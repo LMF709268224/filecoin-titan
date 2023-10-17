@@ -18,7 +18,7 @@ import (
 var log = logging.Logger("workload")
 
 const (
-	workloadInterval = 2 * time.Minute
+	workloadInterval = 10 * time.Minute
 	confirmationTime = 70 * time.Second
 
 	// Process 100 pieces of workload result data at a time
@@ -65,8 +65,10 @@ func (m *Manager) handleWorkloadResults() {
 		return
 	}
 
-	startTime := time.Now()
-	defer log.Debugf("handleWorkloadResult time:%s", time.Since(startTime))
+	defer func() {
+		log.Debugf("handleWorkloadResult end : %s\n", time.Now().Format("2006-01-02 15:04:05"))
+	}()
+	log.Debugf("handleWorkloadResult start : %s\n", time.Now().Format("2006-01-02 15:04:05"))
 
 	profit := m.getValidationProfit()
 
