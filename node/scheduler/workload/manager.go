@@ -65,8 +65,8 @@ func (m *Manager) handleWorkloadResults() {
 		return
 	}
 
-	defer log.Debugf("handleWorkloadResult end  %s", time.Now().Format("2006-01-02 15:04:05"))
-	log.Debugf("handleWorkloadResult start  %s", time.Now().Format("2006-01-02 15:04:05"))
+	startTime := time.Now()
+	defer log.Debugf("handleWorkloadResult time:%s", time.Since(startTime))
 
 	profit := m.getValidationProfit()
 
