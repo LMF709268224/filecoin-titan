@@ -331,11 +331,6 @@ func (s *Scheduler) GetNodeList(ctx context.Context, offset int, limit int) (*ty
 			continue
 		}
 
-		_, exist := validator[nodeInfo.NodeID]
-		if exist {
-			nodeInfo.Type = types.NodeValidator
-		}
-
 		node := s.NodeManager.GetNode(nodeInfo.NodeID)
 		if node != nil {
 			nodeInfo.Status = nodeStatus(node)
@@ -347,6 +342,11 @@ func (s *Scheduler) GetNodeList(ctx context.Context, offset int, limit int) (*ty
 			nodeInfo.DiskUsage = node.DiskUsage
 			nodeInfo.BandwidthDown = node.BandwidthDown
 			nodeInfo.BandwidthUp = node.BandwidthUp
+		}
+
+		_, exist := validator[nodeInfo.NodeID]
+		if exist {
+			nodeInfo.Type = types.NodeValidator
 		}
 
 		nodeInfos = append(nodeInfos, *nodeInfo)
