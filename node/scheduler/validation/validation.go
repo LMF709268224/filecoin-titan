@@ -11,6 +11,7 @@ import (
 	"github.com/Filecoin-Titan/titan/lotuscli"
 	"github.com/Filecoin-Titan/titan/node/cidutil"
 	"github.com/google/uuid"
+	"golang.org/x/xerrors"
 )
 
 const (
@@ -95,7 +96,7 @@ func (m *Manager) startValidate() error {
 
 	vReqs, dbInfos := m.getValidationDetails(vrs)
 	if len(vReqs) == 0 {
-		return nil
+		return xerrors.New("validation pair fail")
 	}
 
 	err = m.nodeMgr.SaveValidationResultInfos(dbInfos)
@@ -136,6 +137,8 @@ func (m *Manager) getValidationDetails(vrs []*VWindow) (map[string]*api.Validate
 			log.Errorf("%s validator not exist", vNode)
 			continue
 		}
+
+		log.Debugf("Validation Details validator %s : %d \n", vID, len(vr.ValidatableNodes))
 
 		for nodeID := range vr.ValidatableNodes {
 			cid, err := m.assetMgr.RandomAsset(nodeID, m.seed)
