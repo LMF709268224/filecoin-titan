@@ -138,8 +138,6 @@ func (m *Manager) getValidationDetails(vrs []*VWindow) (map[string]*api.Validate
 			continue
 		}
 
-		log.Debugf("Validation Details validator %s : %d \n", vID, len(vr.ValidatableNodes))
-
 		for nodeID := range vr.ValidatableNodes {
 			cid, err := m.assetMgr.RandomAsset(nodeID, m.seed)
 			if err != nil {

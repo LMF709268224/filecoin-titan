@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	bandwidthRatio = 0.7                  // The ratio of the total upstream bandwidth on edge nodes to the downstream bandwidth on validation nodes.
+	bandwidthRatio = 1                    // The ratio of the total upstream bandwidth on edge nodes to the downstream bandwidth on validation nodes.
 	toleranceBwUp  = int64(5 * units.MiB) // The tolerance for uplink bandwidth deviation per group, set to 5M.
 )
 
