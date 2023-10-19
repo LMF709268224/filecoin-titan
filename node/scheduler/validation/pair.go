@@ -145,7 +145,7 @@ func (m *Manager) addValidator(nodeID string, bwDn int64) {
 
 	count := int(math.Floor((float64(bwDn) * bandwidthRatio) / m.getValidatorBaseBwDn()))
 	if count < 1 {
-		return
+		count = 1
 	}
 
 	// Do not process if node present
