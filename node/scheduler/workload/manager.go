@@ -113,6 +113,15 @@ func (m *Manager) handleWorkloadResults() {
 			}
 
 			removeIDs = append(removeIDs, record.ID)
+
+			// update node bandwidths
+			t := cWorkload.EndTime - cWorkload.StartTime
+			if t > 1 {
+				speed := cWorkload.DownloadSize / t
+				m.nodeMgr.UpdateNodeBandwidths(record.NodeID, 0, speed)
+				m.nodeMgr.UpdateNodeBandwidths(record.ClientID, speed, 0)
+			}
+
 			continue
 		}
 

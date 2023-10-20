@@ -193,6 +193,7 @@ func (m *Manager) updateResultInfo(status types.ValidationStatus, vr *api.Valida
 		TokenID:     vr.Token,
 	}
 
+	// update node bandwidths
 	if status == types.ValidationStatusSuccess {
 		m.nodeMgr.UpdateNodeBandwidths(vr.NodeID, 0, int64(vr.Bandwidth))
 	}
