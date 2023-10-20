@@ -104,19 +104,6 @@ func (ds *DataSync) performDataSync(nodeID string) error {
 		return xerrors.Errorf("could not get node %s data sync api", nodeID)
 	}
 
-	syncTime, err := ds.nodeManager.LoadSyncTime(nodeID)
-	if err != nil {
-		return xerrors.Errorf("load sync time %w", err)
-	}
-
-	if time.Since(syncTime) < syncInterval {
-		log.Debugf("%s already sync data within 24 hour", nodeID)
-		return nil
-	}
-	if err = ds.nodeManager.UpdateSyncTime(nodeID); err != nil {
-		log.Errorf("UpdateSyncTime error %s", err.Error())
-	}
-
 	topChecksum, err := ds.fetchTopHash(nodeID)
 	if err != nil {
 		return xerrors.Errorf("get top hash %w", err)
@@ -128,8 +115,11 @@ func (ds *DataSync) performDataSync(nodeID string) error {
 	if ok, err := node.CompareTopHash(ctx, topChecksum); err != nil {
 		return xerrors.Errorf("compare top hash %w", err)
 	} else if ok {
+		log.Infof("node %s asset is sync", nodeID)
 		return nil
 	}
+
+	log.Warnf("node %s asset is not sync", nodeID)
 
 	checksums, err := ds.fetchBucketHashes(nodeID)
 	if err != nil {
@@ -139,6 +129,10 @@ func (ds *DataSync) performDataSync(nodeID string) error {
 	mismatchBuckets, err := node.CompareBucketHashes(ctx, checksums)
 	if err != nil {
 		return xerrors.Errorf("compare bucket hashes %w", err)
+	}
+
+	if err = ds.nodeManager.UpdateSyncTime(nodeID); err != nil {
+		log.Errorf("UpdateSyncTime error %s", err.Error())
 	}
 
 	log.Warnf("mismatch buckets len:%d", len(mismatchBuckets))

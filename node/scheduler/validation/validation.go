@@ -3,6 +3,7 @@ package validation
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -268,7 +269,7 @@ func (m *Manager) handleResult(vr *api.ValidationResult) {
 		return
 	}
 
-	cids, err := m.getAssetBlocksFromCandidate(hash, vInfo.Cid, nodeID, cidCount)
+	cids, cNodeID, err := m.getAssetBlocksFromCandidate(hash, vInfo.Cid, nodeID, cidCount)
 	if err != nil {
 		status = types.ValidationStatusLoadDBErr
 		return
@@ -289,7 +290,7 @@ func (m *Manager) handleResult(vr *api.ValidationResult) {
 
 		if !m.compareCid(resultCid, validatorCid) {
 			status = types.ValidationStatusValidateFail
-			log.Errorf("round [%s] validator [%s] nodeID [%s], assetCID [%s] seed [%d] ; validator fail resultCid:%s, vCid:%s,index:%d", m.curRoundID, vr.Validator, nodeID, vInfo.Cid, m.seed, resultCid, validatorCid, i)
+			log.Errorf("round [%s] validator [%s] cNodeID [%s] nodeID [%s], assetCID [%s] seed [%d] ; validator fail resultCid:%s, vCid:%s,index:%d", m.curRoundID, vr.Validator, cNodeID, nodeID, vInfo.Cid, m.seed, resultCid, validatorCid, i)
 			return
 		}
 	}
@@ -298,11 +299,11 @@ func (m *Manager) handleResult(vr *api.ValidationResult) {
 	status = types.ValidationStatusSuccess
 }
 
-func (m *Manager) getAssetBlocksFromCandidate(hash, cid string, filterNode string, cidCount int) ([]string, error) {
+func (m *Manager) getAssetBlocksFromCandidate(hash, cid string, filterNode string, cidCount int) ([]string, string, error) {
 	replicas, err := m.nodeMgr.LoadReplicasByStatus(hash, []types.ReplicaStatus{types.ReplicaStatusSucceeded})
 	if err != nil {
 		log.Errorf("LoadReplicasByHash %s , err:%s", hash, err.Error())
-		return nil, err
+		return nil, "", err
 	}
 
 	var cids []string
@@ -324,10 +325,10 @@ func (m *Manager) getAssetBlocksFromCandidate(hash, cid string, filterNode strin
 			continue
 		}
 
-		break
+		return cids, cNodeID, nil
 	}
 
-	return cids, nil
+	return nil, "", fmt.Errorf("can not find candidate node")
 }
 
 // compares two CID strings and returns true if they are equal, false otherwise
