@@ -8,7 +8,6 @@ import (
 
 	"github.com/Filecoin-Titan/titan/api"
 	"github.com/Filecoin-Titan/titan/api/types"
-	"github.com/Filecoin-Titan/titan/lotuscli"
 	"github.com/Filecoin-Titan/titan/node/cidutil"
 	"github.com/google/uuid"
 	"golang.org/x/xerrors"
@@ -86,9 +85,10 @@ func (m *Manager) startValidate() error {
 
 	roundID := uuid.NewString()
 	m.curRoundID = roundID
-	seed, err := lotuscli.StateGetRandomnessFromBeacon(m.getLotusURL())
+
+	seed, err := m.getSeedFromFilecoin()
 	if err != nil {
-		log.Errorf("startNewRound:%s StateGetRandomnessFromBeacon err:%s", m.curRoundID, err.Error())
+		log.Errorf("startNewRound:%s getSeedFromFilecoin err:%s", m.curRoundID, err.Error())
 	}
 	m.seed = seed
 
