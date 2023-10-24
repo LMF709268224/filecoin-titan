@@ -134,6 +134,8 @@ type UserAPI interface {
 	AllocateStorage(ctx context.Context, userID string) (*types.UserInfo, error) //perm:web,admin
 	// GetUserInfo get user info
 	GetUserInfo(ctx context.Context, userID string) (*types.UserInfo, error) // perm:web,admin
+	// GetUserInfos get user infos
+	GetUserInfos(ctx context.Context, userIDs []string) ([]*types.UserInfo, error) // perm:web,admin
 	// CreateAPIKey creates a key for the client API.
 	CreateAPIKey(ctx context.Context, userID, keyName string) (string, error) //perm:web,admin
 	// GetAPIKeys get all api key for user.

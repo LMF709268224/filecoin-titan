@@ -11,7 +11,7 @@ import (
 	"github.com/Filecoin-Titan/titan/journal/alerting"
 	"github.com/Filecoin-Titan/titan/node/modules/dtypes"
 	"github.com/google/uuid"
-	xerrors "golang.org/x/xerrors"
+	"golang.org/x/xerrors"
 )
 
 var ErrNotSupported = xerrors.New("method not supported")
@@ -349,6 +349,8 @@ type UserAPIStruct struct {
 		GetUserAccessToken func(p0 context.Context, p1 string) (string, error) `perm:"web,admin"`
 
 		GetUserInfo func(p0 context.Context, p1 string) (*types.UserInfo, error) `perm:"web,admin"`
+
+		GetUserInfos func(p0 context.Context, p1 []string) ([]*types.UserInfo, error) `perm:"web,admin"`
 
 		SetUserVIP func(p0 context.Context, p1 string, p2 bool) error `perm:"admin"`
 
@@ -1501,6 +1503,17 @@ func (s *UserAPIStruct) GetUserInfo(p0 context.Context, p1 string) (*types.UserI
 
 func (s *UserAPIStub) GetUserInfo(p0 context.Context, p1 string) (*types.UserInfo, error) {
 	return nil, ErrNotSupported
+}
+
+func (s *UserAPIStruct) GetUserInfos(p0 context.Context, p1 []string) ([]*types.UserInfo, error) {
+	if s.Internal.GetUserInfos == nil {
+		return *new([]*types.UserInfo), ErrNotSupported
+	}
+	return s.Internal.GetUserInfos(p0, p1)
+}
+
+func (s *UserAPIStub) GetUserInfos(p0 context.Context, p1 []string) ([]*types.UserInfo, error) {
+	return *new([]*types.UserInfo), ErrNotSupported
 }
 
 func (s *UserAPIStruct) SetUserVIP(p0 context.Context, p1 string, p2 bool) error {

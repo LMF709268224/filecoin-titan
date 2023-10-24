@@ -44,6 +44,21 @@ func (s *Scheduler) GetUserInfo(ctx context.Context, userID string) (*types.User
 	return s.loadUserInfo(userID)
 }
 
+// GetUserInfos get user infos
+func (s *Scheduler) GetUserInfos(ctx context.Context, userIDs []string) ([]*types.UserInfo, error) {
+	list := make([]*types.UserInfo, 0)
+	for _, userID := range userIDs {
+		info, err := s.loadUserInfo(userID)
+		if err != nil {
+			continue
+		}
+
+		list = append(list, info)
+	}
+
+	return list, nil
+}
+
 func (s *Scheduler) loadUserInfo(userID string) (*types.UserInfo, error) {
 	u := s.newUser(userID)
 	return u.GetInfo()
