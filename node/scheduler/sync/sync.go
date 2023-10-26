@@ -119,8 +119,6 @@ func (ds *DataSync) performDataSync(nodeID string) error {
 		return nil
 	}
 
-	log.Warnf("node %s asset is not sync", nodeID)
-
 	checksums, err := ds.fetchBucketHashes(nodeID)
 	if err != nil {
 		return xerrors.Errorf("get hashes of buckets %w", err)
@@ -135,7 +133,7 @@ func (ds *DataSync) performDataSync(nodeID string) error {
 		log.Errorf("UpdateSyncTime error %s", err.Error())
 	}
 
-	log.Warnf("mismatch buckets len:%d", len(mismatchBuckets))
+	log.Warnf("node %s mismatch buckets len:%d", nodeID, len(mismatchBuckets))
 	return nil
 }
 

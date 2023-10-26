@@ -92,8 +92,6 @@ func (ds *DataSync) doSync(ctx context.Context, extraBuckets, lostBuckets, misma
 			log.Errorf("repair mismatch asset error %s", err.Error())
 		}
 	}
-
-	// TODO sync assetsView and assets
 }
 
 // removeExtraAsset removes any assets from the datastore that are not present in the specified buckets.
@@ -120,7 +118,7 @@ func (ds *DataSync) removeExtraAsset(ctx context.Context, buckets []uint32) erro
 func (ds *DataSync) addLostAsset(ctx context.Context, buckets []uint32) error {
 	cars := make([]cid.Cid, 0)
 	for _, bucketID := range buckets {
-		cs, err := ds.GetAssetsOfBucket(context.Background(), bucketID, true)
+		cs, err := ds.GetAssetsOfBucket(ctx, bucketID, true)
 		if err != nil {
 			return xerrors.Errorf("get assets of bucket %w", err)
 		}
