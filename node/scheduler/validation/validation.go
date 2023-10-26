@@ -423,15 +423,15 @@ func (m *Manager) loadResults(maxTime time.Time) ([]*types.ValidationResultInfo,
 			record, err := m.nodeMgr.LoadRetrieveEvent(tokenID)
 			if err != nil {
 				vInfo.Profit = 0
-			}
+			} else {
+				// check time
+				if record.CreatedTime > vInfo.EndTime.Unix() {
+					vInfo.Profit = 0
+				}
 
-			// check time
-			if record.CreatedTime > vInfo.EndTime.Unix() {
-				vInfo.Profit = 0
-			}
-
-			if record.EndTime < vInfo.StartTime.Unix() {
-				vInfo.Profit = 0
+				if record.EndTime < vInfo.StartTime.Unix() {
+					vInfo.Profit = 0
+				}
 			}
 		}
 
