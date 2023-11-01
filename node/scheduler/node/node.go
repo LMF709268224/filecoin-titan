@@ -150,10 +150,12 @@ func (n *Node) ConnectRPC(addr string, nodeType types.NodeType) error {
 
 // IsAbnormal is node abnormal
 func (n *Node) IsAbnormal() bool {
+	// waiting for deactivate
 	if n.DeactivateTime > 0 {
 		return true
 	}
 
+	// is minio node
 	if n.IsPrivateMinioOnly {
 		return true
 	}
