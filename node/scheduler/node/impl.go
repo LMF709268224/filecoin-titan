@@ -4,8 +4,8 @@ import (
 	"github.com/Filecoin-Titan/titan/api/types"
 )
 
-// GetAllCandidateNodes  returns a list of all candidate nodes
-func (m *Manager) GetAllCandidateNodes() ([]string, []*Node) {
+// GetAllValidCandidateNodes  Get all valid candidate nodes
+func (m *Manager) GetAllValidCandidateNodes() ([]string, []*Node) {
 	var ids []string
 	var nodes []*Node
 	m.candidateNodes.Range(func(key, value interface{}) bool {

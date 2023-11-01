@@ -710,7 +710,7 @@ func (s *Scheduler) GetMinioConfigFromCandidate(ctx context.Context, nodeID stri
 func (s *Scheduler) GetCandidateIPs(ctx context.Context) ([]*types.NodeIPInfo, error) {
 	list := make([]*types.NodeIPInfo, 0)
 
-	_, cNodes := s.NodeManager.GetAllCandidateNodes()
+	_, cNodes := s.NodeManager.GetAllValidCandidateNodes()
 	if len(cNodes) == 0 {
 		return list, &api.ErrWeb{Code: terrors.NotFoundNode.Int(), Message: terrors.NotFoundNode.String()}
 	}
