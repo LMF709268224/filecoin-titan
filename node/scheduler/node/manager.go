@@ -165,10 +165,6 @@ func (m *Manager) DistributeNodeWeight(node *Node) {
 		return
 	}
 
-	if node.IsPrivateMinioOnly {
-		return
-	}
-
 	score := m.getNodeScoreLevel(node.NodeID)
 	wNum := m.weightMgr.getWeightNum(score)
 	if node.Type == types.NodeCandidate {
@@ -285,10 +281,6 @@ func (m *Manager) redistributeNodeSelectWeights() {
 		node := value.(*Node)
 
 		if node.IsAbnormal() {
-			return true
-		}
-
-		if node.IsPrivateMinioOnly {
 			return true
 		}
 

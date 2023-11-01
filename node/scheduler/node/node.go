@@ -154,6 +154,10 @@ func (n *Node) IsAbnormal() bool {
 		return true
 	}
 
+	if n.IsPrivateMinioOnly {
+		return true
+	}
+
 	return false
 }
 
