@@ -162,6 +162,7 @@ var cUserAssetTable = `
 	    created_time      DATETIME     DEFAULT CURRENT_TIMESTAMP,
 		total_size        BIGINT       DEFAULT 0,
 		expiration        DATETIME     DEFAULT CURRENT_TIMESTAMP,
+		password          VARCHAR(128) DEFAULT '' ,
 		PRIMARY KEY (hash,user_id),
 		KEY idx_user_id (user_id)
     ) ENGINE=InnoDB COMMENT='user asset';`

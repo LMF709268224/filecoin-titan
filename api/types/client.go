@@ -8,6 +8,7 @@ type AssetProperty struct {
 	AssetSize int64
 	AssetType string
 	NodeID    string
+	Password  string
 }
 
 type CreateAssetReq struct {

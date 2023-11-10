@@ -11,7 +11,7 @@ import (
 )
 
 // SaveAssetUser save asset and user info
-func (n *SQLDB) SaveAssetUser(hash, userID, assetName, assetType string, size int64, expiration time.Time) error {
+func (n *SQLDB) SaveAssetUser(hash, userID, assetName, assetType string, size int64, expiration time.Time, password string) error {
 	tx, err := n.db.Beginx()
 	if err != nil {
 		return err
@@ -25,9 +25,9 @@ func (n *SQLDB) SaveAssetUser(hash, userID, assetName, assetType string, size in
 	}()
 
 	query := fmt.Sprintf(
-		`INSERT INTO %s (hash, user_id, asset_name, total_size, asset_type, expiration) 
-		        VALUES (?, ?, ?, ?, ?, ?) `, userAssetTable)
-	_, err = tx.Exec(query, hash, userID, assetName, size, assetType, expiration)
+		`INSERT INTO %s (hash, user_id, asset_name, total_size, asset_type, expiration, password) 
+		        VALUES (?, ?, ?, ?, ?, ?, ?) `, userAssetTable)
+	_, err = tx.Exec(query, hash, userID, assetName, size, assetType, expiration, password)
 	if err != nil {
 		return err
 	}
