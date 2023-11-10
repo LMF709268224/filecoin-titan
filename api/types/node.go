@@ -152,8 +152,9 @@ type CandidateDownloadInfo struct {
 
 // NodeIPInfo
 type NodeIPInfo struct {
-	NodeID string
-	IP     string
+	NodeID      string
+	IP          string
+	ExternalURL string
 }
 
 // NodeReplicaStatus represents the status of a node cache

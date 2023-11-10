@@ -243,7 +243,7 @@ type NodeAPIStruct struct {
 
 		GetCandidateDownloadInfos func(p0 context.Context, p1 string) ([]*types.CandidateDownloadInfo, error) `perm:"edge,candidate,web,locator"`
 
-		GetCandidateIPs func(p0 context.Context) ([]*types.NodeIPInfo, error) `perm:"web,admin"`
+		GetCandidateIPs func(p0 context.Context) ([]*types.NodeIPInfo, error) `perm:"web,user,admin"`
 
 		GetCandidateNodeIP func(p0 context.Context, p1 string) (string, error) `perm:"web,admin"`
 

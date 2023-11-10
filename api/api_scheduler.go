@@ -121,7 +121,7 @@ type NodeAPI interface {
 	// GetMinioConfigFromCandidate get minio config from candidate
 	GetMinioConfigFromCandidate(ctx context.Context, nodeID string) (*types.MinioConfig, error) //perm:default
 	// GetCandidateIPs get candidate ips
-	GetCandidateIPs(ctx context.Context) ([]*types.NodeIPInfo, error) //perm:web,admin
+	GetCandidateIPs(ctx context.Context) ([]*types.NodeIPInfo, error) //perm:web,user,admin
 }
 
 // UserAPI is an interface for user

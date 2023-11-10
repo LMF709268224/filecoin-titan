@@ -720,7 +720,11 @@ func (s *Scheduler) GetCandidateIPs(ctx context.Context) ([]*types.NodeIPInfo, e
 			continue
 		}
 
-		list = append(list, &types.NodeIPInfo{NodeID: n.NodeID, IP: n.ExternalIP})
+		externalURL := n.ExternalURL
+		if len(externalURL) == 0 {
+			externalURL = fmt.Sprintf("http://%s", n.RemoteAddr)
+		}
+		list = append(list, &types.NodeIPInfo{NodeID: n.NodeID, IP: n.ExternalIP, ExternalURL: externalURL})
 	}
 
 	return list, nil
