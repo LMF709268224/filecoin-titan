@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/gob"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -33,7 +34,7 @@ type User struct {
 // AllocateStorage allocates storage space.
 func (u *User) AllocateStorage(ctx context.Context, size int64) (*types.UserInfo, error) {
 	userInfo, err := u.GetInfo()
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 
