@@ -17,6 +17,8 @@ const (
 
 	VisitShareLinkOutOfMaxCount // visit share link out of max count
 	VerifyTokenError            // verify token error
+	OutOfMaxAPIKeyLimit         // out of max api key limit
+	SameNameAPPKeyAlreadyExist  // already exist the same name key
 
 	Success = 0
 	Unknown = -1

@@ -134,6 +134,7 @@ func DefaultSchedulerCfg() *SchedulerCfg {
 		UserVipStorageSize:       5368709120,
 		MaxCountOfVisitShareLink: 10,
 		Weight:                   100,
+		MaxAPIKey:                5,
 	}
 }
 

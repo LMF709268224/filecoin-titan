@@ -69,30 +69,26 @@ func (u *User) GetInfo() (*types.UserInfo, error) {
 
 // CreateAPIKey creates a key for the client API.
 func (u *User) CreateAPIKey(ctx context.Context, keyName string, commonAPI api.Common) (string, error) {
-	buf, err := u.LoadUserAPIKeys(u.ID)
+	apiKeys, err := u.GetAPIKeys(ctx)
 	if err != nil {
 		return "", err
 	}
 
-	apiKeys := make(map[string]types.UserAPIKeysInfo)
-	if len(buf) > 0 {
-		apiKeys, err = u.decodeAPIKeys(buf)
-		if err != nil {
-			return "", err
-		}
+	if apiKeys == nil {
+		apiKeys = make(map[string]types.UserAPIKeysInfo)
 	}
 
-	if len(apiKeys) > 0 {
-		return "", fmt.Errorf("api key already exist, only support create one now")
+	if _, ok := apiKeys[keyName]; ok {
+		return "", &api.ErrWeb{Code: terrors.SameNameAPPKeyAlreadyExist.Int(), Message: fmt.Sprintf("the API key %s already exist", keyName)}
 	}
 
-	keyValue, err := generateAPIKey(u.ID, commonAPI)
+	keyValue, err := generateAPIKey(u.ID, keyName, commonAPI)
 	if err != nil {
 		return "", err
 	}
 	apiKeys[keyName] = types.UserAPIKeysInfo{CreatedTime: time.Now(), APIKey: keyValue}
 
-	buf, err = u.encodeAPIKeys(apiKeys)
+	buf, err := u.encodeAPIKeys(apiKeys)
 	if err != nil {
 		return "", err
 	}
@@ -360,8 +356,8 @@ func (u *User) encodeAPIKeys(apiKeys map[string]types.UserAPIKeysInfo) ([]byte, 
 	return buffer.Bytes(), nil
 }
 
-func generateAPIKey(userID string, commonAPI api.Common) (string, error) {
-	payload := types.JWTPayload{ID: userID, Allow: []auth.Permission{api.RoleUser}}
+func generateAPIKey(userID string, keyName string, commonAPI api.Common) (string, error) {
+	payload := types.JWTPayload{ID: userID, Allow: []auth.Permission{api.RoleUser}, Extend: keyName}
 	tk, err := commonAPI.AuthNew(context.Background(), &payload)
 	if err != nil {
 		return "", err

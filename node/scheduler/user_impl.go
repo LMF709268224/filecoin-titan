@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Filecoin-Titan/titan/api"
+	"github.com/Filecoin-Titan/titan/api/terrors"
 	"github.com/Filecoin-Titan/titan/api/types"
 	"github.com/Filecoin-Titan/titan/node/handler"
 	"github.com/Filecoin-Titan/titan/node/scheduler/user"
@@ -67,6 +68,15 @@ func (s *Scheduler) loadUserInfo(userID string) (*types.UserInfo, error) {
 // CreateAPIKey creates a key for the client API.
 func (s *Scheduler) CreateAPIKey(ctx context.Context, userID, keyName string) (string, error) {
 	u := s.newUser(userID)
+	keys, err := u.GetAPIKeys(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	if len(keys) >= s.SchedulerCfg.MaxAPIKey {
+		return "", &api.ErrWeb{Code: terrors.OutOfMaxAPIKeyLimit.Int(), Message: fmt.Sprintf("api key exceeds maximum limit %d", s.SchedulerCfg.MaxAPIKey)}
+	}
+
 	info, err := u.CreateAPIKey(ctx, keyName, s.CommonAPI)
 	if err != nil {
 		return "", err
