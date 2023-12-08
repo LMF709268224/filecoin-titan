@@ -148,6 +148,10 @@ type UserAPI interface {
 	SetUserVIP(ctx context.Context, userID string, enableVIP bool) error //perm:admin
 	// GetUserAccessToken get access token for user
 	GetUserAccessToken(ctx context.Context, userID string) (string, error) //perm:web,admin
+	// GetUserStorageStats
+	GetUserStorageStats(ctx context.Context, userID string) (*types.StorageStats, error) //perm:web,admin
+	// GetUsersStorageStatistics
+	ListUserStorageStats(ctx context.Context, limit, offset int) (*types.ListStorageStatsRsp, error) //perm:web,admin
 }
 
 // Scheduler is an interface for scheduler

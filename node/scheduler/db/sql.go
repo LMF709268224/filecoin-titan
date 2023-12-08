@@ -53,6 +53,7 @@ const (
 	loadReplicaEventDefaultLimit        = 100
 	loadRetrieveDefaultLimit            = 100
 	loadReplicaDefaultLimit             = 100
+	loadUserDefaultLimit                = 100
 )
 
 // assetStateTable returns the asset state table name for the given serverID.

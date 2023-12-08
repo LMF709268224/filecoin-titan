@@ -148,3 +148,13 @@ func (s *Scheduler) GetUserAccessToken(ctx context.Context, userID string) (stri
 	}
 	return tk, nil
 }
+
+// GetUserStorageStats get user storage info
+func (s *Scheduler) GetUserStorageStats(ctx context.Context, userID string) (*types.StorageStats, error) {
+	return s.db.LoadStorageStatsOfUser(userID)
+}
+
+// ListUserStorageStats list storage info
+func (s *Scheduler) ListUserStorageStats(ctx context.Context, limit, offset int) (*types.ListStorageStatsRsp, error) {
+	return s.db.ListStorageStatsOfUsers(limit, offset)
+}

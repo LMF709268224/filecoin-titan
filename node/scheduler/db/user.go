@@ -217,12 +217,48 @@ func (n *SQLDB) SaveUserTotalStorageSize(userID string, totalSize int64) error {
 	return err
 }
 
-// LoadUserInfo load user storage size
+// LoadUserInfo load user info
 func (n *SQLDB) LoadUserInfo(userID string) (*types.UserInfo, error) {
 	query := fmt.Sprintf("SELECT total_storage_size, used_storage_size, total_traffic, peak_bandwidth, download_count, enable_vip, update_peak_time FROM %s WHERE user_id=?", userInfoTable)
 	info := types.UserInfo{}
 	err := n.db.Get(&info, query, userID)
 	return &info, err
+}
+
+// LoadStorageStatsOfUser load user storage stats
+func (n *SQLDB) LoadStorageStatsOfUser(userID string) (*types.StorageStats, error) {
+	query := fmt.Sprintf("SELECT a.user_id, a.total_storage_size, a.used_storage_size, a.total_traffic, (SELECT COUNT(*) FROM %s WHERE user_id = a.user_id) AS asset_count FROM %s a WHERE user_id=?", userAssetTable, userInfoTable)
+	info := types.StorageStats{}
+	err := n.db.Get(&info, query, userID)
+	return &info, err
+}
+
+// ListStorageStatsOfUsers load users storage stats
+func (n *SQLDB) ListStorageStatsOfUsers(limit, offset int) (*types.ListStorageStatsRsp, error) {
+	res := new(types.ListStorageStatsRsp)
+	var infos []*types.StorageStats
+	query := fmt.Sprintf("SELECT a.user_id, a.total_storage_size, a.used_storage_size, a.total_traffic, (SELECT COUNT(*) FROM %s WHERE user_id = a.user_id) AS asset_count FROM %s a order by a.user_id desc LIMIT ? OFFSET ?", userAssetTable, userInfoTable)
+	if limit > loadUserDefaultLimit {
+		limit = loadUserDefaultLimit
+	}
+
+	err := n.db.Select(&infos, query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	res.Storages = infos
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s ", userInfoTable)
+	var count int
+	err = n.db.Get(&count, countQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	res.Total = count
+
+	return res, nil
 }
 
 // UpdateUserInfo update user info

@@ -35,3 +35,18 @@ type JWTPayload struct {
 	// Extend is json string
 	Extend string
 }
+
+// StorageStats storage stats of user
+type StorageStats struct {
+	TotalSize    int64 `db:"total_storage_size"`
+	UsedSize     int64 `db:"used_storage_size"`
+	TotalTraffic int64 `db:"total_traffic"`
+	EnableVIP    bool  `db:"enable_vip"`
+	AssetCount   int   `db:"asset_count"`
+}
+
+// ListStorageStatsRsp list storage stats records
+type ListStorageStatsRsp struct {
+	Total    int             `json:"total"`
+	Storages []*StorageStats `json:"infos"`
+}
