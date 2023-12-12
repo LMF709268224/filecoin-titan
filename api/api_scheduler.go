@@ -44,7 +44,7 @@ type AssetAPI interface {
 	// CreateUserAsset creates an asset with car CID, car name, and car size.
 	CreateUserAsset(ctx context.Context, assetProperty *types.AssetProperty) (*types.CreateAssetRsp, error) //perm:user
 	// ListUserAssets lists the assets of the user.
-	ListUserAssets(ctx context.Context, limit, offset int) (*types.ListAssetRecordRsp, error) //perm:user
+	ListUserAssets(ctx context.Context, limit, offset, groupID int) (*types.ListAssetRecordRsp, error) //perm:user
 	// DeleteUserAsset deletes the asset of the user.
 	DeleteUserAsset(ctx context.Context, assetCID string) error //perm:user
 	// ShareUserAssets shares the assets of the user.
@@ -52,7 +52,7 @@ type AssetAPI interface {
 	// CreateAsset creates an asset with car CID, car name, and car size.
 	CreateAsset(ctx context.Context, req *types.CreateAssetReq) (*types.CreateAssetRsp, error) //perm:web
 	// ListAssets lists the assets of the user.
-	ListAssets(ctx context.Context, userID string, limit, offset int) (*types.ListAssetRecordRsp, error) //perm:web,admin
+	ListAssets(ctx context.Context, userID string, limit, offset, groupID int) (*types.ListAssetRecordRsp, error) //perm:web,admin
 	// DeleteAsset deletes the asset of the user.
 	DeleteAsset(ctx context.Context, userID, assetCID string) error //perm:web,admin
 	// ShareAssets shares the assets of the user.
@@ -152,6 +152,15 @@ type UserAPI interface {
 	GetUserStorageStats(ctx context.Context, userID string) (*types.StorageStats, error) //perm:web,admin
 	// GetUsersStorageStatistics
 	ListUserStorageStats(ctx context.Context, limit, offset int) (*types.ListStorageStatsRsp, error) //perm:web,admin
+
+	// CreateFileGroup create file group
+	CreateFileGroup(ctx context.Context, parent int, name string) ([]*types.FileGroup, error) //perm:user
+	// ListFileGroup list file group
+	ListFileGroup(ctx context.Context, parent int) ([]*types.FileGroup, error) //perm:user
+	// DeleteFileGroup delete file group
+	DeleteFileGroup(ctx context.Context, gid int) error //perm:user
+	// RenameFileGroup rename group
+	RenameFileGroup(ctx context.Context, info *types.FileGroup) error //perm:user
 }
 
 // Scheduler is an interface for scheduler

@@ -13,7 +13,9 @@ import (
 	"golang.org/x/xerrors"
 )
 
-// UserExists checks if the user exists.
+const userFileGroupMaxCount = 100
+
+// UserAPIKeysExists checks if the user exists.
 func (s *Scheduler) UserAPIKeysExists(ctx context.Context, userID string) error {
 	u := s.newUser(userID)
 	keys, err := u.GetAPIKeys(ctx)
@@ -157,4 +159,58 @@ func (s *Scheduler) GetUserStorageStats(ctx context.Context, userID string) (*ty
 // ListUserStorageStats list storage info
 func (s *Scheduler) ListUserStorageStats(ctx context.Context, limit, offset int) (*types.ListStorageStatsRsp, error) {
 	return s.db.ListStorageStatsOfUsers(limit, offset)
+}
+
+// CreateFileGroup create file group
+func (s *Scheduler) CreateFileGroup(ctx context.Context, parent int, name string) ([]*types.FileGroup, error) {
+	userID := handler.GetUserID(ctx)
+	if len(userID) == 0 {
+		return nil, fmt.Errorf("CreateFileGroup failed, can not get user id")
+	}
+
+	count, err := s.db.GetFileGroupCount(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if count >= userFileGroupMaxCount {
+		return nil, fmt.Errorf("CreateFileGroup failed, Exceed the limit %d", userFileGroupMaxCount)
+	}
+
+	err = s.db.CreateFileGroup(&types.FileGroup{UserID: userID, Parent: parent, Name: name})
+	if err != nil {
+		return nil, err
+	}
+
+	return s.db.ListFileGroupForUser(userID, parent)
+}
+
+// ListFileGroup list file group
+func (s *Scheduler) ListFileGroup(ctx context.Context, parent int) ([]*types.FileGroup, error) {
+	userID := handler.GetUserID(ctx)
+	if len(userID) == 0 {
+		return nil, fmt.Errorf("ListFileGroup failed, can not get user id")
+	}
+
+	return s.db.ListFileGroupForUser(userID, parent)
+}
+
+// DeleteFileGroup delete file group
+func (s *Scheduler) DeleteFileGroup(ctx context.Context, gid int) error {
+	userID := handler.GetUserID(ctx)
+	if len(userID) == 0 {
+		return fmt.Errorf("DeleteFileGroup failed, can not get user id")
+	}
+
+	return s.db.DeleteFileGroup(userID, gid)
+}
+
+// RenameFileGroup rename group
+func (s *Scheduler) RenameFileGroup(ctx context.Context, info *types.FileGroup) error {
+	userID := handler.GetUserID(ctx)
+	if len(userID) == 0 {
+		return fmt.Errorf("RenameFileGroup failed, can not get user id")
+	}
+
+	return s.db.UpdateFileGroupName(info)
 }

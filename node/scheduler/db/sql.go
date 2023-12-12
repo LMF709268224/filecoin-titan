@@ -43,6 +43,7 @@ const (
 	retrieveEventTable    = "retrieve_event"
 	assetVisitCountTable  = "asset_visit_count"
 	replenishBackupTable  = "replenish_backup"
+	userFileGroupTable    = "user_file_group"
 
 	// Default limits for loading table entries.
 	loadNodeInfosDefaultLimit           = 100
@@ -95,6 +96,7 @@ func InitTables(d *SQLDB, serverID dtypes.ServerID) error {
 	tx.MustExec(fmt.Sprintf(cRetrieveEventTable, retrieveEventTable))
 	tx.MustExec(fmt.Sprintf(cAssetVisitCountTable, assetVisitCountTable))
 	tx.MustExec(fmt.Sprintf(cReplenishBackupTable, replenishBackupTable))
+	tx.MustExec(fmt.Sprintf(cUserFileGroupTable, userFileGroupTable))
 
 	return tx.Commit()
 }

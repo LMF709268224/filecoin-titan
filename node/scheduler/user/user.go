@@ -175,7 +175,7 @@ func (u *User) CreateAsset(ctx context.Context, req *types.CreateAssetReq) (*typ
 }
 
 // ListAssets lists the assets of the user.
-func (u *User) ListAssets(ctx context.Context, limit, offset int, maxCountOfVisitAsset int) (*types.ListAssetRecordRsp, error) {
+func (u *User) ListAssets(ctx context.Context, limit, offset, maxCountOfVisitAsset, groupID int) (*types.ListAssetRecordRsp, error) {
 	count, err := u.GetAssetCountsForUser(u.ID)
 	if err != nil {
 		log.Errorf("GetAssetCountsForUser err:%s", err.Error())
@@ -188,7 +188,7 @@ func (u *User) ListAssets(ctx context.Context, limit, offset int, maxCountOfVisi
 		return nil, err
 	}
 
-	userAssets, err := u.ListAssetsForUser(u.ID, limit, offset)
+	userAssets, err := u.ListAssetsForUser(u.ID, limit, offset, groupID)
 	if err != nil {
 		log.Errorf("ListAssetsForUser err:%s", err.Error())
 		return nil, err

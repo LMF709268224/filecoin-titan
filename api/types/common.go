@@ -50,3 +50,12 @@ type ListStorageStatsRsp struct {
 	Total    int             `json:"total"`
 	Storages []*StorageStats `json:"infos"`
 }
+
+// FileGroup user file group
+type FileGroup struct {
+	ID          int       `db:"id"`
+	UserID      string    `db:"user_id"`
+	Name        string    `db:"name"`
+	Parent      int       `db:"parent"`
+	CreatedTime time.Time `db:"created_time"`
+}

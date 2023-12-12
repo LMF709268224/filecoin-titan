@@ -116,7 +116,7 @@ func DefaultSchedulerCfg() *SchedulerCfg {
 		LotusToken:              "",
 		EdgeDownloadRatio:       0.7,
 		AssetPullTaskLimit:      10,
-		UploadAssetReplicaCount: 50,
+		UploadAssetReplicaCount: 20,
 		UploadAssetExpiration:   150,
 		NodeScoreLevel: map[string][]int{
 			"A": {90, 100},

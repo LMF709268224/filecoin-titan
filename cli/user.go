@@ -246,7 +246,7 @@ var listAssets = &cli.Command{
 		offset := cctx.Int("offset")
 
 		ctx := ReqContext(cctx)
-		info, err := schedulerAPI.ListAssets(ctx, userID, limit, offset)
+		info, err := schedulerAPI.ListAssets(ctx, userID, limit, offset, 0)
 		if err != nil {
 			return err
 		}
