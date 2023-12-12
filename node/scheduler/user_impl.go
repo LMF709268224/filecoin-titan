@@ -202,7 +202,10 @@ func (s *Scheduler) DeleteFileGroup(ctx context.Context, gid int) error {
 		return fmt.Errorf("DeleteFileGroup failed, can not get user id")
 	}
 
-	return s.db.DeleteFileGroup(userID, gid)
+	//  s.db.DeleteFileGroup(userID, gid)
+	// TODO delete file
+
+	return fmt.Errorf("Function not completed")
 }
 
 // RenameFileGroup rename group
