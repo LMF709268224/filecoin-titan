@@ -145,6 +145,18 @@ func (n *SQLDB) ListAssetsForUser(user string, limit, offset, groupID int) ([]*t
 	return infos, nil
 }
 
+// ListAllAssetsForUser Get a list of assets by user
+func (n *SQLDB) ListAllAssetsForUser(user string, groupID int) ([]*types.UserAssetDetail, error) {
+	var infos []*types.UserAssetDetail
+	query := fmt.Sprintf("SELECT * FROM %s WHERE user_id=? AND group_id=? ", userAssetTable)
+	err := n.db.Select(&infos, query, user, groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	return infos, nil
+}
+
 // GetAssetCountsForUser Get asset count
 func (n *SQLDB) GetAssetCountsForUser(user string) (int, error) {
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE user_id=? ", userAssetTable)
@@ -322,20 +334,20 @@ func (n *SQLDB) UpdateUserVIPAndStorageSize(userID string, enableVIP bool, stora
 	return err
 }
 
-// CreateFileGroup create a group
-func (n *SQLDB) CreateFileGroup(info *types.FileGroup) error {
+// CreateAssetGroup create a group
+func (n *SQLDB) CreateAssetGroup(info *types.AssetGroup) error {
 	query := fmt.Sprintf(
 		`INSERT INTO %s (user_id, name, parent)
-				VALUES (:user_id, :name, :parent)`, userFileGroupTable)
+				VALUES (:user_id, :name, :parent)`, userAssetGroupTable)
 
 	_, err := n.db.NamedExec(query, info)
 	return err
 }
 
-// FileGroupExists is group exists
-func (n *SQLDB) FileGroupExists(userID string, gid int) (bool, error) {
+// AssetGroupExists is group exists
+func (n *SQLDB) AssetGroupExists(userID string, gid int) (bool, error) {
 	var total int64
-	countSQL := fmt.Sprintf(`SELECT count(*) FROM %s WHERE user_id=? AND id=?`, userFileGroupTable)
+	countSQL := fmt.Sprintf(`SELECT count(*) FROM %s WHERE user_id=? AND id=?`, userAssetGroupTable)
 	if err := n.db.Get(&total, countSQL, userID, gid); err != nil {
 		return false, err
 	}
@@ -343,10 +355,10 @@ func (n *SQLDB) FileGroupExists(userID string, gid int) (bool, error) {
 	return total > 0, nil
 }
 
-// GetFileGroupCount get file group count of user
-func (n *SQLDB) GetFileGroupCount(userID string) (int64, error) {
+// GetAssetGroupCount get asset group count of user
+func (n *SQLDB) GetAssetGroupCount(userID string) (int64, error) {
 	var total int64
-	countSQL := fmt.Sprintf(`SELECT count(*) FROM %s WHERE user_id=? `, userFileGroupTable)
+	countSQL := fmt.Sprintf(`SELECT count(*) FROM %s WHERE user_id=? `, userAssetGroupTable)
 	if err := n.db.Get(&total, countSQL, userID); err != nil {
 		return 0, err
 	}
@@ -354,19 +366,19 @@ func (n *SQLDB) GetFileGroupCount(userID string) (int64, error) {
 	return total, nil
 }
 
-// UpdateFileGroupName update user file group name
-func (n *SQLDB) UpdateFileGroupName(info *types.FileGroup) error {
+// UpdateAssetGroupName update user asset group name
+func (n *SQLDB) UpdateAssetGroupName(info *types.AssetGroup) error {
 	query := fmt.Sprintf(
-		`UPDATE %s SET name=? WHERE user_id=? AND id=?`, userFileGroupTable)
+		`UPDATE %s SET name=? WHERE user_id=? AND id=?`, userAssetGroupTable)
 	_, err := n.db.Exec(query, info.Name, info.UserID, info.ID)
 	return err
 }
 
-// ListFileGroupForUser get file group list
-func (n *SQLDB) ListFileGroupForUser(user string, parent int) ([]*types.FileGroup, error) {
-	var infos []*types.FileGroup
+// ListAssetGroupForUser get asset group list
+func (n *SQLDB) ListAssetGroupForUser(user string, parent int) ([]*types.AssetGroup, error) {
+	var infos []*types.AssetGroup
 
-	query := fmt.Sprintf("SELECT * FROM %s WHERE user_id=? AND parent=?", userFileGroupTable)
+	query := fmt.Sprintf("SELECT * FROM %s WHERE user_id=? AND parent=?", userAssetGroupTable)
 	err := n.db.Select(&infos, query, user, parent)
 	if err != nil {
 		return nil, err
@@ -375,8 +387,8 @@ func (n *SQLDB) ListFileGroupForUser(user string, parent int) ([]*types.FileGrou
 	return infos, nil
 }
 
-// DeleteFileGroup delete file group
-func (n *SQLDB) DeleteFileGroup(userID string, gid int) error {
+// DeleteAssetGroup delete asset group
+func (n *SQLDB) DeleteAssetGroup(userID string, gid int) error {
 	tx, err := n.db.Beginx()
 	if err != nil {
 		return err
@@ -389,13 +401,13 @@ func (n *SQLDB) DeleteFileGroup(userID string, gid int) error {
 		}
 	}()
 
-	query := fmt.Sprintf(`DELETE FROM %s WHERE user_id=? AND parent=?`, userFileGroupTable)
+	query := fmt.Sprintf(`DELETE FROM %s WHERE user_id=? AND parent=?`, userAssetGroupTable)
 	_, err = tx.Exec(query, userID, gid)
 	if err != nil {
 		return err
 	}
 
-	query = fmt.Sprintf(`DELETE FROM %s WHERE user_id=? AND id=?`, userFileGroupTable)
+	query = fmt.Sprintf(`DELETE FROM %s WHERE user_id=? AND id=?`, userAssetGroupTable)
 	_, err = tx.Exec(query, userID, gid)
 	if err != nil {
 		return err

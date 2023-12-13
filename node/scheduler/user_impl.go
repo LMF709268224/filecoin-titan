@@ -161,14 +161,14 @@ func (s *Scheduler) ListUserStorageStats(ctx context.Context, limit, offset int)
 	return s.db.ListStorageStatsOfUsers(limit, offset)
 }
 
-// CreateFileGroup create file group
-func (s *Scheduler) CreateFileGroup(ctx context.Context, parent int, name string) ([]*types.FileGroup, error) {
+// CreateAssetGroup create file group
+func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name string) ([]*types.AssetGroup, error) {
 	userID := handler.GetUserID(ctx)
 	if len(userID) == 0 {
 		return nil, fmt.Errorf("CreateFileGroup failed, can not get user id")
 	}
 
-	count, err := s.db.GetFileGroupCount(userID)
+	count, err := s.db.GetAssetGroupCount(userID)
 	if err != nil {
 		return nil, err
 	}
@@ -177,43 +177,58 @@ func (s *Scheduler) CreateFileGroup(ctx context.Context, parent int, name string
 		return nil, fmt.Errorf("CreateFileGroup failed, Exceed the limit %d", userFileGroupMaxCount)
 	}
 
-	err = s.db.CreateFileGroup(&types.FileGroup{UserID: userID, Parent: parent, Name: name})
+	err = s.db.CreateAssetGroup(&types.AssetGroup{UserID: userID, Parent: parent, Name: name})
 	if err != nil {
 		return nil, err
 	}
 
-	return s.db.ListFileGroupForUser(userID, parent)
+	return s.db.ListAssetGroupForUser(userID, parent)
 }
 
-// ListFileGroup list file group
-func (s *Scheduler) ListFileGroup(ctx context.Context, parent int) ([]*types.FileGroup, error) {
+// ListAssetGroup list file group
+func (s *Scheduler) ListAssetGroup(ctx context.Context, parent int) ([]*types.AssetGroup, error) {
 	userID := handler.GetUserID(ctx)
 	if len(userID) == 0 {
 		return nil, fmt.Errorf("ListFileGroup failed, can not get user id")
 	}
 
-	return s.db.ListFileGroupForUser(userID, parent)
+	return s.db.ListAssetGroupForUser(userID, parent)
 }
 
-// DeleteFileGroup delete file group
-func (s *Scheduler) DeleteFileGroup(ctx context.Context, gid int) error {
+// DeleteAssetGroup delete asset group
+func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int) error {
 	userID := handler.GetUserID(ctx)
 	if len(userID) == 0 {
 		return fmt.Errorf("DeleteFileGroup failed, can not get user id")
 	}
 
-	//  s.db.DeleteFileGroup(userID, gid)
-	// TODO delete file
+	list, err := s.db.ListAllAssetsForUser(userID, gid)
+	if err != nil {
+		return err
+	}
 
-	return fmt.Errorf("Function not completed")
+	if len(list) > 0 {
+		return fmt.Errorf("There are files in the group and the group cannot be deleted")
+	}
+
+	// delete asset
+	// u := s.newUser(userID)
+	// u.DeleteAsset(ctx, assetCID)
+
+	return s.db.DeleteAssetGroup(userID, gid)
 }
 
-// RenameFileGroup rename group
-func (s *Scheduler) RenameFileGroup(ctx context.Context, info *types.FileGroup) error {
+// RenameAssetGroup rename group
+func (s *Scheduler) RenameAssetGroup(ctx context.Context, info *types.AssetGroup) error {
 	userID := handler.GetUserID(ctx)
 	if len(userID) == 0 {
 		return fmt.Errorf("RenameFileGroup failed, can not get user id")
 	}
 
-	return s.db.UpdateFileGroupName(info)
+	return s.db.UpdateAssetGroupName(info)
+}
+
+// MoveAssetToGroup move a file to group
+func (s *Scheduler) MoveAssetToGroup(ctx context.Context, cid string, groupID int) error {
+	return nil
 }

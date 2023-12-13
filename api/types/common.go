@@ -51,8 +51,8 @@ type ListStorageStatsRsp struct {
 	Storages []*StorageStats `json:"infos"`
 }
 
-// FileGroup user file group
-type FileGroup struct {
+// AssetGroup user asset group
+type AssetGroup struct {
 	ID          int       `db:"id"`
 	UserID      string    `db:"user_id"`
 	Name        string    `db:"name"`

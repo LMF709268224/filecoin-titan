@@ -222,7 +222,7 @@ var cReplenishBackupTable = `
 		PRIMARY KEY (hash)
     ) ENGINE=InnoDB COMMENT='Assets that need to be replenish backed up to candidate nodes';`
 
-var cUserFileGroupTable = `
+var cUserAssetGroupTable = `
     CREATE TABLE if not exists %s (
 		id            INT UNSIGNED AUTO_INCREMENT,
 	    user_id       VARCHAR(128) NOT NULL,
@@ -231,4 +231,4 @@ var cUserFileGroupTable = `
 	    created_time  DATETIME     DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (id),
 	    KEY idx_user_id (user_id)
-    ) ENGINE=InnoDB COMMENT='user file group';`
+    ) ENGINE=InnoDB COMMENT='user asset group';`

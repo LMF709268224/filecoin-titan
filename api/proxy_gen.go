@@ -8,7 +8,7 @@ import (
 	"github.com/Filecoin-Titan/titan/journal/alerting"
 	"github.com/Filecoin-Titan/titan/node/modules/dtypes"
 	"github.com/google/uuid"
-	"golang.org/x/xerrors"
+	xerrors "golang.org/x/xerrors"
 	"io"
 	"time"
 
@@ -390,11 +390,11 @@ type UserAPIStruct struct {
 
 		CreateAPIKey func(p0 context.Context, p1 string, p2 string) (string, error) `perm:"web,admin"`
 
-		CreateFileGroup func(p0 context.Context, p1 int, p2 string) ([]*types.FileGroup, error) `perm:"user"`
+		CreateAssetGroup func(p0 context.Context, p1 int, p2 string) ([]*types.AssetGroup, error) `perm:"user"`
 
 		DeleteAPIKey func(p0 context.Context, p1 string, p2 string) (error) `perm:"web,admin"`
 
-		DeleteFileGroup func(p0 context.Context, p1 int) (error) `perm:"user"`
+		DeleteAssetGroup func(p0 context.Context, p1 int) (error) `perm:"user"`
 
 		GetAPIKeys func(p0 context.Context, p1 string) (map[string]types.UserAPIKeysInfo, error) `perm:"web,admin"`
 
@@ -406,11 +406,13 @@ type UserAPIStruct struct {
 
 		GetUserStorageStats func(p0 context.Context, p1 string) (*types.StorageStats, error) `perm:"web,admin"`
 
-		ListFileGroup func(p0 context.Context, p1 int) ([]*types.FileGroup, error) `perm:"user"`
+		ListAssetGroup func(p0 context.Context, p1 int) ([]*types.AssetGroup, error) `perm:"user"`
 
 		ListUserStorageStats func(p0 context.Context, p1 int, p2 int) (*types.ListStorageStatsRsp, error) `perm:"web,admin"`
 
-		RenameFileGroup func(p0 context.Context, p1 *types.FileGroup) (error) `perm:"user"`
+		MoveAssetToGroup func(p0 context.Context, p1 string, p2 int) (error) `perm:"user"`
+
+		RenameAssetGroup func(p0 context.Context, p1 *types.AssetGroup) (error) `perm:"user"`
 
 		SetUserVIP func(p0 context.Context, p1 string, p2 bool) (error) `perm:"admin"`
 
@@ -1561,15 +1563,15 @@ func (s *UserAPIStub) CreateAPIKey(p0 context.Context, p1 string, p2 string) (st
 	return "", ErrNotSupported
 }
 
-func (s *UserAPIStruct) CreateFileGroup(p0 context.Context, p1 int, p2 string) ([]*types.FileGroup, error) {
-	if s.Internal.CreateFileGroup == nil {
-		return *new([]*types.FileGroup), ErrNotSupported
+func (s *UserAPIStruct) CreateAssetGroup(p0 context.Context, p1 int, p2 string) ([]*types.AssetGroup, error) {
+	if s.Internal.CreateAssetGroup == nil {
+		return *new([]*types.AssetGroup), ErrNotSupported
 	}
-	return s.Internal.CreateFileGroup(p0, p1, p2)
+	return s.Internal.CreateAssetGroup(p0, p1, p2)
 }
 
-func (s *UserAPIStub) CreateFileGroup(p0 context.Context, p1 int, p2 string) ([]*types.FileGroup, error) {
-	return *new([]*types.FileGroup), ErrNotSupported
+func (s *UserAPIStub) CreateAssetGroup(p0 context.Context, p1 int, p2 string) ([]*types.AssetGroup, error) {
+	return *new([]*types.AssetGroup), ErrNotSupported
 }
 
 func (s *UserAPIStruct) DeleteAPIKey(p0 context.Context, p1 string, p2 string) (error) {
@@ -1583,14 +1585,14 @@ func (s *UserAPIStub) DeleteAPIKey(p0 context.Context, p1 string, p2 string) (er
 	return ErrNotSupported
 }
 
-func (s *UserAPIStruct) DeleteFileGroup(p0 context.Context, p1 int) (error) {
-	if s.Internal.DeleteFileGroup == nil {
+func (s *UserAPIStruct) DeleteAssetGroup(p0 context.Context, p1 int) (error) {
+	if s.Internal.DeleteAssetGroup == nil {
 		return ErrNotSupported
 	}
-	return s.Internal.DeleteFileGroup(p0, p1)
+	return s.Internal.DeleteAssetGroup(p0, p1)
 }
 
-func (s *UserAPIStub) DeleteFileGroup(p0 context.Context, p1 int) (error) {
+func (s *UserAPIStub) DeleteAssetGroup(p0 context.Context, p1 int) (error) {
 	return ErrNotSupported
 }
 
@@ -1649,15 +1651,15 @@ func (s *UserAPIStub) GetUserStorageStats(p0 context.Context, p1 string) (*types
 	return nil, ErrNotSupported
 }
 
-func (s *UserAPIStruct) ListFileGroup(p0 context.Context, p1 int) ([]*types.FileGroup, error) {
-	if s.Internal.ListFileGroup == nil {
-		return *new([]*types.FileGroup), ErrNotSupported
+func (s *UserAPIStruct) ListAssetGroup(p0 context.Context, p1 int) ([]*types.AssetGroup, error) {
+	if s.Internal.ListAssetGroup == nil {
+		return *new([]*types.AssetGroup), ErrNotSupported
 	}
-	return s.Internal.ListFileGroup(p0, p1)
+	return s.Internal.ListAssetGroup(p0, p1)
 }
 
-func (s *UserAPIStub) ListFileGroup(p0 context.Context, p1 int) ([]*types.FileGroup, error) {
-	return *new([]*types.FileGroup), ErrNotSupported
+func (s *UserAPIStub) ListAssetGroup(p0 context.Context, p1 int) ([]*types.AssetGroup, error) {
+	return *new([]*types.AssetGroup), ErrNotSupported
 }
 
 func (s *UserAPIStruct) ListUserStorageStats(p0 context.Context, p1 int, p2 int) (*types.ListStorageStatsRsp, error) {
@@ -1671,14 +1673,25 @@ func (s *UserAPIStub) ListUserStorageStats(p0 context.Context, p1 int, p2 int) (
 	return nil, ErrNotSupported
 }
 
-func (s *UserAPIStruct) RenameFileGroup(p0 context.Context, p1 *types.FileGroup) (error) {
-	if s.Internal.RenameFileGroup == nil {
+func (s *UserAPIStruct) MoveAssetToGroup(p0 context.Context, p1 string, p2 int) (error) {
+	if s.Internal.MoveAssetToGroup == nil {
 		return ErrNotSupported
 	}
-	return s.Internal.RenameFileGroup(p0, p1)
+	return s.Internal.MoveAssetToGroup(p0, p1, p2)
 }
 
-func (s *UserAPIStub) RenameFileGroup(p0 context.Context, p1 *types.FileGroup) (error) {
+func (s *UserAPIStub) MoveAssetToGroup(p0 context.Context, p1 string, p2 int) (error) {
+	return ErrNotSupported
+}
+
+func (s *UserAPIStruct) RenameAssetGroup(p0 context.Context, p1 *types.AssetGroup) (error) {
+	if s.Internal.RenameAssetGroup == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.RenameAssetGroup(p0, p1)
+}
+
+func (s *UserAPIStub) RenameAssetGroup(p0 context.Context, p1 *types.AssetGroup) (error) {
 	return ErrNotSupported
 }
 
