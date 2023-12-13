@@ -7,6 +7,7 @@ import (
 	"github.com/Filecoin-Titan/titan/api"
 	"github.com/Filecoin-Titan/titan/api/terrors"
 	"github.com/Filecoin-Titan/titan/api/types"
+	"github.com/Filecoin-Titan/titan/node/cidutil"
 	"github.com/Filecoin-Titan/titan/node/handler"
 	"github.com/Filecoin-Titan/titan/node/scheduler/user"
 	"github.com/filecoin-project/go-jsonrpc/auth"
@@ -165,7 +166,7 @@ func (s *Scheduler) ListUserStorageStats(ctx context.Context, limit, offset int)
 func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name string) ([]*types.AssetGroup, error) {
 	userID := handler.GetUserID(ctx)
 	if len(userID) == 0 {
-		return nil, fmt.Errorf("CreateFileGroup failed, can not get user id")
+		return nil, fmt.Errorf("CreateAssetGroup failed, can not get user id")
 	}
 
 	count, err := s.db.GetAssetGroupCount(userID)
@@ -174,7 +175,7 @@ func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name strin
 	}
 
 	if count >= userFileGroupMaxCount {
-		return nil, fmt.Errorf("CreateFileGroup failed, Exceed the limit %d", userFileGroupMaxCount)
+		return nil, fmt.Errorf("CreateAssetGroup failed, Exceed the limit %d", userFileGroupMaxCount)
 	}
 
 	err = s.db.CreateAssetGroup(&types.AssetGroup{UserID: userID, Parent: parent, Name: name})
@@ -189,7 +190,7 @@ func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name strin
 func (s *Scheduler) ListAssetGroup(ctx context.Context, parent int) ([]*types.AssetGroup, error) {
 	userID := handler.GetUserID(ctx)
 	if len(userID) == 0 {
-		return nil, fmt.Errorf("ListFileGroup failed, can not get user id")
+		return nil, fmt.Errorf("ListAssetGroup failed, can not get user id")
 	}
 
 	return s.db.ListAssetGroupForUser(userID, parent)
@@ -199,7 +200,7 @@ func (s *Scheduler) ListAssetGroup(ctx context.Context, parent int) ([]*types.As
 func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int) error {
 	userID := handler.GetUserID(ctx)
 	if len(userID) == 0 {
-		return fmt.Errorf("DeleteFileGroup failed, can not get user id")
+		return fmt.Errorf("DeleteAssetGroup failed, can not get user id")
 	}
 
 	list, err := s.db.ListAllAssetsForUser(userID, gid)
@@ -208,7 +209,7 @@ func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int) error {
 	}
 
 	if len(list) > 0 {
-		return fmt.Errorf("There are files in the group and the group cannot be deleted")
+		return fmt.Errorf("There are assets in the group and the group cannot be deleted")
 	}
 
 	// delete asset
@@ -222,7 +223,7 @@ func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int) error {
 func (s *Scheduler) RenameAssetGroup(ctx context.Context, info *types.AssetGroup) error {
 	userID := handler.GetUserID(ctx)
 	if len(userID) == 0 {
-		return fmt.Errorf("RenameFileGroup failed, can not get user id")
+		return fmt.Errorf("RenameAssetGroup failed, can not get user id")
 	}
 
 	return s.db.UpdateAssetGroupName(info)
@@ -230,5 +231,15 @@ func (s *Scheduler) RenameAssetGroup(ctx context.Context, info *types.AssetGroup
 
 // MoveAssetToGroup move a file to group
 func (s *Scheduler) MoveAssetToGroup(ctx context.Context, cid string, groupID int) error {
-	return nil
+	userID := handler.GetUserID(ctx)
+	if len(userID) == 0 {
+		return fmt.Errorf("MoveAssetToGroup failed, can not get user id")
+	}
+
+	hash, err := cidutil.CIDToHash(cid)
+	if err != nil {
+		return err
+	}
+
+	return s.db.UpdateAssetGroup(hash, userID, groupID)
 }

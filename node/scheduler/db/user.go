@@ -374,6 +374,14 @@ func (n *SQLDB) UpdateAssetGroupName(info *types.AssetGroup) error {
 	return err
 }
 
+// UpdateAssetGroup update user asset group
+func (n *SQLDB) UpdateAssetGroup(hash, userID string, groupID int) error {
+	query := fmt.Sprintf(
+		`UPDATE %s SET group_id=? WHERE user_id=? AND hash=?`, userAssetTable)
+	_, err := n.db.Exec(query, groupID, userID, hash)
+	return err
+}
+
 // ListAssetGroupForUser get asset group list
 func (n *SQLDB) ListAssetGroupForUser(user string, parent int) ([]*types.AssetGroup, error) {
 	var infos []*types.AssetGroup
