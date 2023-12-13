@@ -247,13 +247,13 @@ func (s *Scheduler) CreateUserAsset(ctx context.Context, assetProperty *types.As
 	return s.CreateAsset(ctx, &types.CreateAssetReq{UserID: userID, AssetProperty: *assetProperty})
 }
 
-func (s *Scheduler) ListUserAssets(ctx context.Context, limit, offset, groupID int) (*types.ListAssetRecordRsp, error) {
+func (s *Scheduler) ListUserAssets(ctx context.Context, limit, offset int) (*types.ListAssetRecordRsp, error) {
 	userID := handler.GetUserID(ctx)
 	if len(userID) == 0 {
 		return nil, fmt.Errorf("ListUserAssets failed, can not get user id")
 	}
 
-	return s.ListAssets(ctx, userID, limit, offset, groupID)
+	return s.ListAssets(ctx, userID, limit, offset)
 }
 
 // DeleteUserAsset deletes the asset of the user.
@@ -282,9 +282,11 @@ func (s *Scheduler) CreateAsset(ctx context.Context, req *types.CreateAssetReq) 
 }
 
 // ListAssets lists the assets of the user.
-func (s *Scheduler) ListAssets(ctx context.Context, userID string, limit, offset, groupID int) (*types.ListAssetRecordRsp, error) {
+func (s *Scheduler) ListAssets(ctx context.Context, userID string, limit, offset int) (*types.ListAssetRecordRsp, error) {
 	startTime := time.Now()
 	defer log.Debugf("ListAssets [%s] request time:%s", userID, time.Since(startTime))
+
+	groupID := 0
 
 	u := s.newUser(userID)
 	info, err := u.ListAssets(ctx, limit, offset, s.SchedulerCfg.MaxCountOfVisitShareLink, groupID)

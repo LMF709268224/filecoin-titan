@@ -71,9 +71,9 @@ type AssetAPIStruct struct {
 
 		GetReplicas func(p0 context.Context, p1 string, p2 int, p3 int) (*types.ListReplicaRsp, error) `perm:"web,admin"`
 
-		ListAssets func(p0 context.Context, p1 string, p2 int, p3 int, p4 int) (*types.ListAssetRecordRsp, error) `perm:"web,admin"`
+		ListAssets func(p0 context.Context, p1 string, p2 int, p3 int) (*types.ListAssetRecordRsp, error) `perm:"web,admin"`
 
-		ListUserAssets func(p0 context.Context, p1 int, p2 int, p3 int) (*types.ListAssetRecordRsp, error) `perm:"user"`
+		ListUserAssets func(p0 context.Context, p1 int, p2 int) (*types.ListAssetRecordRsp, error) `perm:"user"`
 
 		MinioUploadFileEvent func(p0 context.Context, p1 *types.MinioUploadFileEvent) (error) `perm:"candidate"`
 
@@ -656,25 +656,25 @@ func (s *AssetAPIStub) GetReplicas(p0 context.Context, p1 string, p2 int, p3 int
 	return nil, ErrNotSupported
 }
 
-func (s *AssetAPIStruct) ListAssets(p0 context.Context, p1 string, p2 int, p3 int, p4 int) (*types.ListAssetRecordRsp, error) {
+func (s *AssetAPIStruct) ListAssets(p0 context.Context, p1 string, p2 int, p3 int) (*types.ListAssetRecordRsp, error) {
 	if s.Internal.ListAssets == nil {
 		return nil, ErrNotSupported
 	}
-	return s.Internal.ListAssets(p0, p1, p2, p3, p4)
+	return s.Internal.ListAssets(p0, p1, p2, p3)
 }
 
-func (s *AssetAPIStub) ListAssets(p0 context.Context, p1 string, p2 int, p3 int, p4 int) (*types.ListAssetRecordRsp, error) {
+func (s *AssetAPIStub) ListAssets(p0 context.Context, p1 string, p2 int, p3 int) (*types.ListAssetRecordRsp, error) {
 	return nil, ErrNotSupported
 }
 
-func (s *AssetAPIStruct) ListUserAssets(p0 context.Context, p1 int, p2 int, p3 int) (*types.ListAssetRecordRsp, error) {
+func (s *AssetAPIStruct) ListUserAssets(p0 context.Context, p1 int, p2 int) (*types.ListAssetRecordRsp, error) {
 	if s.Internal.ListUserAssets == nil {
 		return nil, ErrNotSupported
 	}
-	return s.Internal.ListUserAssets(p0, p1, p2, p3)
+	return s.Internal.ListUserAssets(p0, p1, p2)
 }
 
-func (s *AssetAPIStub) ListUserAssets(p0 context.Context, p1 int, p2 int, p3 int) (*types.ListAssetRecordRsp, error) {
+func (s *AssetAPIStub) ListUserAssets(p0 context.Context, p1 int, p2 int) (*types.ListAssetRecordRsp, error) {
 	return nil, ErrNotSupported
 }
 
