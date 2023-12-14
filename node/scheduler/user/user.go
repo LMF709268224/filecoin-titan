@@ -216,6 +216,8 @@ func (u *User) ListAssets(ctx context.Context, limit, offset int, maxCountOfVisi
 
 		if !userInfo.EnableVIP && count >= maxCountOfVisitAsset {
 			userAsset.ShareStatus = int64(types.UserAssetShareStatusForbid)
+		} else if count > 0 {
+			userAsset.ShareStatus = int64(types.UserAssetShareStatusShared)
 		}
 
 		r := &types.AssetOverview{
