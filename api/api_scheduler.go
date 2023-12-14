@@ -154,15 +154,15 @@ type UserAPI interface {
 	ListUserStorageStats(ctx context.Context, limit, offset int) (*types.ListStorageStatsRsp, error) //perm:web,admin
 
 	// CreateAssetGroup create Asset group
-	CreateAssetGroup(ctx context.Context, parent int, name string) ([]*types.AssetGroup, error) //perm:user
+	CreateAssetGroup(ctx context.Context, parent int, name, userID string) ([]*types.AssetGroup, error) //perm:user,web,admin
 	// ListAssetGroup list Asset group
-	ListAssetGroup(ctx context.Context, parent int) ([]*types.AssetGroup, error) //perm:user
+	ListAssetGroup(ctx context.Context, parent int, userID string) ([]*types.AssetGroup, error) //perm:user,web,admin
 	// DeleteAssetGroup delete Asset group
-	DeleteAssetGroup(ctx context.Context, gid int) error //perm:user
+	DeleteAssetGroup(ctx context.Context, gid int, userID string) error //perm:user,web,admin
 	// RenameAssetGroup rename group
-	RenameAssetGroup(ctx context.Context, info *types.AssetGroup) error //perm:user
+	RenameAssetGroup(ctx context.Context, info *types.AssetGroup) error //perm:user,web,admin
 	// MoveAssetToGroup move a file to group
-	MoveAssetToGroup(ctx context.Context, cid string, groupID int) error //perm:user
+	MoveAssetToGroup(ctx context.Context, cid string, groupID int, userID string) error //perm:user,web,admin
 }
 
 // Scheduler is an interface for scheduler

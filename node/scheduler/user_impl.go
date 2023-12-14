@@ -163,10 +163,10 @@ func (s *Scheduler) ListUserStorageStats(ctx context.Context, limit, offset int)
 }
 
 // CreateAssetGroup create file group
-func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name string) ([]*types.AssetGroup, error) {
-	userID := handler.GetUserID(ctx)
-	if len(userID) == 0 {
-		return nil, fmt.Errorf("CreateAssetGroup failed, can not get user id")
+func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name, userID string) ([]*types.AssetGroup, error) {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
 	}
 
 	count, err := s.db.GetAssetGroupCount(userID)
@@ -187,20 +187,20 @@ func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name strin
 }
 
 // ListAssetGroup list file group
-func (s *Scheduler) ListAssetGroup(ctx context.Context, parent int) ([]*types.AssetGroup, error) {
-	userID := handler.GetUserID(ctx)
-	if len(userID) == 0 {
-		return nil, fmt.Errorf("ListAssetGroup failed, can not get user id")
+func (s *Scheduler) ListAssetGroup(ctx context.Context, parent int, userID string) ([]*types.AssetGroup, error) {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
 	}
 
 	return s.db.ListAssetGroupForUser(userID, parent)
 }
 
 // DeleteAssetGroup delete asset group
-func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int) error {
-	userID := handler.GetUserID(ctx)
-	if len(userID) == 0 {
-		return fmt.Errorf("DeleteAssetGroup failed, can not get user id")
+func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int, userID string) error {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
 	}
 
 	list, err := s.db.ListAllAssetsForUser(userID, gid)
@@ -221,19 +221,19 @@ func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int) error {
 
 // RenameAssetGroup rename group
 func (s *Scheduler) RenameAssetGroup(ctx context.Context, info *types.AssetGroup) error {
-	userID := handler.GetUserID(ctx)
-	if len(userID) == 0 {
-		return fmt.Errorf("RenameAssetGroup failed, can not get user id")
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		info.UserID = uID
 	}
 
 	return s.db.UpdateAssetGroupName(info)
 }
 
 // MoveAssetToGroup move a file to group
-func (s *Scheduler) MoveAssetToGroup(ctx context.Context, cid string, groupID int) error {
-	userID := handler.GetUserID(ctx)
-	if len(userID) == 0 {
-		return fmt.Errorf("MoveAssetToGroup failed, can not get user id")
+func (s *Scheduler) MoveAssetToGroup(ctx context.Context, cid string, groupID int, userID string) error {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
 	}
 
 	hash, err := cidutil.CIDToHash(cid)
