@@ -367,10 +367,10 @@ func (n *SQLDB) GetAssetGroupCount(userID string) (int64, error) {
 }
 
 // UpdateAssetGroupName update user asset group name
-func (n *SQLDB) UpdateAssetGroupName(info *types.AssetGroup) error {
+func (n *SQLDB) UpdateAssetGroupName(userID, rename string, groupID int) error {
 	query := fmt.Sprintf(
 		`UPDATE %s SET name=? WHERE user_id=? AND id=? `, userAssetGroupTable)
-	_, err := n.db.Exec(query, info.Name, info.UserID, info.ID)
+	_, err := n.db.Exec(query, rename, userID, groupID)
 	return err
 }
 

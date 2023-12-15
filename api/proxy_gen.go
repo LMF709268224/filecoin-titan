@@ -8,7 +8,7 @@ import (
 	"github.com/Filecoin-Titan/titan/journal/alerting"
 	"github.com/Filecoin-Titan/titan/node/modules/dtypes"
 	"github.com/google/uuid"
-	"golang.org/x/xerrors"
+	xerrors "golang.org/x/xerrors"
 	"io"
 	"time"
 
@@ -412,7 +412,7 @@ type UserAPIStruct struct {
 
 		MoveAssetToGroup func(p0 context.Context, p1 string, p2 int, p3 string) (error) `perm:"user,web,admin"`
 
-		RenameAssetGroup func(p0 context.Context, p1 *types.AssetGroup) (error) `perm:"user,web,admin"`
+		RenameAssetGroup func(p0 context.Context, p1 int, p2 string, p3 string) (error) `perm:"user,web,admin"`
 
 		SetUserVIP func(p0 context.Context, p1 string, p2 bool) (error) `perm:"admin"`
 
@@ -1684,14 +1684,14 @@ func (s *UserAPIStub) MoveAssetToGroup(p0 context.Context, p1 string, p2 int, p3
 	return ErrNotSupported
 }
 
-func (s *UserAPIStruct) RenameAssetGroup(p0 context.Context, p1 *types.AssetGroup) (error) {
+func (s *UserAPIStruct) RenameAssetGroup(p0 context.Context, p1 int, p2 string, p3 string) (error) {
 	if s.Internal.RenameAssetGroup == nil {
 		return ErrNotSupported
 	}
-	return s.Internal.RenameAssetGroup(p0, p1)
+	return s.Internal.RenameAssetGroup(p0, p1, p2, p3)
 }
 
-func (s *UserAPIStub) RenameAssetGroup(p0 context.Context, p1 *types.AssetGroup) (error) {
+func (s *UserAPIStub) RenameAssetGroup(p0 context.Context, p1 int, p2 string, p3 string) (error) {
 	return ErrNotSupported
 }
 

@@ -229,13 +229,13 @@ func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int, userID string
 }
 
 // RenameAssetGroup rename group
-func (s *Scheduler) RenameAssetGroup(ctx context.Context, info *types.AssetGroup) error {
+func (s *Scheduler) RenameAssetGroup(ctx context.Context, groupID int, rename, userID string) error {
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
-		info.UserID = uID
+		userID = uID
 	}
 
-	return s.db.UpdateAssetGroupName(info)
+	return s.db.UpdateAssetGroupName(userID, rename, groupID)
 }
 
 // MoveAssetToGroup move a file to group

@@ -160,7 +160,7 @@ type UserAPI interface {
 	// DeleteAssetGroup delete Asset group
 	DeleteAssetGroup(ctx context.Context, gid int, userID string) error //perm:user,web,admin
 	// RenameAssetGroup rename group
-	RenameAssetGroup(ctx context.Context, info *types.AssetGroup) error //perm:user,web,admin
+	RenameAssetGroup(ctx context.Context, groupID int, rename, userID string) error //perm:user,web,admin
 	// MoveAssetToGroup move a file to group
 	MoveAssetToGroup(ctx context.Context, cid string, groupID int, userID string) error //perm:user,web,admin
 }
