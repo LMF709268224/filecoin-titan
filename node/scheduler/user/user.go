@@ -68,7 +68,12 @@ func (u *User) GetInfo() (*types.UserInfo, error) {
 }
 
 // CreateAPIKey creates a key for the client API.
-func (u *User) CreateAPIKey(ctx context.Context, keyName string, commonAPI api.Common) (string, error) {
+func (u *User) CreateAPIKey(ctx context.Context, keyName string, perms []types.UserAccessControl, schedulerCfg *config.SchedulerCfg, commonAPI api.Common) (string, error) {
+	// check perms
+	if err := checkPermsIfInACL(perms); err != nil {
+		return "", err
+	}
+
 	apiKeys, err := u.GetAPIKeys(ctx)
 	if err != nil {
 		return "", err
@@ -82,7 +87,11 @@ func (u *User) CreateAPIKey(ctx context.Context, keyName string, commonAPI api.C
 		return "", &api.ErrWeb{Code: terrors.SameNameAPPKeyAlreadyExist.Int(), Message: fmt.Sprintf("the API key %s already exist", keyName)}
 	}
 
-	keyValue, err := generateAPIKey(u.ID, keyName, commonAPI)
+	if len(apiKeys) >= schedulerCfg.MaxAPIKey {
+		return "", &api.ErrWeb{Code: terrors.OutOfMaxAPIKeyLimit.Int(), Message: fmt.Sprintf("api key exceeds maximum limit %d", schedulerCfg.MaxAPIKey)}
+	}
+
+	keyValue, err := generateAPIKey(u.ID, keyName, perms, commonAPI)
 	if err != nil {
 		return "", err
 	}
@@ -358,8 +367,8 @@ func (u *User) encodeAPIKeys(apiKeys map[string]types.UserAPIKeysInfo) ([]byte, 
 	return buffer.Bytes(), nil
 }
 
-func generateAPIKey(userID string, keyName string, commonAPI api.Common) (string, error) {
-	payload := types.JWTPayload{ID: userID, Allow: []auth.Permission{api.RoleUser}, Extend: keyName}
+func generateAPIKey(userID string, keyName string, perms []types.UserAccessControl, commonAPI api.Common) (string, error) {
+	payload := types.JWTPayload{ID: userID, Allow: []auth.Permission{api.RoleUser}, Extend: keyName, AccessControlList: perms}
 	tk, err := commonAPI.AuthNew(context.Background(), &payload)
 	if err != nil {
 		return "", err
@@ -381,4 +390,22 @@ func generateAccessToken(auth *types.AuthUserUploadDownloadAsset, commonAPI api.
 	}
 
 	return tk, nil
+}
+
+func checkPermsIfInACL(perms []types.UserAccessControl) error {
+	for _, perm := range perms {
+		isInACL := false
+		for _, ac := range types.UserAccessControlAll {
+			if perm == ac {
+				isInACL = true
+				break
+			}
+		}
+
+		if !isInACL {
+			return fmt.Errorf("%s not in acl %s", perm, types.UserAccessControlAll)
+		}
+	}
+
+	return nil
 }

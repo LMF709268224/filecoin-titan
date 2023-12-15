@@ -41,22 +41,14 @@ type AssetAPI interface {
 	GetReplicaEventsForNode(ctx context.Context, nodeID string, limit, offset int) (*types.ListReplicaEventRsp, error) //perm:web,admin
 	// GetReplicaEvents retrieves a replica event list of node
 	GetReplicaEvents(ctx context.Context, start, end time.Time, limit, offset int) (*types.ListReplicaEventRsp, error) //perm:web,admin
-	// CreateUserAsset creates an asset with car CID, car name, and car size.
-	CreateUserAsset(ctx context.Context, assetProperty *types.AssetProperty) (*types.CreateAssetRsp, error) //perm:user
-	// ListUserAssets lists the assets of the user.
-	ListUserAssets(ctx context.Context, limit, offset, groupID int) (*types.ListAssetRecordRsp, error) //perm:user
-	// DeleteUserAsset deletes the asset of the user.
-	DeleteUserAsset(ctx context.Context, assetCID string) error //perm:user
-	// ShareUserAssets shares the assets of the user.
-	ShareUserAssets(ctx context.Context, assetCID []string) (map[string]string, error) //perm:user
 	// CreateAsset creates an asset with car CID, car name, and car size.
-	CreateAsset(ctx context.Context, req *types.CreateAssetReq) (*types.CreateAssetRsp, error) //perm:web
+	CreateAsset(ctx context.Context, req *types.CreateAssetReq) (*types.CreateAssetRsp, error) //perm:web,admin,user
 	// ListAssets lists the assets of the user.
-	ListAssets(ctx context.Context, userID string, limit, offset, groupID int) (*types.ListAssetRecordRsp, error) //perm:web,admin
+	ListAssets(ctx context.Context, userID string, limit, offset, groupID int) (*types.ListAssetRecordRsp, error) //perm:web,admin,user
 	// DeleteAsset deletes the asset of the user.
-	DeleteAsset(ctx context.Context, userID, assetCID string) error //perm:web,admin
+	DeleteAsset(ctx context.Context, userID, assetCID string) error //perm:web,admin,user
 	// ShareAssets shares the assets of the user.
-	ShareAssets(ctx context.Context, userID string, assetCID []string) (map[string]string, error) //perm:web,admin
+	ShareAssets(ctx context.Context, userID string, assetCID []string) (map[string]string, error) //perm:web,admin,user
 	// UpdateShareStatus update share status of the user asset
 	UpdateShareStatus(ctx context.Context, userID, assetCID string) error //perm:web,admin
 	// GetAssetStatus retrieves a asset status
@@ -137,7 +129,7 @@ type UserAPI interface {
 	// GetUserInfos get user infos
 	GetUserInfos(ctx context.Context, userIDs []string) (map[string]*types.UserInfo, error) // perm:web,admin
 	// CreateAPIKey creates a key for the client API.
-	CreateAPIKey(ctx context.Context, userID, keyName string) (string, error) //perm:web,admin
+	CreateAPIKey(ctx context.Context, userID, keyName string, acl []types.UserAccessControl) (string, error) //perm:web,admin
 	// GetAPIKeys get all api key for user.
 	GetAPIKeys(ctx context.Context, userID string) (map[string]types.UserAPIKeysInfo, error) //perm:web,admin
 	// DeleteAPIKey delete a api key for user
@@ -163,6 +155,8 @@ type UserAPI interface {
 	RenameAssetGroup(ctx context.Context, groupID int, rename, userID string) error //perm:user,web,admin
 	// MoveAssetToGroup move a file to group
 	MoveAssetToGroup(ctx context.Context, cid string, groupID int, userID string) error //perm:user,web,admin
+	// GetAPPKeyPermissions get the permissions of user app key
+	GetAPPKeyPermissions(ctx context.Context, userID, keyName string) ([]string, error) //perm:user,web,admin
 }
 
 // Scheduler is an interface for scheduler

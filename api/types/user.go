@@ -64,3 +64,35 @@ const (
 	UserAssetShareStatusShared
 	UserAssetShareStatusForbid
 )
+
+type UserAccessControl string
+
+const (
+	UserAPIKeyReadFile     UserAccessControl = "readFile"
+	UserAPIKeyCreateFile   UserAccessControl = "createFile"
+	UserAPIKeyDeleteFile   UserAccessControl = "deleteFile"
+	UserAPIKeyReadFolder   UserAccessControl = "readFolder"
+	UserAPIKeyCreateFolder UserAccessControl = "createFolder"
+	UserAPIKeyDeleteFolder UserAccessControl = "deleteFolder"
+)
+
+var UserAccessControlAll = []UserAccessControl{
+	UserAPIKeyReadFile,
+	UserAPIKeyCreateFile,
+	UserAPIKeyDeleteFile,
+	UserAPIKeyReadFolder,
+	UserAPIKeyCreateFolder,
+	UserAPIKeyDeleteFolder,
+}
+
+// key is function name, value is permission name
+var FuncAccessControlMap = map[string]UserAccessControl{
+	"CreateAsset":      UserAPIKeyCreateFile,
+	"ListAssets":       UserAPIKeyReadFile,
+	"DeleteAsset":      UserAPIKeyDeleteFile,
+	"ShareAssets":      UserAPIKeyReadFile,
+	"CreateAssetGroup": UserAPIKeyCreateFolder,
+	"ListAssetGroup":   UserAPIKeyReadFolder,
+	"DeleteAssetGroup": UserAPIKeyDeleteFolder,
+	"RenameAssetGroup": UserAPIKeyCreateFolder,
+}

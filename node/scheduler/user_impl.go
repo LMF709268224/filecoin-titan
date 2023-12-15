@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/Filecoin-Titan/titan/api"
-	"github.com/Filecoin-Titan/titan/api/terrors"
 	"github.com/Filecoin-Titan/titan/api/types"
 	"github.com/Filecoin-Titan/titan/node/cidutil"
 	"github.com/Filecoin-Titan/titan/node/handler"
@@ -69,18 +68,9 @@ func (s *Scheduler) loadUserInfo(userID string) (*types.UserInfo, error) {
 }
 
 // CreateAPIKey creates a key for the client API.
-func (s *Scheduler) CreateAPIKey(ctx context.Context, userID, keyName string) (string, error) {
+func (s *Scheduler) CreateAPIKey(ctx context.Context, userID, keyName string, perms []types.UserAccessControl) (string, error) {
 	u := s.newUser(userID)
-	keys, err := u.GetAPIKeys(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	if len(keys) >= s.SchedulerCfg.MaxAPIKey {
-		return "", &api.ErrWeb{Code: terrors.OutOfMaxAPIKeyLimit.Int(), Message: fmt.Sprintf("api key exceeds maximum limit %d", s.SchedulerCfg.MaxAPIKey)}
-	}
-
-	info, err := u.CreateAPIKey(ctx, keyName, s.CommonAPI)
+	info, err := u.CreateAPIKey(ctx, keyName, perms, s.SchedulerCfg, s.CommonAPI)
 	if err != nil {
 		return "", err
 	}
@@ -144,7 +134,7 @@ func (s *Scheduler) GetUserAccessToken(ctx context.Context, userID string) (stri
 		return "", err
 	}
 
-	payload := types.JWTPayload{ID: userID, Allow: []auth.Permission{api.RoleUser}}
+	payload := types.JWTPayload{ID: userID, Allow: []auth.Permission{api.RoleUser}, AccessControlList: types.UserAccessControlAll}
 	tk, err := s.AuthNew(ctx, &payload)
 	if err != nil {
 		return "", err
@@ -251,4 +241,28 @@ func (s *Scheduler) MoveAssetToGroup(ctx context.Context, cid string, groupID in
 	}
 
 	return s.db.UpdateAssetGroup(hash, userID, groupID)
+}
+
+// GetAPPKeyPermissions get the permission of user app key
+func (s *Scheduler) GetAPPKeyPermissions(ctx context.Context, userID string, keyName string) ([]string, error) {
+	keyMap, err := s.GetAPIKeys(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	key, ok := keyMap[keyName]
+	if !ok {
+		return nil, fmt.Errorf("user %s APPKey %s not exist", userID, keyName)
+	}
+
+	payload, err := s.AuthVerify(ctx, key.APIKey)
+	if err != nil {
+		return nil, err
+	}
+
+	permissions := make([]string, 0, len(payload.AccessControlList))
+	for _, accessControl := range payload.AccessControlList {
+		permissions = append(permissions, string(accessControl))
+	}
+	return permissions, nil
 }

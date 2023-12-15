@@ -237,44 +237,6 @@ func (s *Scheduler) GetReplicaEvents(ctx context.Context, start, end time.Time, 
 	return info, nil
 }
 
-// CreateUserAsset creates an user asset with car CID, car name, and car size.
-func (s *Scheduler) CreateUserAsset(ctx context.Context, assetProperty *types.AssetProperty) (*types.CreateAssetRsp, error) {
-	userID := handler.GetUserID(ctx)
-	if len(userID) == 0 {
-		return nil, fmt.Errorf("CreateUserAsset failed, can not get user id")
-	}
-
-	return s.CreateAsset(ctx, &types.CreateAssetReq{UserID: userID, AssetProperty: *assetProperty})
-}
-
-func (s *Scheduler) ListUserAssets(ctx context.Context, limit, offset, groupID int) (*types.ListAssetRecordRsp, error) {
-	userID := handler.GetUserID(ctx)
-	if len(userID) == 0 {
-		return nil, fmt.Errorf("ListUserAssets failed, can not get user id")
-	}
-
-	return s.ListAssets(ctx, userID, limit, offset, groupID)
-}
-
-// DeleteUserAsset deletes the asset of the user.
-func (s *Scheduler) DeleteUserAsset(ctx context.Context, assetCID string) error {
-	userID := handler.GetUserID(ctx)
-	if len(userID) == 0 {
-		return fmt.Errorf("DeleteUserAsset failed, can not get user id")
-	}
-	return s.DeleteAsset(ctx, userID, assetCID)
-}
-
-// ShareUserAssets shares the assets of the user.
-func (s *Scheduler) ShareUserAssets(ctx context.Context, assetCID []string) (map[string]string, error) {
-	userID := handler.GetUserID(ctx)
-	if len(userID) == 0 {
-		return nil, fmt.Errorf("ShareUserAssets failed, can not get user id")
-	}
-
-	return s.ShareAssets(ctx, userID, assetCID)
-}
-
 // CreateAsset creates an asset with car CID, car name, and car size.
 func (s *Scheduler) CreateAsset(ctx context.Context, req *types.CreateAssetReq) (*types.CreateAssetRsp, error) {
 	u := s.newUser(req.UserID)
