@@ -165,7 +165,8 @@ var cUserAssetTable = `
 		password          VARCHAR(128) DEFAULT '' ,		
 		group_id          INT          DEFAULT 0,
 		PRIMARY KEY (hash,user_id),
-		KEY idx_user_id (user_id)
+		KEY idx_user_id (user_id),
+		KEY idx_group_id (group_id)
     ) ENGINE=InnoDB COMMENT='user asset';`
 
 var cUserInfoTable = `
@@ -230,5 +231,6 @@ var cUserAssetGroupTable = `
 		parent        INT          DEFAULT 0,
 	    created_time  DATETIME     DEFAULT CURRENT_TIMESTAMP,
 		PRIMARY KEY (id),
-	    KEY idx_user_id (user_id)
+	    KEY idx_user_id (user_id),
+	    KEY idx_parent (parent)
     ) ENGINE=InnoDB COMMENT='user asset group';`
