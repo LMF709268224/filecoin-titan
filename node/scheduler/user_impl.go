@@ -203,13 +203,22 @@ func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int, userID string
 		userID = uID
 	}
 
-	list, err := s.db.ListAllAssetsForUser(userID, gid)
+	aList, err := s.db.ListAllAssetsForUser(userID, gid)
 	if err != nil {
 		return err
 	}
 
-	if len(list) > 0 {
+	if len(aList) > 0 {
 		return fmt.Errorf("There are assets in the group and the group cannot be deleted")
+	}
+
+	gList, err := s.db.ListAssetGroupForUser(userID, gid)
+	if err != nil {
+		return err
+	}
+
+	if len(gList) > 0 {
+		return fmt.Errorf("There are groups in the group and the group cannot be deleted")
 	}
 
 	// delete asset
