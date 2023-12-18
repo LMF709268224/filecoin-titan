@@ -71,7 +71,7 @@ func (u *User) GetInfo() (*types.UserInfo, error) {
 func (u *User) CreateAPIKey(ctx context.Context, keyName string, perms []types.UserAccessControl, schedulerCfg *config.SchedulerCfg, commonAPI api.Common) (string, error) {
 	// check perms
 	if err := checkPermsIfInACL(perms); err != nil {
-		return "", err
+		return "", &api.ErrWeb{Code: terrors.APIKeyACLError.Int(), Message: err.Error()}
 	}
 
 	apiKeys, err := u.GetAPIKeys(ctx)
@@ -84,7 +84,7 @@ func (u *User) CreateAPIKey(ctx context.Context, keyName string, perms []types.U
 	}
 
 	if _, ok := apiKeys[keyName]; ok {
-		return "", &api.ErrWeb{Code: terrors.SameNameAPPKeyAlreadyExist.Int(), Message: fmt.Sprintf("the API key %s already exist", keyName)}
+		return "", &api.ErrWeb{Code: terrors.APPKeyAlreadyExist.Int(), Message: fmt.Sprintf("the API key %s already exist", keyName)}
 	}
 
 	if len(apiKeys) >= schedulerCfg.MaxAPIKey {
@@ -393,6 +393,10 @@ func generateAccessToken(auth *types.AuthUserUploadDownloadAsset, commonAPI api.
 }
 
 func checkPermsIfInACL(perms []types.UserAccessControl) error {
+	if len(perms) == 0 {
+		return fmt.Errorf("perms can not empty")
+	}
+
 	for _, perm := range perms {
 		isInACL := false
 		for _, ac := range types.UserAccessControlAll {

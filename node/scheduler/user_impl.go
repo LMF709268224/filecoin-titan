@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/Filecoin-Titan/titan/api"
+	"github.com/Filecoin-Titan/titan/api/terrors"
 	"github.com/Filecoin-Titan/titan/api/types"
 	"github.com/Filecoin-Titan/titan/node/cidutil"
 	"github.com/Filecoin-Titan/titan/node/handler"
@@ -252,7 +253,7 @@ func (s *Scheduler) GetAPPKeyPermissions(ctx context.Context, userID string, key
 
 	key, ok := keyMap[keyName]
 	if !ok {
-		return nil, fmt.Errorf("user %s APPKey %s not exist", userID, keyName)
+		return nil, &api.ErrWeb{Code: terrors.APPKeyNotFound.Int(), Message: fmt.Sprintf("the API key %s already exist", keyName)}
 	}
 
 	payload, err := s.AuthVerify(ctx, key.APIKey)
