@@ -322,7 +322,7 @@ func (s *Scheduler) MoveAssetGroup(ctx context.Context, groupID int, userID stri
 		}
 
 		if !exist {
-			return fmt.Errorf("CreateAssetGroup failed, group parent [%d] is not exist ", targetGroupID)
+			return fmt.Errorf("MoveAssetGroup failed, group parent [%d] is not exist ", targetGroupID)
 		}
 	}
 
