@@ -160,6 +160,17 @@ func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name, user
 		userID = uID
 	}
 
+	if parent != 0 {
+		exist, err := s.db.AssetGroupExists(userID, parent)
+		if err != nil {
+			return nil, err
+		}
+
+		if !exist {
+			return nil, fmt.Errorf("CreateAssetGroup failed, group parent [%d] is not exist ", parent)
+		}
+	}
+
 	count, err := s.db.GetAssetGroupCount(userID)
 	if err != nil {
 		return nil, err
