@@ -60,6 +60,8 @@ type AssetGroup struct {
 	UserID      string    `db:"user_id"`
 	Name        string    `db:"name"`
 	Parent      int       `db:"parent"`
+	AssetCount  int       `db:"asset_count"`
+	AssetSize   int64     `db:"asset_size"`
 	CreatedTime time.Time `db:"created_time"`
 }
 

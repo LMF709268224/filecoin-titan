@@ -398,7 +398,7 @@ func (n *SQLDB) ListAssetGroupForUser(user string, parent, limit, offset int) (*
 	var infos []*types.AssetGroup
 	var count int
 
-	query := fmt.Sprintf("SELECT * FROM %s WHERE user_id=? AND parent=? order by created_time desc LIMIT ? OFFSET ?", userAssetGroupTable)
+	query := fmt.Sprintf("SELECT a.*, COUNT(ua.user_id) AS asset_count,	COALESCE(SUM(ua.total_size), 0) AS asset_size FROM %s a	LEFT JOIN %s ua ON ua.user_id=a.user_id AND ua.group_id=a.id WHERE a.user_id=? AND a.parent=? GROUP BY a.id	ORDER BY a.created_time DESC LIMIT ? OFFSET ?", userAssetGroupTable, userAssetTable)
 	err := n.db.Select(&infos, query, user, parent, limit, offset)
 	if err != nil {
 		return nil, err
