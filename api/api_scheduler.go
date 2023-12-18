@@ -157,6 +157,8 @@ type UserAPI interface {
 	RenameAssetGroup(ctx context.Context, groupID int, rename, userID string) error //perm:user,web,admin
 	// MoveAssetToGroup move a file to group
 	MoveAssetToGroup(ctx context.Context, cid string, groupID int, userID string) error //perm:user,web,admin
+	// MoveAssetGroup move a asset group
+	MoveAssetGroup(ctx context.Context, groupID int, userID string, targetGroupID int) error //perm:user,web,admin
 	// GetAPPKeyPermissions get the permissions of user app key
 	GetAPPKeyPermissions(ctx context.Context, userID, keyName string) ([]string, error) //perm:user,web,admin
 }

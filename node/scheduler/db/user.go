@@ -384,6 +384,14 @@ func (n *SQLDB) UpdateAssetGroupName(userID, rename string, groupID int) error {
 	return err
 }
 
+// UpdateAssetGroupParent update user asset group parent
+func (n *SQLDB) UpdateAssetGroupParent(userID string, groupID, parent int) error {
+	query := fmt.Sprintf(
+		`UPDATE %s SET parent=? WHERE user_id=? AND id=? `, userAssetGroupTable)
+	_, err := n.db.Exec(query, parent, userID, groupID)
+	return err
+}
+
 // UpdateAssetGroup update user asset group
 func (n *SQLDB) UpdateAssetGroup(hash, userID string, groupID int) error {
 	query := fmt.Sprintf(

@@ -406,6 +406,8 @@ type UserAPIStruct struct {
 
 		ListUserStorageStats func(p0 context.Context, p1 int, p2 int) (*types.ListStorageStatsRsp, error) `perm:"web,admin"`
 
+		MoveAssetGroup func(p0 context.Context, p1 int, p2 string, p3 int) (error) `perm:"user,web,admin"`
+
 		MoveAssetToGroup func(p0 context.Context, p1 string, p2 int, p3 string) (error) `perm:"user,web,admin"`
 
 		RenameAssetGroup func(p0 context.Context, p1 int, p2 string, p3 string) (error) `perm:"user,web,admin"`
@@ -1645,6 +1647,17 @@ func (s *UserAPIStruct) ListUserStorageStats(p0 context.Context, p1 int, p2 int)
 
 func (s *UserAPIStub) ListUserStorageStats(p0 context.Context, p1 int, p2 int) (*types.ListStorageStatsRsp, error) {
 	return nil, ErrNotSupported
+}
+
+func (s *UserAPIStruct) MoveAssetGroup(p0 context.Context, p1 int, p2 string, p3 int) (error) {
+	if s.Internal.MoveAssetGroup == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.MoveAssetGroup(p0, p1, p2, p3)
+}
+
+func (s *UserAPIStub) MoveAssetGroup(p0 context.Context, p1 int, p2 string, p3 int) (error) {
+	return ErrNotSupported
 }
 
 func (s *UserAPIStruct) MoveAssetToGroup(p0 context.Context, p1 string, p2 int, p3 string) (error) {

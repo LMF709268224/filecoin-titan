@@ -308,6 +308,27 @@ func (s *Scheduler) MoveAssetToGroup(ctx context.Context, cid string, groupID in
 	return s.db.UpdateAssetGroup(hash, userID, groupID)
 }
 
+// MoveAssetGroup move a asset group
+func (s *Scheduler) MoveAssetGroup(ctx context.Context, groupID int, userID string, targetGroupID int) error {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
+	if targetGroupID > rootGroup {
+		exist, err := s.db.AssetGroupExists(userID, targetGroupID)
+		if err != nil {
+			return err
+		}
+
+		if !exist {
+			return fmt.Errorf("CreateAssetGroup failed, group parent [%d] is not exist ", targetGroupID)
+		}
+	}
+
+	return s.db.UpdateAssetGroupParent(userID, groupID, targetGroupID)
+}
+
 // GetAPPKeyPermissions get the permission of user app key
 func (s *Scheduler) GetAPPKeyPermissions(ctx context.Context, userID string, keyName string) ([]string, error) {
 	keyMap, err := s.GetAPIKeys(ctx, userID)
