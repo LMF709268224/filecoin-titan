@@ -62,3 +62,21 @@ type AssetGroup struct {
 	Parent      int       `db:"parent"`
 	CreatedTime time.Time `db:"created_time"`
 }
+
+// ListAssetGroupRsp list  asset group records
+type ListAssetGroupRsp struct {
+	Total       int           `json:"total"`
+	AssetGroups []*AssetGroup `json:"infos"`
+}
+
+// UserAssetSummary user asset and group
+type UserAssetSummary struct {
+	AssetOverview *AssetOverview
+	AssetGroup    *AssetGroup
+}
+
+// ListAssetSummaryRsp list asset and group
+type ListAssetSummaryRsp struct {
+	Total int                 `json:"total"`
+	List  []*UserAssetSummary `json:"list"`
+}

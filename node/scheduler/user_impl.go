@@ -14,7 +14,10 @@ import (
 	"golang.org/x/xerrors"
 )
 
-const userFileGroupMaxCount = 100
+const (
+	userFileGroupMaxCount = 100
+	rootGroup             = 0
+)
 
 // UserAPIKeysExists checks if the user exists.
 func (s *Scheduler) UserAPIKeysExists(ctx context.Context, userID string) error {
@@ -154,13 +157,13 @@ func (s *Scheduler) ListUserStorageStats(ctx context.Context, limit, offset int)
 }
 
 // CreateAssetGroup create file group
-func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name, userID string) ([]*types.AssetGroup, error) {
+func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name, userID string) (*types.AssetGroup, error) {
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
 		userID = uID
 	}
 
-	if parent != 0 {
+	if parent > rootGroup {
 		exist, err := s.db.AssetGroupExists(userID, parent)
 		if err != nil {
 			return nil, err
@@ -180,22 +183,72 @@ func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name, user
 		return nil, fmt.Errorf("CreateAssetGroup failed, Exceed the limit %d", userFileGroupMaxCount)
 	}
 
-	err = s.db.CreateAssetGroup(&types.AssetGroup{UserID: userID, Parent: parent, Name: name})
+	info, err := s.db.CreateAssetGroup(&types.AssetGroup{UserID: userID, Parent: parent, Name: name})
 	if err != nil {
 		return nil, err
 	}
 
-	return s.db.ListAssetGroupForUser(userID, parent)
+	return info, nil
 }
 
 // ListAssetGroup list file group
-func (s *Scheduler) ListAssetGroup(ctx context.Context, parent int, userID string) ([]*types.AssetGroup, error) {
+func (s *Scheduler) ListAssetGroup(ctx context.Context, parent int, userID string, limit int, offset int) (*types.ListAssetGroupRsp, error) {
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
 		userID = uID
 	}
 
-	return s.db.ListAssetGroupForUser(userID, parent)
+	return s.db.ListAssetGroupForUser(userID, parent, limit, offset)
+}
+
+// ListAssetSummary list file group
+func (s *Scheduler) ListAssetSummary(ctx context.Context, gid int, userID string, limit int, offset int) (*types.ListAssetSummaryRsp, error) {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
+	out := new(types.ListAssetSummaryRsp)
+
+	// list group
+	groupRsp, err := s.db.ListAssetGroupForUser(userID, gid, limit, offset)
+	if err != nil {
+		return nil, xerrors.Errorf("ListAssetGroupForUser err:%s", err.Error())
+	}
+
+	for _, group := range groupRsp.AssetGroups {
+		i := new(types.UserAssetSummary)
+		i.AssetGroup = group
+		out.List = append(out.List, i)
+	}
+
+	out.Total += groupRsp.Total
+
+	aLimit := limit - groupRsp.Total
+	if aLimit < 0 {
+		aLimit = 0
+	}
+
+	aOffset := offset - groupRsp.Total
+	if aOffset < 0 {
+		aOffset = 0
+	}
+
+	u := s.newUser(userID)
+	assetRsp, err := u.ListAssets(ctx, aLimit, aOffset, s.SchedulerCfg.MaxCountOfVisitShareLink, gid)
+	if err != nil {
+		return nil, xerrors.Errorf("ListAssets err:%s", err.Error())
+	}
+
+	for _, asset := range assetRsp.AssetOverviews {
+		i := new(types.UserAssetSummary)
+		i.AssetOverview = asset
+		out.List = append(out.List, i)
+	}
+
+	out.Total += assetRsp.Total
+
+	return out, nil
 }
 
 // DeleteAssetGroup delete asset group
@@ -205,21 +258,21 @@ func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int, userID string
 		userID = uID
 	}
 
-	aList, err := s.db.ListAllAssetsForUser(userID, gid)
+	gCount, err := s.db.GetUserAssetCountByGroupID(userID, gid)
 	if err != nil {
 		return err
 	}
 
-	if len(aList) > 0 {
+	if gCount > 0 {
 		return fmt.Errorf("There are assets in the group and the group cannot be deleted")
 	}
 
-	gList, err := s.db.ListAssetGroupForUser(userID, gid)
+	rsp, err := s.db.ListAssetGroupForUser(userID, gid, 1, 0)
 	if err != nil {
 		return err
 	}
 
-	if len(gList) > 0 {
+	if rsp.Total > 0 {
 		return fmt.Errorf("There are groups in the group and the group cannot be deleted")
 	}
 

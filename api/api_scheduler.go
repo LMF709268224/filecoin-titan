@@ -146,9 +146,11 @@ type UserAPI interface {
 	ListUserStorageStats(ctx context.Context, limit, offset int) (*types.ListStorageStatsRsp, error) //perm:web,admin
 
 	// CreateAssetGroup create Asset group
-	CreateAssetGroup(ctx context.Context, parent int, name, userID string) ([]*types.AssetGroup, error) //perm:user,web,admin
+	CreateAssetGroup(ctx context.Context, parent int, name, userID string) (*types.AssetGroup, error) //perm:user,web,admin
 	// ListAssetGroup list Asset group
-	ListAssetGroup(ctx context.Context, parent int, userID string) ([]*types.AssetGroup, error) //perm:user,web,admin
+	ListAssetGroup(ctx context.Context, parent int, userID string, limit int, offset int) (*types.ListAssetGroupRsp, error) //perm:user,web,admin
+	// ListAssetSummary list Asset and group
+	ListAssetSummary(ctx context.Context, parent int, userID string, limit int, offset int) (*types.ListAssetSummaryRsp, error) //perm:user,web,admin
 	// DeleteAssetGroup delete Asset group
 	DeleteAssetGroup(ctx context.Context, gid int, userID string) error //perm:user,web,admin
 	// RenameAssetGroup rename group

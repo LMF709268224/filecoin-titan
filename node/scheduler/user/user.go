@@ -217,23 +217,23 @@ func (u *User) ListAssets(ctx context.Context, limit, offset, maxCountOfVisitAss
 			continue
 		}
 
-		count, err := u.GetAssetVisitCount(userAsset.Hash)
+		gCount, err := u.GetAssetVisitCount(userAsset.Hash)
 		if err != nil {
 			log.Errorf("get asset visit count err: %s", err.Error())
 			continue
 		}
 
-		if !userInfo.EnableVIP && count >= maxCountOfVisitAsset {
+		if !userInfo.EnableVIP && gCount >= maxCountOfVisitAsset {
 			userAsset.ShareStatus = int64(types.UserAssetShareStatusForbid)
-		} else if count > 0 {
+		} else if gCount > 0 {
 			userAsset.ShareStatus = int64(types.UserAssetShareStatusShared)
 		}
 
 		r := &types.AssetOverview{
 			AssetRecord:      record,
 			UserAssetDetail:  userAsset,
-			VisitCount:       count,
-			RemainVisitCount: maxCountOfVisitAsset - count,
+			VisitCount:       gCount,
+			RemainVisitCount: maxCountOfVisitAsset - gCount,
 		}
 
 		list = append(list, r)
