@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Filecoin-Titan/titan/api"
 	"github.com/Filecoin-Titan/titan/api/terrors"
@@ -163,7 +164,7 @@ func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name, user
 		userID = uID
 	}
 
-	if parent > rootGroup {
+	if parent != rootGroup {
 		exist, err := s.db.AssetGroupExists(userID, parent)
 		if err != nil {
 			return nil, err
@@ -203,6 +204,9 @@ func (s *Scheduler) ListAssetGroup(ctx context.Context, parent int, userID strin
 
 // ListAssetSummary list file group
 func (s *Scheduler) ListAssetSummary(ctx context.Context, gid int, userID string, limit int, offset int) (*types.ListAssetSummaryRsp, error) {
+	startTime := time.Now()
+	defer log.Debugf("ListAssetSummary [userID:%s,gid:%d,limit:%d,offset:%d] request time:%s", userID, gid, limit, offset, time.Since(startTime))
+
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
 		userID = uID
@@ -224,7 +228,7 @@ func (s *Scheduler) ListAssetSummary(ctx context.Context, gid int, userID string
 
 	out.Total += groupRsp.Total
 
-	aLimit := limit - groupRsp.Total
+	aLimit := limit - len(groupRsp.AssetGroups)
 	if aLimit < 0 {
 		aLimit = 0
 	}
@@ -315,7 +319,15 @@ func (s *Scheduler) MoveAssetGroup(ctx context.Context, groupID int, userID stri
 		userID = uID
 	}
 
-	if targetGroupID > rootGroup {
+	if groupID == rootGroup {
+		return &api.ErrWeb{Code: terrors.RootGroupCannotMoved.Int(), Message: "the root group cannot be moved"}
+	}
+
+	if groupID == targetGroupID {
+		return &api.ErrWeb{Code: terrors.GroupsAreSame.Int(), Message: "groups are the same"}
+	}
+
+	if targetGroupID != rootGroup {
 		exist, err := s.db.AssetGroupExists(userID, targetGroupID)
 		if err != nil {
 			return err
@@ -324,9 +336,24 @@ func (s *Scheduler) MoveAssetGroup(ctx context.Context, groupID int, userID stri
 		if !exist {
 			return &api.ErrWeb{Code: terrors.GroupNotExist.Int(), Message: fmt.Sprintf("MoveAssetGroup failed, group parent [%d] is not exist ", targetGroupID)}
 		}
-	}
 
-	// Prevent loops
+		// Prevent loops
+		gid := targetGroupID
+		for {
+			gid, err = s.db.GetAssetGroupParent(gid)
+			if err != nil {
+				return err
+			}
+
+			if gid == groupID {
+				return &api.ErrWeb{Code: terrors.CannotMoveToSubgroup.Int(), Message: "cannot move to subgroup"}
+			}
+
+			if gid == rootGroup {
+				break
+			}
+		}
+	}
 
 	return s.db.UpdateAssetGroupParent(userID, groupID, targetGroupID)
 }

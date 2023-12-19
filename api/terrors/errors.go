@@ -24,6 +24,9 @@ const (
 	GroupNotEmptyCannotBeDelete // the group is not empty and cannot be deleted
 	GroupNotExist               // group not exist
 	GroupLimit                  // group limit
+	CannotMoveToSubgroup        // cannot move to subgroup
+	RootGroupCannotMoved        // the root group cannot be moved
+	GroupsAreSame               // groups are the same
 
 	Success = 0
 	Unknown = -1

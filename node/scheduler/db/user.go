@@ -366,13 +366,13 @@ func (n *SQLDB) AssetGroupExists(userID string, gid int) (bool, error) {
 }
 
 // GetAssetGroupParent get a group parent
-func (n *SQLDB) GetAssetGroupParent(gid int) (string, error) {
-	var parent string
+func (n *SQLDB) GetAssetGroupParent(gid int) (int, error) {
+	var parent int
 
 	query := fmt.Sprintf("SELECT parent FROM %s WHERE id=?", userAssetGroupTable)
 	err := n.db.Get(&parent, query, gid)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 
 	return parent, nil
