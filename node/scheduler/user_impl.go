@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	userFileGroupMaxCount = 100
+	userFileGroupMaxCount = 20
 	rootGroup             = 0
 )
 
@@ -170,7 +170,7 @@ func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name, user
 		}
 
 		if !exist {
-			return nil, fmt.Errorf("CreateAssetGroup failed, group parent [%d] is not exist ", parent)
+			return nil, &api.ErrWeb{Code: terrors.GroupNotExist.Int(), Message: fmt.Sprintf("CreateAssetGroup failed, group parent [%d] is not exist ", parent)}
 		}
 	}
 
@@ -180,7 +180,7 @@ func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name, user
 	}
 
 	if count >= userFileGroupMaxCount {
-		return nil, fmt.Errorf("CreateAssetGroup failed, Exceed the limit %d", userFileGroupMaxCount)
+		return nil, &api.ErrWeb{Code: terrors.GroupLimit.Int(), Message: fmt.Sprintf("CreateAssetGroup failed, Exceed the limit %d", userFileGroupMaxCount)}
 	}
 
 	info, err := s.db.CreateAssetGroup(&types.AssetGroup{UserID: userID, Parent: parent, Name: name})
@@ -264,7 +264,7 @@ func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int, userID string
 	}
 
 	if gCount > 0 {
-		return fmt.Errorf("There are assets in the group and the group cannot be deleted")
+		return &api.ErrWeb{Code: terrors.GroupCannotBeDelete.Int(), Message: "There are assets in the group and the group cannot be deleted"}
 	}
 
 	rsp, err := s.db.ListAssetGroupForUser(userID, gid, 1, 0)
@@ -273,7 +273,7 @@ func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int, userID string
 	}
 
 	if rsp.Total > 0 {
-		return fmt.Errorf("There are groups in the group and the group cannot be deleted")
+		return &api.ErrWeb{Code: terrors.GroupCannotBeDelete.Int(), Message: "There are assets in the group and the group cannot be deleted"}
 	}
 
 	// delete asset
@@ -322,7 +322,7 @@ func (s *Scheduler) MoveAssetGroup(ctx context.Context, groupID int, userID stri
 		}
 
 		if !exist {
-			return fmt.Errorf("MoveAssetGroup failed, group parent [%d] is not exist ", targetGroupID)
+			return &api.ErrWeb{Code: terrors.GroupNotExist.Int(), Message: fmt.Sprintf("MoveAssetGroup failed, group parent [%d] is not exist ", targetGroupID)}
 		}
 	}
 

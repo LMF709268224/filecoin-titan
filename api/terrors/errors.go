@@ -21,6 +21,9 @@ const (
 	APPKeyAlreadyExist          // the APPKey already exist
 	APPKeyNotFound              // the APPKey not found
 	APIKeyACLError              // api key access control list error
+	GroupCannotBeDelete         // group cannot be deleted
+	GroupNotExist               // group not exist
+	GroupLimit                  // group limit
 
 	Success = 0
 	Unknown = -1

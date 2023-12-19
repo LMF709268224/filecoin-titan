@@ -365,6 +365,19 @@ func (n *SQLDB) AssetGroupExists(userID string, gid int) (bool, error) {
 	return total > 0, nil
 }
 
+// GetAssetGroupParent get a group parent
+func (n *SQLDB) GetAssetGroupParent(gid int) (string, error) {
+	var parent string
+
+	query := fmt.Sprintf("SELECT parent FROM %s WHERE id=?", userAssetGroupTable)
+	err := n.db.Get(&parent, query, gid)
+	if err != nil {
+		return "", err
+	}
+
+	return parent, nil
+}
+
 // GetAssetGroupCount get asset group count of user
 func (n *SQLDB) GetAssetGroupCount(userID string) (int64, error) {
 	var total int64
