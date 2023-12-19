@@ -314,6 +314,9 @@ func (s *Scheduler) MoveAssetToGroup(ctx context.Context, cid string, groupID in
 
 // MoveAssetGroup move a asset group
 func (s *Scheduler) MoveAssetGroup(ctx context.Context, groupID int, userID string, targetGroupID int) error {
+	startTime := time.Now()
+	defer log.Debugf("MoveAssetGroup [userID:%s,gid:%d,targetGroupID:%d] request time:%s", userID, groupID, targetGroupID, time.Since(startTime))
+
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
 		userID = uID
