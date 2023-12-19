@@ -158,10 +158,10 @@ func (n *SQLDB) GetUserAssetCountByGroupID(user string, groupID int) (int, error
 }
 
 // GetAssetCountsForUser Get asset count
-func (n *SQLDB) GetAssetCountsForUser(user string) (int, error) {
-	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE user_id=? ", userAssetTable)
+func (n *SQLDB) GetAssetCountsForUser(user string, groupID int) (int, error) {
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE user_id=? AND group_id=? ", userAssetTable)
 	var count int
-	err := n.db.Get(&count, countQuery, user)
+	err := n.db.Get(&count, countQuery, user, groupID)
 	if err != nil {
 		return 0, err
 	}
