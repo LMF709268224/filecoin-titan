@@ -264,7 +264,7 @@ func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int, userID string
 	}
 
 	if gCount > 0 {
-		return &api.ErrWeb{Code: terrors.GroupCannotBeDelete.Int(), Message: "There are assets in the group and the group cannot be deleted"}
+		return &api.ErrWeb{Code: terrors.GroupNotEmptyCannotBeDelete.Int(), Message: "There are assets in the group and the group cannot be deleted"}
 	}
 
 	rsp, err := s.db.ListAssetGroupForUser(userID, gid, 1, 0)
@@ -273,7 +273,7 @@ func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int, userID string
 	}
 
 	if rsp.Total > 0 {
-		return &api.ErrWeb{Code: terrors.GroupCannotBeDelete.Int(), Message: "There are assets in the group and the group cannot be deleted"}
+		return &api.ErrWeb{Code: terrors.GroupNotEmptyCannotBeDelete.Int(), Message: "There are assets in the group and the group cannot be deleted"}
 	}
 
 	// delete asset
@@ -325,6 +325,8 @@ func (s *Scheduler) MoveAssetGroup(ctx context.Context, groupID int, userID stri
 			return &api.ErrWeb{Code: terrors.GroupNotExist.Int(), Message: fmt.Sprintf("MoveAssetGroup failed, group parent [%d] is not exist ", targetGroupID)}
 		}
 	}
+
+	// Prevent loops
 
 	return s.db.UpdateAssetGroupParent(userID, groupID, targetGroupID)
 }
