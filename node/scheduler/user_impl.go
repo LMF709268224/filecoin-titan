@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	userFileGroupMaxCount = 20
-	rootGroup             = 0
+	userAssetGroupMaxCount = 20
+	rootGroup              = 0
 )
 
 // UserAPIKeysExists checks if the user exists.
@@ -157,7 +157,7 @@ func (s *Scheduler) ListUserStorageStats(ctx context.Context, limit, offset int)
 	return s.db.ListStorageStatsOfUsers(limit, offset)
 }
 
-// CreateAssetGroup create file group
+// CreateAssetGroup create asset group
 func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name, userID string) (*types.AssetGroup, error) {
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
@@ -180,8 +180,8 @@ func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name, user
 		return nil, err
 	}
 
-	if count >= userFileGroupMaxCount {
-		return nil, &api.ErrWeb{Code: terrors.GroupLimit.Int(), Message: fmt.Sprintf("CreateAssetGroup failed, Exceed the limit %d", userFileGroupMaxCount)}
+	if count >= userAssetGroupMaxCount {
+		return nil, &api.ErrWeb{Code: terrors.GroupLimit.Int(), Message: fmt.Sprintf("CreateAssetGroup failed, Exceed the limit %d", userAssetGroupMaxCount)}
 	}
 
 	info, err := s.db.CreateAssetGroup(&types.AssetGroup{UserID: userID, Parent: parent, Name: name})
@@ -192,7 +192,7 @@ func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name, user
 	return info, nil
 }
 
-// ListAssetGroup list file group
+// ListAssetGroup list asset group
 func (s *Scheduler) ListAssetGroup(ctx context.Context, parent int, userID string, limit int, offset int) (*types.ListAssetGroupRsp, error) {
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
@@ -202,7 +202,7 @@ func (s *Scheduler) ListAssetGroup(ctx context.Context, parent int, userID strin
 	return s.db.ListAssetGroupForUser(userID, parent, limit, offset)
 }
 
-// ListAssetSummary list file group
+// ListAssetSummary list asset group
 func (s *Scheduler) ListAssetSummary(ctx context.Context, gid int, userID string, limit int, offset int) (*types.ListAssetSummaryRsp, error) {
 	startTime := time.Now()
 	defer log.Debugf("ListAssetSummary [userID:%s,gid:%d,limit:%d,offset:%d] request time:%s", userID, gid, limit, offset, time.Since(startTime))
@@ -280,10 +280,6 @@ func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int, userID string
 		return &api.ErrWeb{Code: terrors.GroupNotEmptyCannotBeDelete.Int(), Message: "There are assets in the group and the group cannot be deleted"}
 	}
 
-	// delete asset
-	// u := s.newUser(userID)
-	// u.DeleteAsset(ctx, assetCID)
-
 	return s.db.DeleteAssetGroup(userID, gid)
 }
 
@@ -297,7 +293,7 @@ func (s *Scheduler) RenameAssetGroup(ctx context.Context, groupID int, rename, u
 	return s.db.UpdateAssetGroupName(userID, rename, groupID)
 }
 
-// MoveAssetToGroup move a file to group
+// MoveAssetToGroup move a asset to group
 func (s *Scheduler) MoveAssetToGroup(ctx context.Context, cid string, groupID int, userID string) error {
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
