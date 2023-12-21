@@ -22,6 +22,11 @@ const (
 
 // UserAPIKeysExists checks if the user exists.
 func (s *Scheduler) UserAPIKeysExists(ctx context.Context, userID string) error {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
 	u := s.newUser(userID)
 	keys, err := u.GetAPIKeys(ctx)
 	if err != nil {
@@ -49,6 +54,11 @@ func (s *Scheduler) AllocateStorage(ctx context.Context, userID string) (*types.
 
 // GetUserInfo get user info
 func (s *Scheduler) GetUserInfo(ctx context.Context, userID string) (*types.UserInfo, error) {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
 	return s.loadUserInfo(userID)
 }
 
@@ -74,6 +84,11 @@ func (s *Scheduler) loadUserInfo(userID string) (*types.UserInfo, error) {
 
 // CreateAPIKey creates a key for the client API.
 func (s *Scheduler) CreateAPIKey(ctx context.Context, userID, keyName string, perms []types.UserAccessControl) (string, error) {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
 	u := s.newUser(userID)
 	info, err := u.CreateAPIKey(ctx, keyName, perms, s.SchedulerCfg, s.CommonAPI)
 	if err != nil {
@@ -85,6 +100,11 @@ func (s *Scheduler) CreateAPIKey(ctx context.Context, userID, keyName string, pe
 
 // GetAPIKeys get all api key for user.
 func (s *Scheduler) GetAPIKeys(ctx context.Context, userID string) (map[string]types.UserAPIKeysInfo, error) {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
 	u := s.newUser(userID)
 	info, err := u.GetAPIKeys(ctx)
 	if err != nil {
@@ -95,11 +115,21 @@ func (s *Scheduler) GetAPIKeys(ctx context.Context, userID string) (map[string]t
 }
 
 func (s *Scheduler) DeleteAPIKey(ctx context.Context, userID, name string) error {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
 	u := s.newUser(userID)
 	return u.DeleteAPIKey(ctx, name)
 }
 
 func (s *Scheduler) UpdateShareStatus(ctx context.Context, userID, assetCID string) error {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
 	u := s.newUser(userID)
 	return u.SetAssetAtShareStatus(ctx, assetCID)
 }
@@ -111,7 +141,6 @@ func (s *Scheduler) newUser(userID string) *user.User {
 // UserAssetDownloadResult download result
 func (s *Scheduler) UserAssetDownloadResult(ctx context.Context, userID, cid string, totalTraffic, peakBandwidth int64) error {
 	nodeID := handler.GetNodeID(ctx)
-
 	cNode := s.NodeManager.GetNode(nodeID)
 	if cNode == nil {
 		return xerrors.Errorf("UserAssetDownloadResult node not found: %s", nodeID)
@@ -126,6 +155,11 @@ func (s *Scheduler) UserAssetDownloadResult(ctx context.Context, userID, cid str
 }
 
 func (s *Scheduler) SetUserVIP(ctx context.Context, userID string, enableVIP bool) error {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
 	storageSize := s.SchedulerCfg.UserFreeStorageSize
 	if enableVIP {
 		storageSize = s.SchedulerCfg.UserVipStorageSize
@@ -134,6 +168,11 @@ func (s *Scheduler) SetUserVIP(ctx context.Context, userID string, enableVIP boo
 }
 
 func (s *Scheduler) GetUserAccessToken(ctx context.Context, userID string) (string, error) {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
 	_, err := s.GetUserInfo(ctx, userID)
 	if err != nil {
 		return "", err
@@ -149,6 +188,10 @@ func (s *Scheduler) GetUserAccessToken(ctx context.Context, userID string) (stri
 
 // GetUserStorageStats get user storage info
 func (s *Scheduler) GetUserStorageStats(ctx context.Context, userID string) (*types.StorageStats, error) {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
 	return s.db.LoadStorageStatsOfUser(userID)
 }
 

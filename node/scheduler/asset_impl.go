@@ -239,12 +239,22 @@ func (s *Scheduler) GetReplicaEvents(ctx context.Context, start, end time.Time, 
 
 // CreateAsset creates an asset with car CID, car name, and car size.
 func (s *Scheduler) CreateAsset(ctx context.Context, req *types.CreateAssetReq) (*types.CreateAssetRsp, error) {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		req.UserID = uID
+	}
+
 	u := s.newUser(req.UserID)
 	return u.CreateAsset(ctx, req)
 }
 
 // ListAssets lists the assets of the user.
 func (s *Scheduler) ListAssets(ctx context.Context, userID string, limit, offset, groupID int) (*types.ListAssetRecordRsp, error) {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
 	startTime := time.Now()
 	defer log.Debugf("ListAssets [%s] request time:%s", userID, time.Since(startTime))
 
@@ -259,12 +269,22 @@ func (s *Scheduler) ListAssets(ctx context.Context, userID string, limit, offset
 
 // DeleteAsset deletes the assets of the user.
 func (s *Scheduler) DeleteAsset(ctx context.Context, userID, assetCID string) error {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
 	u := s.newUser(userID)
 	return u.DeleteAsset(ctx, assetCID)
 }
 
 // ShareAssets shares the assets of the user.
 func (s *Scheduler) ShareAssets(ctx context.Context, userID string, assetCIDs []string) (map[string]string, error) {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
 	u := s.newUser(userID)
 	info, err := u.ShareAssets(ctx, assetCIDs, s, s.NodeManager)
 	if err != nil {
@@ -276,6 +296,11 @@ func (s *Scheduler) ShareAssets(ctx context.Context, userID string, assetCIDs []
 
 // GetAssetStatus retrieves a asset status
 func (s *Scheduler) GetAssetStatus(ctx context.Context, userID, assetCID string) (*types.AssetStatus, error) {
+	uID := handler.GetUserID(ctx)
+	if len(uID) > 0 {
+		userID = uID
+	}
+
 	u := s.newUser(userID)
 	status, err := u.GetAssetStatus(ctx, assetCID, s.SchedulerCfg)
 	if err != nil {
