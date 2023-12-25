@@ -146,19 +146,19 @@ type UserAPI interface {
 	ListUserStorageStats(ctx context.Context, limit, offset int) (*types.ListStorageStatsRsp, error) //perm:web,admin
 
 	// CreateAssetGroup create Asset group
-	CreateAssetGroup(ctx context.Context, parent int, name, userID string) (*types.AssetGroup, error) //perm:user,web,admin
+	CreateAssetGroup(ctx context.Context, userID, name string, parent int) (*types.AssetGroup, error) //perm:user,web,admin
 	// ListAssetGroup list Asset group
-	ListAssetGroup(ctx context.Context, parent int, userID string, limit int, offset int) (*types.ListAssetGroupRsp, error) //perm:user,web,admin
+	ListAssetGroup(ctx context.Context, userID string, parent, limit, offset int) (*types.ListAssetGroupRsp, error) //perm:user,web,admin
 	// ListAssetSummary list Asset and group
-	ListAssetSummary(ctx context.Context, parent int, userID string, limit int, offset int) (*types.ListAssetSummaryRsp, error) //perm:user,web,admin
+	ListAssetSummary(ctx context.Context, userID string, parent, limit, offset int) (*types.ListAssetSummaryRsp, error) //perm:user,web,admin
 	// DeleteAssetGroup delete Asset group
-	DeleteAssetGroup(ctx context.Context, gid int, userID string) error //perm:user,web,admin
+	DeleteAssetGroup(ctx context.Context, userID string, gid int) error //perm:user,web,admin
 	// RenameAssetGroup rename group
-	RenameAssetGroup(ctx context.Context, groupID int, rename, userID string) error //perm:user,web,admin
+	RenameAssetGroup(ctx context.Context, userID, newName string, groupID int) error //perm:user,web,admin
 	// MoveAssetToGroup move a asset to group
-	MoveAssetToGroup(ctx context.Context, cid string, groupID int, userID string) error //perm:user,web,admin
+	MoveAssetToGroup(ctx context.Context, userID, cid string, groupID int) error //perm:user,web,admin
 	// MoveAssetGroup move a asset group
-	MoveAssetGroup(ctx context.Context, groupID int, userID string, targetGroupID int) error //perm:user,web,admin
+	MoveAssetGroup(ctx context.Context, userID string, groupID, targetGroupID int) error //perm:user,web,admin
 	// GetAPPKeyPermissions get the permissions of user app key
 	GetAPPKeyPermissions(ctx context.Context, userID, keyName string) ([]string, error) //perm:user,web,admin
 }

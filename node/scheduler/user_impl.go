@@ -200,8 +200,8 @@ func (s *Scheduler) ListUserStorageStats(ctx context.Context, limit, offset int)
 	return s.db.ListStorageStatsOfUsers(limit, offset)
 }
 
-// CreateAssetGroup create asset group
-func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name, userID string) (*types.AssetGroup, error) {
+// CreateAssetGroup create file group
+func (s *Scheduler) CreateAssetGroup(ctx context.Context, userID, name string, parent int) (*types.AssetGroup, error) {
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
 		userID = uID
@@ -235,8 +235,8 @@ func (s *Scheduler) CreateAssetGroup(ctx context.Context, parent int, name, user
 	return info, nil
 }
 
-// ListAssetGroup list asset group
-func (s *Scheduler) ListAssetGroup(ctx context.Context, parent int, userID string, limit int, offset int) (*types.ListAssetGroupRsp, error) {
+// ListAssetGroup list file group
+func (s *Scheduler) ListAssetGroup(ctx context.Context, userID string, parent, limit int, offset int) (*types.ListAssetGroupRsp, error) {
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
 		userID = uID
@@ -245,10 +245,12 @@ func (s *Scheduler) ListAssetGroup(ctx context.Context, parent int, userID strin
 	return s.db.ListAssetGroupForUser(userID, parent, limit, offset)
 }
 
-// ListAssetSummary list asset group
-func (s *Scheduler) ListAssetSummary(ctx context.Context, gid int, userID string, limit int, offset int) (*types.ListAssetSummaryRsp, error) {
+// ListAssetSummary list file group
+func (s *Scheduler) ListAssetSummary(ctx context.Context, userID string, parent, limit, offset int) (*types.ListAssetSummaryRsp, error) {
 	startTime := time.Now()
-	defer log.Debugf("ListAssetSummary [userID:%s,gid:%d,limit:%d,offset:%d] request time:%s", userID, gid, limit, offset, time.Since(startTime))
+	defer func() {
+		log.Debugf("ListAssetSummary [userID:%s,parent:%d,limit:%d,offset:%d] request time:%s", userID, parent, limit, offset, time.Since(startTime))
+	}()
 
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
@@ -258,7 +260,7 @@ func (s *Scheduler) ListAssetSummary(ctx context.Context, gid int, userID string
 	out := new(types.ListAssetSummaryRsp)
 
 	// list group
-	groupRsp, err := s.db.ListAssetGroupForUser(userID, gid, limit, offset)
+	groupRsp, err := s.db.ListAssetGroupForUser(userID, parent, limit, offset)
 	if err != nil {
 		return nil, xerrors.Errorf("ListAssetGroupForUser err:%s", err.Error())
 	}
@@ -282,7 +284,7 @@ func (s *Scheduler) ListAssetSummary(ctx context.Context, gid int, userID string
 	}
 
 	u := s.newUser(userID)
-	assetRsp, err := u.ListAssets(ctx, aLimit, aOffset, s.SchedulerCfg.MaxCountOfVisitShareLink, gid)
+	assetRsp, err := u.ListAssets(ctx, aLimit, aOffset, s.SchedulerCfg.MaxCountOfVisitShareLink, parent)
 	if err != nil {
 		return nil, xerrors.Errorf("ListAssets err:%s", err.Error())
 	}
@@ -299,7 +301,7 @@ func (s *Scheduler) ListAssetSummary(ctx context.Context, gid int, userID string
 }
 
 // DeleteAssetGroup delete asset group
-func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int, userID string) error {
+func (s *Scheduler) DeleteAssetGroup(ctx context.Context, userID string, gid int) error {
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
 		userID = uID
@@ -327,17 +329,17 @@ func (s *Scheduler) DeleteAssetGroup(ctx context.Context, gid int, userID string
 }
 
 // RenameAssetGroup rename group
-func (s *Scheduler) RenameAssetGroup(ctx context.Context, groupID int, rename, userID string) error {
+func (s *Scheduler) RenameAssetGroup(ctx context.Context, userID, newName string, groupID int) error {
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
 		userID = uID
 	}
 
-	return s.db.UpdateAssetGroupName(userID, rename, groupID)
+	return s.db.UpdateAssetGroupName(userID, newName, groupID)
 }
 
-// MoveAssetToGroup move a asset to group
-func (s *Scheduler) MoveAssetToGroup(ctx context.Context, cid string, groupID int, userID string) error {
+// MoveAssetToGroup move a file to group
+func (s *Scheduler) MoveAssetToGroup(ctx context.Context, userID, cid string, groupID int) error {
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
 		userID = uID
@@ -352,9 +354,11 @@ func (s *Scheduler) MoveAssetToGroup(ctx context.Context, cid string, groupID in
 }
 
 // MoveAssetGroup move a asset group
-func (s *Scheduler) MoveAssetGroup(ctx context.Context, groupID int, userID string, targetGroupID int) error {
+func (s *Scheduler) MoveAssetGroup(ctx context.Context, userID string, groupID, targetGroupID int) error {
 	startTime := time.Now()
-	defer log.Debugf("MoveAssetGroup [userID:%s,gid:%d,targetGroupID:%d] request time:%s", userID, groupID, targetGroupID, time.Since(startTime))
+	defer func() {
+		log.Debugf("MoveAssetGroup [userID:%s,gid:%d,targetGroupID:%d] request time:%s", userID, groupID, targetGroupID, time.Since(startTime))
+	}()
 
 	uID := handler.GetUserID(ctx)
 	if len(uID) > 0 {
