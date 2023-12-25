@@ -276,7 +276,7 @@ var runCmd = &cli.Command{
 		handler := EdgeHandler(edgeAPI.AuthVerify, edgeAPI, true)
 		handler = httpServer.NewHandler(handler)
 
-		srv := &http.Server{
+		httpSrv := &http.Server{
 			ReadHeaderTimeout: 30 * time.Second,
 			Handler:           handler,
 			BaseContext: func(listener net.Listener) context.Context {
@@ -290,14 +290,24 @@ var runCmd = &cli.Command{
 			return xerrors.Errorf("get tls config error: %w", err)
 		}
 
-		go startUDPServer(udpPacketConn, handler, tlsConfig) //nolint:errcheck
+		http3Srv := http3.Server{
+			TLSConfig: tlsConfig,
+			Handler:   handler,
+		}
+
+		go http3Srv.Serve(udpPacketConn)
 
 		go func() {
 			<-ctx.Done()
 			log.Warn("Shutting down...")
-			if err := srv.Shutdown(context.TODO()); err != nil {
+			if err := httpSrv.Shutdown(context.TODO()); err != nil {
 				log.Errorf("shutting down RPC server failed: %s", err)
 			}
+
+			if err := http3Srv.Close(); err != nil {
+				log.Errorf("shutting down http3Srv failed: %s", err)
+			}
+
 			stop(ctx) //nolint:errcheck
 			log.Warn("Graceful shutdown successful")
 		}()
@@ -383,7 +393,7 @@ var runCmd = &cli.Command{
 			}
 		}()
 
-		return srv.Serve(nl)
+		return httpSrv.Serve(nl)
 	},
 }
 
@@ -476,15 +486,6 @@ func newSchedulerAPI(cctx *cli.Context, schedulerURL, nodeID string, privateKey 
 	}
 
 	return schedulerAPI, closer, nil
-}
-
-func startUDPServer(conn net.PacketConn, handler http.Handler, tlsConfig *tls.Config) error {
-	srv := http3.Server{
-		TLSConfig: tlsConfig,
-		Handler:   handler,
-	}
-
-	return srv.Serve(conn)
 }
 
 func getTLSConfig(edgeCfg *config.EdgeCfg) (*tls.Config, error) {

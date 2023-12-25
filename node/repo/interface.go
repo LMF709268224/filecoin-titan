@@ -32,6 +32,8 @@ var (
 	// ErrInvalidBlockstoreDomain is returned by LockedRepo#Blockstore() when
 	// an unrecognized domain is requested.
 	ErrInvalidBlockstoreDomain = errors.New("invalid blockstore domain")
+
+	ErrPrivateKeyNotExist = errors.New("Private key not exist")
 )
 
 type Repo interface {

@@ -26,6 +26,7 @@ import (
 	"github.com/Filecoin-Titan/titan/node/modules/dtypes"
 	"github.com/Filecoin-Titan/titan/node/validation"
 	"github.com/gbrlsnchs/jwt/v3"
+	"github.com/quic-go/quic-go/http3"
 
 	"github.com/Filecoin-Titan/titan/api"
 	"github.com/Filecoin-Titan/titan/api/client"
@@ -39,7 +40,6 @@ import (
 	titanrsa "github.com/Filecoin-Titan/titan/node/rsa"
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/go-jsonrpc/auth"
-	"github.com/quic-go/quic-go/http3"
 
 	"github.com/google/uuid"
 	logging "github.com/ipfs/go-log/v2"
@@ -290,7 +290,7 @@ var runCmd = &cli.Command{
 		handler := CandidateHandler(candidateAPI.AuthVerify, candidateAPI, true)
 		handler = httpServer.NewHandler(handler)
 
-		srv := &http.Server{
+		httpSrv := &http.Server{
 			ReadHeaderTimeout: 30 * time.Second,
 			Handler:           handler,
 			BaseContext: func(listener net.Listener) context.Context {
@@ -300,13 +300,22 @@ var runCmd = &cli.Command{
 			TLSConfig: tlsConfig,
 		}
 
-		go startUDPServer(udpPacketConn, handler, tlsConfig) //nolint:errcheck
+		http3Srv := http3.Server{
+			TLSConfig: tlsConfig,
+			Handler:   handler,
+		}
+
+		go http3Srv.Serve(udpPacketConn)
 
 		go func() {
 			<-ctx.Done()
 			log.Warn("Shutting down...")
-			if err := srv.Shutdown(context.TODO()); err != nil {
-				log.Errorf("shutting down RPC server failed: %s", err)
+			if err := httpSrv.Shutdown(context.TODO()); err != nil {
+				log.Errorf("shutting down httpSrv failed: %s", err)
+			}
+
+			if err := http3Srv.Close(); err != nil {
+				log.Errorf("shutting down http3Srv failed: %s", err)
 			}
 			stop(ctx) //nolint:errcheck
 			log.Warn("Graceful shutdown successful")
@@ -405,9 +414,9 @@ var runCmd = &cli.Command{
 		}()
 
 		if isEnableTLS(candidateCfg) {
-			return srv.ServeTLS(nl, "", "")
+			return httpSrv.ServeTLS(nl, "", "")
 		}
-		return srv.Serve(nl)
+		return httpSrv.Serve(nl)
 	},
 }
 
@@ -511,15 +520,6 @@ func newSchedulerAPI(cctx *cli.Context, schedulerURL, nodeID string, privateKey 
 	return schedulerAPI, closer, nil
 }
 
-func startUDPServer(conn net.PacketConn, handler http.Handler, tlsConfig *tls.Config) error {
-	srv := http3.Server{
-		TLSConfig: tlsConfig,
-		Handler:   handler,
-	}
-
-	return srv.Serve(conn)
-}
-
 func isEnableTLS(candidateCfg *config.CandidateCfg) bool {
 	if len(candidateCfg.CertificatePath) > 0 && len(candidateCfg.PrivateKeyPath) > 0 {
 		return true
@@ -531,7 +531,7 @@ func getTLSConfig(candidateCfg *config.CandidateCfg) (*tls.Config, error) {
 	if isEnableTLS(candidateCfg) {
 		cert, err := tls.LoadX509KeyPair(candidateCfg.CertificatePath, candidateCfg.PrivateKeyPath)
 		if err != nil {
-			log.Errorf("startUDPServer, LoadX509KeyPair error:%s", err.Error())
+			log.Errorf("LoadX509KeyPair error:%s", err.Error())
 			return nil, err
 		}
 

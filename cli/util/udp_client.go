@@ -45,7 +45,12 @@ func NewHTTP3Client(pConn net.PacketConn, insecureSkipVerify bool, caCertPath st
 		if err != nil {
 			return nil, err
 		}
-		return quic.DialEarlyContext(ctx, pConn, remoteAddr, "localhost", tlsCfg, cfg)
+
+		host, _, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+		return quic.DialEarlyContext(ctx, pConn, remoteAddr, host, tlsCfg, cfg)
 	}
 
 	roundTripper := &http3.RoundTripper{

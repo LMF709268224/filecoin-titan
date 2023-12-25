@@ -365,13 +365,13 @@ func (fsr *FsRepo) PrivateKey() ([]byte, error) {
 	f, err := os.Open(p)
 
 	if os.IsNotExist(err) {
-		return nil, ErrNoAPIEndpoint
+		return nil, ErrPrivateKeyNotExist
 	} else if err != nil {
 		return nil, err
 	}
 	defer f.Close() //nolint: errcheck // Read only op
 
-	tb, err := ioutil.ReadAll(f)
+	tb, err := io.ReadAll(f)
 	if err != nil {
 		return nil, err
 	}
