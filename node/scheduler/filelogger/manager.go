@@ -61,7 +61,7 @@ func (m *Manager) startTimer() {
 	for {
 		<-timer.C
 
-		log.Debugln("start timer...")
+		log.Debugln("start save validation result to files...")
 		m.handleValidationResultSaveToFiles()
 		// Packaging
 
@@ -91,9 +91,9 @@ func (m *Manager) handleValidationResultSaveToFiles() {
 
 		m.saveValidationResultToFiles(ds)
 
-		err = m.UpdateFileSavedStatus(ids)
+		err = m.RemoveInvalidValidationResult(ids)
 		if err != nil {
-			log.Errorf("UpdateFileSavedStatus err:%s", err.Error())
+			log.Errorf("RemoveInvalidValidationResult err:%s", err.Error())
 			return
 		}
 	}

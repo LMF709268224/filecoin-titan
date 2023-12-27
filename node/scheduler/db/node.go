@@ -595,6 +595,20 @@ func (n *SQLDB) LoadUnSavedValidationResults(limit int) (*sqlx.Rows, error) {
 	return n.db.QueryxContext(context.Background(), sQuery, false, true, limit)
 }
 
+// RemoveInvalidValidationResult Remove invalid validation results
+func (n *SQLDB) RemoveInvalidValidationResult(sIDs []int) error {
+	rQuery := fmt.Sprintf(`DELETE FROM %s WHERE id in (?)`, validationResultTable)
+
+	srQuery, args, err := sqlx.In(rQuery, sIDs)
+	if err != nil {
+		return err
+	}
+
+	srQuery = n.db.Rebind(srQuery)
+	_, err = n.db.Exec(srQuery, args...)
+	return err
+}
+
 // UpdateFileSavedStatus update the file saved in validation result
 func (n *SQLDB) UpdateFileSavedStatus(ids []int) error {
 	tx, err := n.db.Beginx()
