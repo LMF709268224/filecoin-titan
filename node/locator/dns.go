@@ -12,6 +12,7 @@ import (
 	"github.com/Filecoin-Titan/titan/node/config"
 	"github.com/Filecoin-Titan/titan/node/handler"
 	"github.com/Filecoin-Titan/titan/region"
+	"github.com/ipfs/go-cid"
 	"github.com/miekg/dns"
 )
 
@@ -223,6 +224,10 @@ func (h *dnsHandler) handlerAssetLocation(m *dns.Msg, domain, remoteAddr string)
 	}
 	// find candidate for asset
 	cid := fields[0]
+	if !h.isValidCID(cid) {
+		return false, fmt.Errorf("invalid cid %s", cid)
+	}
+
 	ctx := context.WithValue(context.Background(), handler.RemoteAddr{}, remoteAddr)
 	infos, err := h.dnsServer.CandidateDownloadInfos(ctx, cid)
 	if err != nil {
@@ -274,4 +279,9 @@ func (h *dnsHandler) getIPList(downloadInfos []*types.CandidateDownloadInfo) []s
 func (h *dnsHandler) isMatchNodeID(id string) bool {
 	id = strings.TrimSpace(id)
 	return len(id) == lengthOfNodeID
+}
+
+func (h *dnsHandler) isValidCID(cidString string) bool {
+	_, err := cid.Decode(cidString)
+	return err == nil
 }
