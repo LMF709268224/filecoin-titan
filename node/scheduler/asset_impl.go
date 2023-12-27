@@ -234,6 +234,8 @@ func (s *Scheduler) GetReplicaEvents(ctx context.Context, start, end time.Time, 
 		return nil, xerrors.Errorf("LoadReplicaEvents err:%s", err.Error())
 	}
 
+	log.Debugf("GetReplicaEvents ps: %v ,%v ,%d ,%d , total:%d", start, end, limit, offset, info.Total)
+
 	return info, nil
 }
 
