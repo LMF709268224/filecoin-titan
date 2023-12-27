@@ -51,7 +51,7 @@ const (
 	loadAssetRecordsDefaultLimit        = 100
 	loadExpiredAssetRecordsDefaultLimit = 100
 	loadWorkloadDefaultLimit            = 100
-	loadReplicaEventDefaultLimit        = 100
+	loadReplicaEventDefaultLimit        = 500
 	loadRetrieveDefaultLimit            = 100
 	loadReplicaDefaultLimit             = 100
 	loadUserDefaultLimit                = 100
