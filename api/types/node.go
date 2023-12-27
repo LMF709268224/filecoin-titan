@@ -321,8 +321,8 @@ type Token struct {
 type Workload struct {
 	DownloadSpeed int64
 	DownloadSize  int64
-	StartTime     int64
-	EndTime       int64
+	StartTime     time.Time
+	EndTime       time.Time
 	BlockCount    int64
 }
 

@@ -5,5 +5,5 @@ package build
 
 var (
 	DefaultFDLimit uint64 = 16 << 10
-	EdgeFDLimit    uint64 = 100_000
+	NodeFDLimit    uint64 = 60_000
 )

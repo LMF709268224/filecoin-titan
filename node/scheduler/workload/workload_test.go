@@ -31,7 +31,7 @@ func TestWorkloadRecord(t *testing.T) {
 		return
 	}
 
-	workload := &types.Workload{DownloadSpeed: 11, DownloadSize: 222, StartTime: time.Now().Unix(), EndTime: time.Now().Unix()}
+	workload := &types.Workload{DownloadSpeed: 11, DownloadSize: 222, StartTime: time.Now(), EndTime: time.Now()}
 	// workloads := []*types.Workload{workload}
 
 	buffer := &bytes.Buffer{}

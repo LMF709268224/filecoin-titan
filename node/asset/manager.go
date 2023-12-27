@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"crypto/tls"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"sync"
 	"syscall"
@@ -25,6 +27,7 @@ import (
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/blockstore"
 	"github.com/multiformats/go-multihash"
+	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/xerrors"
 )
 
@@ -147,12 +150,13 @@ func (m *Manager) pullAssets() {
 
 // doPullAsset pulls a single asset from the waitList
 func (m *Manager) doPullAsset() {
-	udpConn, httpClient, err := newHTTP3Client()
-	if err != nil {
-		log.Errorf("newHTTP3Client error %s", err.Error())
-		return
+	httpClient := &http.Client{
+		Transport: &http3.RoundTripper{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
 	}
-	defer udpConn.Close()
 
 	cw := m.headFromWaitList()
 	if cw == nil {

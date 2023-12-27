@@ -100,8 +100,8 @@ func (m *Manager) handleWorkloadResults() {
 				NodeID:      record.NodeID,
 				ClientID:    record.ClientID,
 				Size:        cWorkload.DownloadSize,
-				CreatedTime: cWorkload.StartTime,
-				EndTime:     cWorkload.EndTime,
+				CreatedTime: cWorkload.StartTime.Unix(),
+				EndTime:     cWorkload.EndTime.Unix(),
 				Profit:      profit,
 			}); err != nil {
 				log.Errorf("SaveRetrieveEventInfo token:%s , %d,  error %s", record.ID, cWorkload.StartTime, err.Error())
@@ -109,9 +109,9 @@ func (m *Manager) handleWorkloadResults() {
 			}
 
 			// update node bandwidths
-			t := cWorkload.EndTime - cWorkload.StartTime
+			t := cWorkload.EndTime.Sub(cWorkload.StartTime)
 			if t > 1 {
-				speed := cWorkload.DownloadSize / t
+				speed := cWorkload.DownloadSize / int64(t) * int64(time.Second)
 				m.nodeMgr.UpdateNodeBandwidths(record.NodeID, 0, speed)
 				m.nodeMgr.UpdateNodeBandwidths(record.ClientID, speed, 0)
 			}
@@ -282,8 +282,8 @@ func (m *Manager) mergeWorkloads(workloads []*types.Workload) *types.Workload {
 
 	// costTime := int64(0)
 	downloadSize := int64(0)
-	startTime := int64(0)
-	endTime := int64(0)
+	startTime := time.Time{}
+	endTime := time.Time{}
 	speedCount := int64(0)
 	accumulateSpeed := int64(0)
 
@@ -294,11 +294,11 @@ func (m *Manager) mergeWorkloads(workloads []*types.Workload) *types.Workload {
 		}
 		downloadSize += workload.DownloadSize
 
-		if startTime == 0 || workload.StartTime < startTime {
+		if startTime.IsZero() || workload.StartTime.Before(startTime) {
 			startTime = workload.StartTime
 		}
 
-		if workload.EndTime > endTime {
+		if workload.EndTime.After(endTime) {
 			endTime = workload.EndTime
 		}
 	}
