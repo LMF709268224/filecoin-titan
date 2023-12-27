@@ -362,7 +362,7 @@ func (m *Manager) startHandleResultsTimer() {
 	for {
 		<-timer.C
 
-		log.Debugln("start node timer...")
+		log.Debugln("start handle validation results timer...")
 		m.handleValidationResults()
 
 		timer.Reset(oneDay)

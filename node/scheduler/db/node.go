@@ -534,6 +534,12 @@ func (n *SQLDB) LoadWorkloadRecord(tokenID string) (*types.WorkloadRecord, error
 }
 
 // LoadUnprocessedWorkloadResults Load unprocessed workload results
+func (n *SQLDB) LoadUnprocessedWorkloadResults222(limit, offset int) (*sqlx.Rows, error) {
+	sQuery := fmt.Sprintf(`SELECT * FROM %s ORDER BY token_id LIMIT ? OFFSET ?`, workloadRecordTable)
+	return n.db.QueryxContext(context.Background(), sQuery, limit, offset)
+}
+
+// LoadUnprocessedWorkloadResults Load unprocessed workload results
 func (n *SQLDB) LoadUnprocessedWorkloadResults(limit int, endTime int64) (*sqlx.Rows, error) {
 	sQuery := fmt.Sprintf(`SELECT * FROM %s WHERE status=? AND client_end_time<? order by created_time asc LIMIT ?`, workloadRecordTable)
 	return n.db.QueryxContext(context.Background(), sQuery, types.WorkloadStatusCreate, endTime, limit)

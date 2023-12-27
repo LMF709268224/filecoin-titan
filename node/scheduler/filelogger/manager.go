@@ -54,6 +54,7 @@ func (m *Manager) startTimer() {
 	}
 
 	duration := nextTime.Sub(now)
+	log.Debugf("start save validation result to files time : %d", duration.Seconds())
 
 	timer := time.NewTimer(duration)
 	defer timer.Stop()
@@ -61,7 +62,7 @@ func (m *Manager) startTimer() {
 	for {
 		<-timer.C
 
-		log.Debugln("start save validation result to files...")
+		log.Debugln("start save validation result to files timer...")
 		m.handleValidationResultSaveToFiles()
 		// Packaging
 

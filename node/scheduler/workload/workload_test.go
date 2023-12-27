@@ -3,6 +3,7 @@ package workload
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 	"testing"
 	"time"
 
@@ -156,7 +157,7 @@ func TestWorkloadCheck(t *testing.T) {
 	}
 	defer rows.Close()
 
-	m := Manager{}
+	// m := Manager{}
 
 	// t.Logf("rows.Rows %d", len(rows.Values))
 	for rows.Next() {
@@ -168,9 +169,147 @@ func TestWorkloadCheck(t *testing.T) {
 		}
 
 		// check workload ...
-		status, cWorkload := m.checkWorkload(record)
-		t.Logf("status %d, startTime:%d", status, cWorkload.StartTime)
+		// status, cWorkload := m.checkWorkload(record)
+		// t.Logf("status %d, startTime:%d", status, cWorkload.StartTime)
+
+	}
+}
+
+func TestRemoveInvalidWorkloads(t *testing.T) {
+	sqldb, err := sqldb.NewDB("user01:sql001@tcp(127.0.0.1:3308)/titan")
+	if err != nil {
+		t.Errorf("NewDB error:%s", err.Error())
+		return
+	}
+
+	db, err := db.NewSQLDB(sqldb)
+	if err != nil {
+		t.Errorf("NewSQLDB error:%s", err.Error())
+		return
+	}
+
+	for {
+		n := doRemoveInvalidWorkloads(t, db)
+		fmt.Printf("len:%d offset:%d\n", n, offset)
+		time.Sleep(time.Second)
+
+		if n < limit {
+			return
+		}
+	}
+}
+
+var (
+	offset = 0
+	limit  = 3000
+)
+
+func doRemoveInvalidWorkloads(t *testing.T, db *db.SQLDB) int {
+	rows, err := db.LoadUnprocessedWorkloadResults222(limit, offset)
+	if err != nil {
+		t.Errorf("LoadTokenPayloadAndWorkloads error:%s", err.Error())
+		return 0
+	}
+	defer rows.Close()
+
+	removeIDs := make([]string, 0)
+
+	n := 0
+
+	for rows.Next() {
+		n++
+
+		record := &types.WorkloadRecord{}
+		err = rows.StructScan(record)
+		if err != nil {
+			log.Errorf("ValidationResultInfo StructScan err: %s", err.Error())
+			removeIDs = append(removeIDs, record.ID)
+			continue
+		}
+
+		if len(record.ClientWorkload) == 0 {
+			removeIDs = append(removeIDs, record.ID)
+			continue
+		}
+	}
+
+	if len(removeIDs) > 0 {
+		err = db.RemoveInvalidWorkloadResult(removeIDs)
+		if err != nil {
+			log.Errorf("RemoveInvalidWorkloadResult err:%s", err.Error())
+		}
+
+	}
+	offset += limit - len(removeIDs)
+
+	return n
+}
+
+func TestRemoveFailedWorkloads(t *testing.T) {
+	sqldb, err := sqldb.NewDB("user01:sql001@tcp(127.0.0.1:3308)/titan")
+	if err != nil {
+		t.Errorf("NewDB error:%s", err.Error())
+		return
+	}
+
+	db, err := db.NewSQLDB(sqldb)
+	if err != nil {
+		t.Errorf("NewSQLDB error:%s", err.Error())
+		return
+	}
+
+	for {
+		n := doRemoveFailedWorkloads(t, db)
+		fmt.Printf("len:%d offset:%d\n", n, offset)
+		time.Sleep(time.Second)
+	}
+}
+
+func doRemoveFailedWorkloads(t *testing.T, db *db.SQLDB) int {
+	rows, err := db.LoadUnprocessedWorkloadResults222(limit, offset)
+	if err != nil {
+		t.Errorf("LoadTokenPayloadAndWorkloads error:%s", err.Error())
+		return 0
+	}
+	defer rows.Close()
+
+	removeIDs := make([]string, 0)
+
+	n := 0
+
+	for rows.Next() {
+		n++
+
+		record := &types.WorkloadRecord{}
+		err = rows.StructScan(record)
+		if err != nil {
+			log.Errorf("ValidationResultInfo StructScan err: %s", err.Error())
+			removeIDs = append(removeIDs, record.ID)
+			continue
+		}
+
+		cWorkload := &types.Workload{}
+		if len(record.ClientWorkload) > 0 {
+			dec := gob.NewDecoder(bytes.NewBuffer(record.ClientWorkload))
+			err := dec.Decode(cWorkload)
+			if err != nil {
+				removeIDs = append(removeIDs, record.ID)
+				continue
+			}
+		}
+
+		fmt.Printf("cWorkload : %v, %d", cWorkload.StartTime, cWorkload.StartTime.Unix())
 
 	}
 
+	// if len(removeIDs) > 0 {
+	// 	err = db.RemoveInvalidWorkloadResult(removeIDs)
+	// 	if err != nil {
+	// 		log.Errorf("RemoveInvalidWorkloadResult err:%s", err.Error())
+	// 	}
+
+	// }
+	offset += limit - len(removeIDs)
+
+	return n
 }
