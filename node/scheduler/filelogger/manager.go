@@ -40,12 +40,10 @@ func NewManager(sdb *db.SQLDB, serverID dtypes.ServerID, lmgr *leadership.Manage
 		ServerID:      serverID,
 	}
 
-	go mgr.startTimer()
-
 	return mgr
 }
 
-func (m *Manager) startTimer() {
+func (m *Manager) StartTimer() {
 	now := time.Now()
 
 	nextTime := time.Date(now.Year(), now.Month(), now.Day(), 2, 0, 0, 0, now.Location())

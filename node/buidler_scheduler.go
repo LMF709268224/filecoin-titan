@@ -59,7 +59,7 @@ func ConfigScheduler(c interface{}) Option {
 		Override(new(*config.SchedulerCfg), cfg),
 		Override(new(*etcdcli.Client), modules.RegisterToEtcd),
 		Override(new(*leadership.Manager), leadership.NewManager),
-		Override(new(*filelogger.Manager), filelogger.NewManager),
+		Override(new(*filelogger.Manager), modules.NewFileLog),
 		Override(new(*sqlx.DB), modules.NewDB),
 		Override(new(*db.SQLDB), db.NewSQLDB),
 		Override(new(*pubsub.PubSub), modules.NewPubSub),
@@ -76,7 +76,7 @@ func ConfigScheduler(c interface{}) Option {
 		Override(new(dtypes.GetSchedulerConfigFunc), modules.NewGetSchedulerConfigFunc),
 		Override(new(*rsa.PrivateKey), modules.NewPrivateKey),
 		// func() (*rsa.PrivateKey, error) {
-			// return rsa.GenerateKey(rand.Reader, units.KiB) //nolint:gosec   // need smaller key
+		// return rsa.GenerateKey(rand.Reader, units.KiB) //nolint:gosec   // need smaller key
 		// }),
 	)
 }
