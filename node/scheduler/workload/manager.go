@@ -65,13 +65,16 @@ func (m *Manager) handleWorkloadResults() {
 		return
 	}
 
+	resultLen := 0
+	endTime := time.Now().Add(-confirmationTime).Unix()
+
 	startTime := time.Now()
-	defer log.Debugf("handleWorkloadResult time:%s", time.Since(startTime))
+	defer log.Debugf("handleWorkloadResult time:%s , len:%d , endTime:%d", time.Since(startTime), resultLen, endTime)
 
 	profit := m.getValidationProfit()
 
 	// do handle workload result
-	rows, err := m.LoadUnprocessedWorkloadResults(vWorkloadLimit, time.Now().Add(-confirmationTime).Unix())
+	rows, err := m.LoadUnprocessedWorkloadResults(vWorkloadLimit, endTime)
 	if err != nil {
 		log.Errorf("LoadWorkloadResults err:%s", err.Error())
 		return
@@ -81,10 +84,12 @@ func (m *Manager) handleWorkloadResults() {
 	removeIDs := make([]string, 0)
 
 	for rows.Next() {
+		resultLen++
+
 		record := &types.WorkloadRecord{}
 		err = rows.StructScan(record)
 		if err != nil {
-			log.Errorf("ValidationResultInfo StructScan err: %s", err.Error())
+			log.Errorf("WorkloadResultInfo StructScan err: %s", err.Error())
 			continue
 		}
 

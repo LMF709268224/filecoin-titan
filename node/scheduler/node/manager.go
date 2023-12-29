@@ -51,7 +51,7 @@ func NewManager(sdb *db.SQLDB, serverID dtypes.ServerID, pk *rsa.PrivateKey, pb 
 	}
 
 	go nodeManager.startNodeKeepaliveTimer()
-	go nodeManager.startNodeTimer()
+	go nodeManager.startCheckNodeTimer()
 
 	return nodeManager
 }
@@ -72,7 +72,7 @@ func (m *Manager) startNodeKeepaliveTimer() {
 	}
 }
 
-func (m *Manager) startNodeTimer() {
+func (m *Manager) startCheckNodeTimer() {
 	now := time.Now()
 
 	nextTime := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())

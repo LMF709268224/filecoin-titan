@@ -538,3 +538,11 @@ func (n *SQLDB) DeleteAssetRecordsOfNode(nodeID string) error {
 
 	return tx.Commit()
 }
+
+// DeleteReplicaEvents delete events
+func (n *SQLDB) DeleteReplicaEvents() error {
+	query := fmt.Sprintf(`DELETE FROM %s WHERE end_time<DATE_SUB(NOW(), INTERVAL 3 MONTH) `, replicaEventTable)
+	_, err := n.db.Exec(query)
+
+	return err
+}

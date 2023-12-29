@@ -12,7 +12,6 @@ import (
 	"github.com/Filecoin-Titan/titan/node/repo"
 	"github.com/Filecoin-Titan/titan/node/scheduler/assets"
 	"github.com/Filecoin-Titan/titan/node/scheduler/db"
-	"github.com/Filecoin-Titan/titan/node/scheduler/filelogger"
 	"github.com/Filecoin-Titan/titan/node/scheduler/leadership"
 	"github.com/Filecoin-Titan/titan/node/scheduler/validation"
 	"github.com/Filecoin-Titan/titan/node/sqldb"
@@ -92,19 +91,6 @@ func NewValidation(mctx helpers.MetricsCtx, l fx.Lifecycle, nm *node.Manager, am
 			return nil
 		},
 		OnStop: v.Stop,
-	})
-
-	return v
-}
-
-func NewFileLog(l fx.Lifecycle, sdb *db.SQLDB, serverID dtypes.ServerID, lmgr *leadership.Manager) *filelogger.Manager {
-	v := filelogger.NewManager(sdb, serverID, lmgr)
-
-	l.Append(fx.Hook{
-		OnStart: func(context.Context) error {
-			go v.StartTimer()
-			return nil
-		},
 	})
 
 	return v

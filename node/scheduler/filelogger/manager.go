@@ -40,10 +40,12 @@ func NewManager(sdb *db.SQLDB, serverID dtypes.ServerID, lmgr *leadership.Manage
 		ServerID:      serverID,
 	}
 
+	go mgr.startTimer()
+
 	return mgr
 }
 
-func (m *Manager) StartTimer() {
+func (m *Manager) startTimer() {
 	now := time.Now()
 
 	nextTime := time.Date(now.Year(), now.Month(), now.Day(), 2, 0, 0, 0, now.Location())
@@ -73,8 +75,8 @@ func (m *Manager) handleValidationResultSaveToFiles() {
 		return
 	}
 
-	defer log.Infoln("handleValidationResultSaveToFiles end")
-	log.Infoln("handleValidationResultSaveToFiles start")
+	startTime := time.Now()
+	defer log.Debugf("handleValidationResultSaveToFiles time:%s", time.Since(startTime))
 
 	// do handle validation result
 	for {
