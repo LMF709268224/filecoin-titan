@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
@@ -105,7 +106,7 @@ func (ds *DataSync) removeExtraAsset(ctx context.Context, buckets []uint32) erro
 		cars = append(cars, cs...)
 	}
 
-	log.Debugf("extra asset %d", len(cars))
+	log.Debugf("remove extra asset %d", len(cars))
 	for _, car := range cars {
 		if err := ds.DeleteAsset(car); err != nil {
 			log.Errorf("delete asset error %s", err.Error())
@@ -125,7 +126,7 @@ func (ds *DataSync) addLostAsset(ctx context.Context, buckets []uint32) error {
 		cars = append(cars, cs...)
 	}
 
-	log.Debugf("lost asset %d", len(cars))
+	log.Debugf("add lost asset %d", len(cars))
 	for _, car := range cars {
 		if err := ds.AddLostAsset(car); err != nil {
 			log.Errorf("AddLostAsset error: %s", err.Error())
@@ -140,7 +141,7 @@ func (ds *DataSync) repairMismatchAsset(ctx context.Context, buckets []uint32) e
 	extraCars := make([]cid.Cid, 0)
 	lostCars := make([]cid.Cid, 0)
 	for _, bucketID := range buckets {
-		extras, lost, err := ds.compareBuckets(ctx, bucketID)
+		extras, lost, err := ds.compareAssetsInBucket(ctx, bucketID)
 		if err != nil {
 			return err
 		}
@@ -154,7 +155,7 @@ func (ds *DataSync) repairMismatchAsset(ctx context.Context, buckets []uint32) e
 		}
 
 	}
-	log.Debugf("extra asset %d, lost asset %d", len(extraCars), len(lostCars))
+	log.Debugf("repairMismatchAsset extra asset %d, lost asset %d", len(extraCars), len(lostCars))
 	for _, car := range extraCars {
 		if err := ds.DeleteAsset(car); err != nil {
 			log.Errorf("DeleteAsset error: %s", err.Error())
@@ -170,7 +171,7 @@ func (ds *DataSync) repairMismatchAsset(ctx context.Context, buckets []uint32) e
 }
 
 // compareBuckets compares the assets in the specified bucket in the datastore and in the remote storage, returning the extra and lost assets.
-func (ds *DataSync) compareBuckets(ctx context.Context, bucketID uint32) ([]cid.Cid, []cid.Cid, error) {
+func (ds *DataSync) compareAssetsInBucket(ctx context.Context, bucketID uint32) ([]cid.Cid, []cid.Cid, error) {
 	localAssets, err := ds.GetAssetsOfBucket(ctx, bucketID, false)
 	if err != nil {
 		return nil, nil, err
@@ -180,6 +181,15 @@ func (ds *DataSync) compareBuckets(ctx context.Context, bucketID uint32) ([]cid.
 		return nil, nil, err
 	}
 
+	localAssetList, err := json.Marshal(localAssets)
+	if err != nil {
+		return nil, nil, err
+	}
+	remoteAssetList, err := json.Marshal(remoteAssets)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.Debugf("compareAssetsInBucket, bucketID %d,  localAssets:%#v, remoteAssets:%#v", bucketID, string(localAssetList), string(remoteAssetList))
 	return ds.compareAssets(ctx, localAssets, remoteAssets)
 }
 

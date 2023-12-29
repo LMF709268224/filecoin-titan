@@ -17,12 +17,12 @@ import (
 	"github.com/Filecoin-Titan/titan/api/types"
 	"github.com/Filecoin-Titan/titan/node/asset/index"
 	"github.com/Filecoin-Titan/titan/node/asset/storage"
+	"github.com/Filecoin-Titan/titan/node/ipld"
 	titanrsa "github.com/Filecoin-Titan/titan/node/rsa"
 	validate "github.com/Filecoin-Titan/titan/node/validation"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
 	format "github.com/ipfs/go-ipld-format"
-	legacy "github.com/ipfs/go-ipld-legacy"
 	"github.com/ipfs/go-libipfs/blocks"
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/blockstore"
@@ -630,7 +630,7 @@ func (m *Manager) ScanBlocks(ctx context.Context, root cid.Cid) error {
 		return xerrors.Errorf("get block %s error %w", root.String(), err)
 	}
 
-	node, err := legacy.DecodeNode(context.Background(), block)
+	node, err := ipld.DecodeNode(context.Background(), block)
 	if err != nil {
 		log.Errorf("decode block error:%s", err.Error())
 		return err
@@ -650,7 +650,7 @@ func (m *Manager) getNodes(ctx context.Context, bs *blockstore.ReadOnly, links [
 			return xerrors.Errorf("get block %s error %w", link.Cid.String(), err)
 		}
 
-		node, err := legacy.DecodeNode(context.Background(), block)
+		node, err := ipld.DecodeNode(context.Background(), block)
 		if err != nil {
 			log.Errorf("decode block error:%s", err.Error())
 			return err

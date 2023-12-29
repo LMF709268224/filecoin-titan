@@ -11,8 +11,8 @@ import (
 	"github.com/Filecoin-Titan/titan/api/types"
 	"github.com/Filecoin-Titan/titan/node/asset/fetcher"
 	"github.com/Filecoin-Titan/titan/node/asset/storage"
+	"github.com/Filecoin-Titan/titan/node/ipld"
 	"github.com/ipfs/go-cid"
-	legacy "github.com/ipfs/go-ipld-legacy"
 	"github.com/ipfs/go-libipfs/blocks"
 )
 
@@ -194,7 +194,7 @@ func (ap *assetPuller) pullBlocks(cids []string) (*pulledResult, error) {
 	linksMap := make(map[string][]string)
 	for _, b := range blks {
 		// get block links
-		node, err := legacy.DecodeNode(context.Background(), b)
+		node, err := ipld.DecodeNode(context.Background(), b)
 		if err != nil {
 			log.Errorf("decode block error:%s", err.Error())
 			return nil, err
