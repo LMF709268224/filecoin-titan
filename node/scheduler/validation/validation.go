@@ -20,8 +20,8 @@ const (
 
 	// Processing validation result data from 5 days ago
 	vResultDay = 5 * oneDay
-	// Process 1000 pieces of validation result data at a time
-	vResultLimit = 1000
+	// Process 50000 pieces of validation result data at a time
+	vResultLimit = 50000
 )
 
 // startValidationTicker starts the validation process.
