@@ -583,32 +583,6 @@ func (n *SQLDB) RemoveInvalidWorkloadResult(sIDs []string) error {
 	return err
 }
 
-// UpdateNodeInfosByWorkloadResult Update the info value of the node, and set the processed flag to the workload record
-func (n *SQLDB) UpdateNodeInfosByWorkloadResult(sIDs map[string]types.WorkloadStatus) error {
-	tx, err := n.db.Beginx()
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		err = tx.Rollback()
-		if err != nil && err != sql.ErrTxDone {
-			log.Errorf("Rollback err:%s", err.Error())
-		}
-	}()
-
-	for tokenID, status := range sIDs {
-		query := fmt.Sprintf(`UPDATE %s SET status=? WHERE token_id=?`, workloadRecordTable)
-		_, err = tx.Exec(query, status, tokenID)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Commit
-	return tx.Commit()
-}
-
 // LoadUnCalculatedValidationResults Load not calculated profit validation results
 func (n *SQLDB) LoadUnCalculatedValidationResults(maxTime time.Time, limit int) (*sqlx.Rows, error) {
 	sQuery := fmt.Sprintf(`SELECT * FROM %s WHERE calculated_profit=? AND end_time<? order by end_time asc LIMIT ?`, validationResultTable)
@@ -648,7 +622,7 @@ func (n *SQLDB) UpdateFileSavedStatus(ids []int) error {
 }
 
 // UpdateNodeInfosByValidationResult Update the info value of the node, and set the calculated flag to the validation record
-func (n *SQLDB) UpdateNodeInfosByValidationResult(infos []*types.ValidationResultInfo, nodeProfits map[string]float64) error {
+func (n *SQLDB) UpdateNodeInfosByValidationResult(sIDs []int, nodeProfits map[string]float64) error {
 	tx, err := n.db.Beginx()
 	if err != nil {
 		return err
@@ -661,14 +635,26 @@ func (n *SQLDB) UpdateNodeInfosByValidationResult(infos []*types.ValidationResul
 		}
 	}()
 
-	// update validation result info
-	for _, info := range infos {
-		// update node profit
-		uQuery := fmt.Sprintf(`UPDATE %s SET calculated_profit=?,profit=? WHERE id=?`, validationResultTable)
-		_, err = tx.Exec(uQuery, true, info.Profit, info.ID)
-		if err != nil {
-			return err
-		}
+	// // update validation result info
+	// for _, info := range infos {
+	// 	// update node profit
+	// 	uQuery := fmt.Sprintf(`UPDATE %s SET calculated_profit=?,profit=? WHERE id=?`, validationResultTable)
+	// 	_, err = tx.Exec(uQuery, true, info.Profit, info.ID)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
+	// remove result info
+	rQuery := fmt.Sprintf(`DELETE FROM %s WHERE id in (?)`, validationResultTable)
+	srQuery, args, err := sqlx.In(rQuery, sIDs)
+	if err != nil {
+		return err
+	}
+
+	srQuery = tx.Rebind(srQuery)
+	_, err = tx.Exec(srQuery, args...)
+	if err != nil {
+		return err
 	}
 
 	for nodeID, profit := range nodeProfits {

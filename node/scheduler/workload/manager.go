@@ -18,11 +18,11 @@ import (
 var log = logging.Logger("workload")
 
 const (
-	workloadInterval = 10 * time.Minute
+	workloadInterval = 5 * time.Minute
 	confirmationTime = 70 * time.Second
 
-	// Process 100 pieces of workload result data at a time
-	vWorkloadLimit = 100
+	// Process 10000 pieces of workload result data at a time
+	vWorkloadLimit = 10000
 )
 
 // Manager node workload
@@ -65,8 +65,8 @@ func (m *Manager) handleWorkloadResults() {
 		return
 	}
 
-	defer log.Infoln("handleWorkloadResult end")
-	log.Infoln("handleWorkloadResult start")
+	startTime := time.Now()
+	defer log.Debugf("handleWorkloadResult time:%s", time.Since(startTime))
 
 	profit := m.getValidationProfit()
 
@@ -78,7 +78,6 @@ func (m *Manager) handleWorkloadResults() {
 	}
 	defer rows.Close()
 
-	updateIDs := make(map[string]types.WorkloadStatus)
 	removeIDs := make([]string, 0)
 
 	for rows.Next() {
@@ -89,13 +88,10 @@ func (m *Manager) handleWorkloadResults() {
 			continue
 		}
 
+		removeIDs = append(removeIDs, record.ID)
+
 		// check workload ...
 		status, cWorkload := m.checkWorkload(record)
-		if status == types.WorkloadStatusInvalid {
-			removeIDs = append(removeIDs, record.ID)
-			continue
-		}
-
 		if status == types.WorkloadStatusSucceeded {
 			// Retrieve Event
 			if err := m.SaveRetrieveEventInfo(&types.RetrieveEvent{
@@ -112,8 +108,6 @@ func (m *Manager) handleWorkloadResults() {
 				continue
 			}
 
-			removeIDs = append(removeIDs, record.ID)
-
 			// update node bandwidths
 			t := cWorkload.EndTime - cWorkload.StartTime
 			if t > 1 {
@@ -125,14 +119,6 @@ func (m *Manager) handleWorkloadResults() {
 			continue
 		}
 
-		updateIDs[record.ID] = status
-	}
-
-	if len(updateIDs) > 0 {
-		err = m.UpdateNodeInfosByWorkloadResult(updateIDs)
-		if err != nil {
-			log.Errorf("UpdateNodeInfosByWorkloadResult err:%s", err.Error())
-		}
 	}
 
 	if len(removeIDs) > 0 {

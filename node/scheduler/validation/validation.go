@@ -374,24 +374,24 @@ func (m *Manager) handleValidationResults() {
 		return
 	}
 
-	defer log.Infoln("handleValidationResults end")
-	log.Infoln("handleValidationResults start")
+	startTime := time.Now()
+	defer log.Debugf("handleValidationResults time:%s", time.Since(startTime))
 
 	maxTime := time.Now().Add(-vResultDay)
 
 	// do handle validation result
 	for {
-		infos, nodeProfits, err := m.loadResults(maxTime)
+		ids, nodeProfits, err := m.loadResults(maxTime)
 		if err != nil {
 			log.Errorf("loadResults err:%s", err.Error())
 			return
 		}
 
-		if len(infos) == 0 {
+		if len(ids) == 0 {
 			return
 		}
 
-		err = m.nodeMgr.UpdateNodeInfosByValidationResult(infos, nodeProfits)
+		err = m.nodeMgr.UpdateNodeInfosByValidationResult(ids, nodeProfits)
 		if err != nil {
 			log.Errorf("UpdateNodeProfitsByValidationResult err:%s", err.Error())
 			return
@@ -400,14 +400,15 @@ func (m *Manager) handleValidationResults() {
 	}
 }
 
-func (m *Manager) loadResults(maxTime time.Time) ([]*types.ValidationResultInfo, map[string]float64, error) {
+func (m *Manager) loadResults(maxTime time.Time) ([]int, map[string]float64, error) {
 	rows, err := m.nodeMgr.LoadUnCalculatedValidationResults(maxTime, vResultLimit)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer rows.Close()
 
-	infos := make([]*types.ValidationResultInfo, 0)
+	// infos := make([]*types.ValidationResultInfo, 0)
+	ids := make([]int, 0)
 	nodeProfits := make(map[string]float64)
 
 	for rows.Next() {
@@ -435,7 +436,8 @@ func (m *Manager) loadResults(maxTime time.Time) ([]*types.ValidationResultInfo,
 			}
 		}
 
-		infos = append(infos, vInfo)
+		// infos = append(infos, vInfo)
+		ids = append(ids, vInfo.ID)
 
 		if vInfo.Profit == 0 {
 			continue
@@ -444,5 +446,5 @@ func (m *Manager) loadResults(maxTime time.Time) ([]*types.ValidationResultInfo,
 		nodeProfits[vInfo.NodeID] += vInfo.Profit
 	}
 
-	return infos, nodeProfits, nil
+	return ids, nodeProfits, nil
 }
