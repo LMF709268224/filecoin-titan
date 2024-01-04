@@ -446,7 +446,7 @@ func (n *SQLDB) LoadReplicaEvents(start, end time.Time, limit, offset int) (*typ
 	res := new(types.ListReplicaEventRsp)
 
 	var infos []*types.ReplicaEventInfo
-	query := fmt.Sprintf("SELECT * FROM %s WHERE end_time BETWEEN ? AND ? order by end_time desc LIMIT ? OFFSET ? ", replicaEventTable)
+	query := fmt.Sprintf("SELECT * FROM %s WHERE end_time BETWEEN ? AND ? order by end_time asc LIMIT ? OFFSET ? ", replicaEventTable)
 	if limit > loadReplicaEventDefaultLimit {
 		limit = loadReplicaEventDefaultLimit
 	}
