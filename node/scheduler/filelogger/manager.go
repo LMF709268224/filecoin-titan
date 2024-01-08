@@ -75,9 +75,6 @@ func (m *Manager) handleValidationResultSaveToFiles() {
 		return
 	}
 
-	startTime := time.Now()
-	defer log.Debugf("handleValidationResultSaveToFiles time:%s", time.Since(startTime))
-
 	// do handle validation result
 	for {
 		ids, ds, err := m.loadResults()

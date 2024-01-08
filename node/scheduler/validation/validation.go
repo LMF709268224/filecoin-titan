@@ -375,7 +375,9 @@ func (m *Manager) handleValidationResults() {
 	}
 
 	startTime := time.Now()
-	defer log.Debugf("handleValidationResults time:%s", time.Since(startTime))
+	defer func() {
+		log.Debugf("handleValidationResults time:%s", time.Since(startTime))
+	}()
 
 	maxTime := time.Now().Add(-vResultDay)
 

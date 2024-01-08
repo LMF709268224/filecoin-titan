@@ -304,9 +304,6 @@ func (s *Scheduler) GetNodeInfo(ctx context.Context, nodeID string) (types.NodeI
 
 // GetNodeList retrieves a list of nodes with pagination.
 func (s *Scheduler) GetNodeList(ctx context.Context, offset int, limit int) (*types.ListNodesRsp, error) {
-	startTime := time.Now()
-	defer log.Debugf("GetNodeList request time:%s", time.Since(startTime))
-
 	info := &types.ListNodesRsp{Data: make([]types.NodeInfo, 0)}
 
 	rows, total, err := s.NodeManager.LoadNodeInfos(limit, offset)

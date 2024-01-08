@@ -203,9 +203,6 @@ func (s *Scheduler) TriggerElection(ctx context.Context) error {
 
 // GetValidationResults retrieves a list of validation results.
 func (s *Scheduler) GetValidationResults(ctx context.Context, nodeID string, limit, offset int) (*types.ListValidationResultRsp, error) {
-	startTime := time.Now()
-	defer log.Debugf("GetValidationResults [%s] request time:%s", nodeID, time.Since(startTime))
-
 	svm, err := s.NodeManager.LoadValidationResultInfos(nodeID, limit, offset)
 	if err != nil {
 		return nil, err
@@ -283,17 +280,11 @@ func (s *Scheduler) SubmitNodeWorkloadReport(ctx context.Context, r io.Reader) e
 
 // GetWorkloadRecords retrieves a list of workload results.
 func (s *Scheduler) GetWorkloadRecords(ctx context.Context, nodeID string, limit, offset int) (*types.ListWorkloadRecordRsp, error) {
-	startTime := time.Now()
-	defer log.Debugf("GetWorkloadRecords [%s] request time:%s", nodeID, time.Since(startTime))
-
 	return s.NodeManager.LoadWorkloadRecords(nodeID, limit, offset)
 }
 
 // GetRetrieveEventRecords retrieves a list of retrieve events
 func (s *Scheduler) GetRetrieveEventRecords(ctx context.Context, nodeID string, limit, offset int) (*types.ListRetrieveEventRsp, error) {
-	startTime := time.Now()
-	defer log.Debugf("GetRetrieveEventRecords [%s] request time:%s", nodeID, time.Since(startTime))
-
 	return s.NodeManager.LoadRetrieveEventRecords(nodeID, limit, offset)
 }
 

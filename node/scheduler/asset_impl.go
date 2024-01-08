@@ -43,9 +43,6 @@ func (s *Scheduler) UpdateAssetExpiration(ctx context.Context, cid string, t tim
 
 // GetAssetRecord retrieves an asset record by its CID.
 func (s *Scheduler) GetAssetRecord(ctx context.Context, cid string) (*types.AssetRecord, error) {
-	startTime := time.Now()
-	defer log.Debugf("GetAssetRecord [%s] request time:%s", cid, time.Since(startTime))
-
 	hash, err := cidutil.CIDToHash(cid)
 	if err != nil {
 		return nil, err
@@ -81,9 +78,6 @@ func (s *Scheduler) GetReplicas(ctx context.Context, cid string, limit, offset i
 
 // GetAssetRecords lists asset records with optional filtering by status, limit, and offset.
 func (s *Scheduler) GetAssetRecords(ctx context.Context, limit, offset int, statuses []string, serverID dtypes.ServerID) ([]*types.AssetRecord, error) {
-	startTime := time.Now()
-	defer log.Debugf("GetAssetRecords request time:%s", time.Since(startTime))
-
 	if serverID == "" {
 		serverID = s.ServerID
 	}
@@ -200,9 +194,6 @@ func (s *Scheduler) GetAssetCount(ctx context.Context) (int, error) {
 
 // GetAssetsForNode retrieves a asset list of node
 func (s *Scheduler) GetAssetsForNode(ctx context.Context, nodeID string, limit, offset int) (*types.ListNodeAssetRsp, error) {
-	startTime := time.Now()
-	defer log.Debugf("GetAssetsForNode [%s] request time:%s", nodeID, time.Since(startTime))
-
 	info, err := s.db.LoadReplicasByNodeID(nodeID, limit, offset)
 	if err != nil {
 		return nil, xerrors.Errorf("LoadReplicasByNodeID err:%s", err.Error())
@@ -213,9 +204,6 @@ func (s *Scheduler) GetAssetsForNode(ctx context.Context, nodeID string, limit, 
 
 // GetReplicaEventsForNode retrieves a replica event list of node
 func (s *Scheduler) GetReplicaEventsForNode(ctx context.Context, nodeID string, limit, offset int) (*types.ListReplicaEventRsp, error) {
-	startTime := time.Now()
-	defer log.Debugf("GetReplicaEventsForNode [%s] request time:%s", nodeID, time.Since(startTime))
-
 	info, err := s.db.LoadReplicaEventsOfNode(nodeID, limit, offset)
 	if err != nil {
 		return nil, xerrors.Errorf("LoadReplicaEvents err:%s", err.Error())
@@ -226,9 +214,6 @@ func (s *Scheduler) GetReplicaEventsForNode(ctx context.Context, nodeID string, 
 
 // GetReplicaEvents retrieves a replica event list
 func (s *Scheduler) GetReplicaEvents(ctx context.Context, start, end time.Time, limit, offset int) (*types.ListReplicaEventRsp, error) {
-	startTime := time.Now()
-	defer log.Debugf("GetReplicaEvents request time:%s", time.Since(startTime))
-
 	info, err := s.db.LoadReplicaEvents(start, end, limit, offset)
 	if err != nil {
 		return nil, xerrors.Errorf("LoadReplicaEvents err:%s", err.Error())
@@ -254,9 +239,6 @@ func (s *Scheduler) ListAssets(ctx context.Context, userID string, limit, offset
 	if len(uID) > 0 {
 		userID = uID
 	}
-
-	startTime := time.Now()
-	defer log.Debugf("ListAssets [%s] request time:%s", userID, time.Since(startTime))
 
 	u := s.newUser(userID)
 	info, err := u.ListAssets(ctx, limit, offset, s.SchedulerCfg.MaxCountOfVisitShareLink, groupID)
