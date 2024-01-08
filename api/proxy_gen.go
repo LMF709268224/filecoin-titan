@@ -11,7 +11,7 @@ import (
 	"github.com/Filecoin-Titan/titan/journal/alerting"
 	"github.com/Filecoin-Titan/titan/node/modules/dtypes"
 	"github.com/google/uuid"
-	xerrors "golang.org/x/xerrors"
+	"golang.org/x/xerrors"
 )
 
 var ErrNotSupported = xerrors.New("method not supported")
@@ -260,6 +260,8 @@ type NodeAPIStruct struct {
 		NodeExists func(p0 context.Context, p1 string) error `perm:"web"`
 
 		NodeKeepalive func(p0 context.Context) (uuid.UUID, error) `perm:"edge,candidate"`
+
+		NodeKeepaliveV2 func(p0 context.Context) (uuid.UUID, error) `perm:"edge,candidate"`
 
 		NodeLogin func(p0 context.Context, p1 string, p2 string) (string, error) `perm:"default"`
 
@@ -1184,6 +1186,17 @@ func (s *NodeAPIStruct) NodeKeepalive(p0 context.Context) (uuid.UUID, error) {
 }
 
 func (s *NodeAPIStub) NodeKeepalive(p0 context.Context) (uuid.UUID, error) {
+	return *new(uuid.UUID), ErrNotSupported
+}
+
+func (s *NodeAPIStruct) NodeKeepaliveV2(p0 context.Context) (uuid.UUID, error) {
+	if s.Internal.NodeKeepaliveV2 == nil {
+		return *new(uuid.UUID), ErrNotSupported
+	}
+	return s.Internal.NodeKeepaliveV2(p0)
+}
+
+func (s *NodeAPIStub) NodeKeepaliveV2(p0 context.Context) (uuid.UUID, error) {
 	return *new(uuid.UUID), ErrNotSupported
 }
 

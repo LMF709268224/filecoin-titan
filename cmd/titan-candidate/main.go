@@ -30,6 +30,7 @@ import (
 
 	"github.com/Filecoin-Titan/titan/api"
 	"github.com/Filecoin-Titan/titan/api/client"
+	"github.com/Filecoin-Titan/titan/api/terrors"
 	"github.com/Filecoin-Titan/titan/api/types"
 	"github.com/Filecoin-Titan/titan/build"
 	lcli "github.com/Filecoin-Titan/titan/cli"
@@ -373,23 +374,7 @@ var runCmd = &cli.Command{
 					readyCh = waitQuietCh()
 				}
 
-				errCount := 0
 				for {
-					curSession, err := keepalive(schedulerAPI, connectTimeout)
-					if err != nil {
-						errCount++
-						log.Errorf("heartbeat: checking remote session failed: %+v", err)
-					} else {
-						if curSession != schedulerSession {
-							schedulerSession = curSession
-							break
-						}
-
-						if errCount > 0 {
-							break
-						}
-					}
-
 					select {
 					case <-readyCh:
 						opts := &types.ConnectOptions{ExternalURL: candidateCfg.ExternalURL, Token: token, TcpServerPort: tcpServerPort, IsPrivateMinioOnly: isPrivateMinioOnly(candidateCfg)}
@@ -401,11 +386,31 @@ var runCmd = &cli.Command{
 						}
 
 						log.Info("Candidate registered successfully, waiting for tasks")
-						errCount = 0
 						readyCh = nil
 					case <-heartbeats.C:
 					case <-ctx.Done():
 						return // graceful shutdown
+					}
+
+					curSession, err := keepalive(schedulerAPI, connectTimeout)
+					if err != nil {
+						log.Errorf("heartbeat: keepalive failed: %+v", err)
+						errNode, ok := err.(*api.ErrNode)
+						if ok {
+							if errNode.Code == int(terrors.NodeDeactivate) {
+								cancel()
+								return
+							} else if errNode.Code == int(terrors.NodeIPInconsistent) {
+								break
+							} else if errNode.Code == int(terrors.NodeOffline) && readyCh == nil {
+								break
+							}
+
+						}
+					} else if curSession != schedulerSession {
+						log.Warn("change session id")
+						schedulerSession = curSession
+						break
 					}
 				}
 
@@ -432,7 +437,7 @@ func keepalive(api api.Scheduler, timeout time.Duration) (uuid.UUID, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	return api.NodeKeepalive(ctx)
+	return api.NodeKeepaliveV2(ctx)
 }
 
 func getSchedulerVersion(api api.Scheduler, timeout time.Duration) (api.APIVersion, error) {

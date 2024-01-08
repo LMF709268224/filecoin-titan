@@ -28,6 +28,10 @@ const (
 	RootGroupCannotMoved        // the root group cannot be moved
 	GroupsAreSame               // groups are the same
 
+	NodeIPInconsistent // node ip inconsistent
+	NodeDeactivate     // node deactivate
+	NodeOffline        // node offline
+
 	Success = 0
 	Unknown = -1
 )

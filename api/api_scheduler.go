@@ -102,6 +102,8 @@ type NodeAPI interface {
 	NodeExists(ctx context.Context, nodeID string) error //perm:web
 	// NodeKeepalive
 	NodeKeepalive(ctx context.Context) (uuid.UUID, error) //perm:edge,candidate
+	// NodeKeepaliveV2 fix the problem of NodeKeepalive, Maintaining old device connections
+	NodeKeepaliveV2(ctx context.Context) (uuid.UUID, error) //perm:edge,candidate
 	// RequestActivationCodes Get the device's encrypted activation code
 	RequestActivationCodes(ctx context.Context, nodeType types.NodeType, count int) ([]*types.NodeActivation, error) //perm:web,admin
 	// VerifyTokenWithLimitCount verify token in limit count

@@ -574,6 +574,37 @@ func (s *Scheduler) NodeKeepalive(ctx context.Context) (uuid.UUID, error) {
 	return uuid, err
 }
 
+// NodeKeepaliveV2 candidate and edge keepalive
+func (s *Scheduler) NodeKeepaliveV2(ctx context.Context) (uuid.UUID, error) {
+	uuid, err := s.CommonAPI.Session(ctx)
+
+	remoteAddr := handler.GetRemoteAddr(ctx)
+	nodeID := handler.GetNodeID(ctx)
+	if nodeID != "" && remoteAddr != "" {
+		lastTime := time.Now()
+
+		node := s.NodeManager.GetNode(nodeID)
+		if node != nil {
+			if remoteAddr != node.RemoteAddr {
+				log.Debugf("node %s remoteAddr inconsistent, new addr %s ,old addr %s", nodeID, remoteAddr, node.RemoteAddr)
+				return uuid, &api.ErrNode{Code: int(terrors.NodeIPInconsistent), Message: fmt.Sprintf("node %s new ip %s, old ip %s", nodeID, remoteAddr, node.RemoteAddr)}
+			}
+
+			if node.DeactivateTime > 0 && node.DeactivateTime < time.Now().Unix() {
+				return uuid, &api.ErrNode{Code: int(terrors.NodeDeactivate), Message: fmt.Sprintf("The node %s has been deactivate and cannot be logged in", nodeID)}
+			}
+
+			node.SetLastRequestTime(lastTime)
+		} else {
+			return uuid, &api.ErrNode{Code: int(terrors.NodeOffline), Message: fmt.Sprintf("node %s offline or not exist", nodeID)}
+		}
+	} else {
+		return uuid, &api.ErrNode{Code: terrors.Unknown, Message: fmt.Sprintf("nodeID %s or remoteAddr %s is nil", nodeID, remoteAddr)}
+	}
+
+	return uuid, err
+}
+
 // create a node id
 func newNodeID(nType types.NodeType) (string, error) {
 	nodeID := ""
