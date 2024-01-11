@@ -28,8 +28,10 @@ func init() {
 // DefaultEdgeCfg returns the default edge config
 func DefaultEdgeCfg() *EdgeCfg {
 	return &EdgeCfg{
-		ListenAddress: "0.0.0.0:1234",
-		Timeout:       "30s",
+		Network: Network{
+			ListenAddress: "0.0.0.0:1234",
+			Timeout:       "30s",
+		},
 		MetadataPath:  "",
 		AssetsPaths:   []string{},
 		BandwidthUp:   104857600,
@@ -44,14 +46,25 @@ func DefaultEdgeCfg() *EdgeCfg {
 		PullBlockTimeout:  15,
 		PullBlockRetry:    1,
 		PullBlockParallel: 5,
+
+		Quota: Quota{
+			Storage:   64, // 64GB
+			Memory:    1,  // 1GB
+			CPUCore:   1,  // 1core
+			Bandwidth: 10, // 10Mb/s
+		},
+
+		LocatorAPI: "https://localhost:5000",
 	}
 }
 
 // DefaultCandidateCfg returns the default candidate config
 func DefaultCandidateCfg() *CandidateCfg {
 	edgeCfg := EdgeCfg{
-		ListenAddress: "0.0.0.0:2345",
-		Timeout:       "30s",
+		Network: Network{
+			ListenAddress: "0.0.0.0:2345",
+			Timeout:       "30s",
+		},
 		MetadataPath:  "",
 		AssetsPaths:   []string{},
 		BandwidthUp:   1073741824,
@@ -70,6 +83,14 @@ func DefaultCandidateCfg() *CandidateCfg {
 		IPFSAPIURL:          "http://127.0.0.1:5001",
 		ValidateDuration:    10,
 		MaxSizeOfUploadFile: 104857600, // 100 MB
+		LocatorAPI:          "https://localhost:5000",
+
+		Quota: Quota{
+			Storage:   64, // 64GB
+			Memory:    1,  // 1GB
+			CPUCore:   1,  // 1core
+			Bandwidth: 10, // 10Mb/s
+		},
 	}
 	return &CandidateCfg{
 		EdgeCfg:     edgeCfg,
@@ -135,6 +156,8 @@ func DefaultSchedulerCfg() *SchedulerCfg {
 		MaxCountOfVisitShareLink: 10,
 		Weight:                   100,
 		MaxAPIKey:                5,
+		LocatorAPI:               "https://localhost:5000/rpc/v0",
+		WebAPI:                   "http://wapi-storage.container1.titannet.io",
 	}
 }
 

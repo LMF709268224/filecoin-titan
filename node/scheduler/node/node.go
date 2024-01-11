@@ -7,6 +7,7 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -115,7 +116,12 @@ func APIFromCandidate(api api.Candidate) *API {
 }
 
 // ConnectRPC connects to the node RPC
-func (n *Node) ConnectRPC(addr string, nodeType types.NodeType) error {
+func (n *Node) ConnectRPC(conn net.PacketConn, addr string, nodeType types.NodeType) error {
+	httpClient, err := client.NewHTTP3ClientWithPacketConn(conn)
+	if err != nil {
+		return err
+	}
+
 	rpcURL := fmt.Sprintf("https://%s/rpc/v0", addr)
 
 	headers := http.Header{}
@@ -123,7 +129,7 @@ func (n *Node) ConnectRPC(addr string, nodeType types.NodeType) error {
 
 	if nodeType == types.NodeEdge {
 		// Connect to node
-		edgeAPI, closer, err := client.NewEdge(context.Background(), rpcURL, headers)
+		edgeAPI, closer, err := client.NewEdge(context.Background(), rpcURL, headers, jsonrpc.WithHTTPClient(httpClient))
 		if err != nil {
 			return xerrors.Errorf("NewEdge err:%s,url:%s", err.Error(), rpcURL)
 		}
@@ -135,7 +141,7 @@ func (n *Node) ConnectRPC(addr string, nodeType types.NodeType) error {
 
 	if nodeType == types.NodeCandidate {
 		// Connect to node
-		candidateAPI, closer, err := client.NewCandidate(context.Background(), rpcURL, headers)
+		candidateAPI, closer, err := client.NewCandidate(context.Background(), rpcURL, headers, jsonrpc.WithHTTPClient(httpClient))
 		if err != nil {
 			return xerrors.Errorf("NewCandidate err:%s,url:%s", err.Error(), rpcURL)
 		}

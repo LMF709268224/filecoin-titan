@@ -1,24 +1,27 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"crypto/rsa"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"net"
+	"net/http"
 	"os"
 
+	"github.com/BurntSushi/toml"
 	"github.com/Filecoin-Titan/titan/api"
 	"github.com/Filecoin-Titan/titan/api/client"
 	"github.com/Filecoin-Titan/titan/api/types"
-	cliutil "github.com/Filecoin-Titan/titan/cli/util"
 	"github.com/Filecoin-Titan/titan/node/config"
 	"github.com/Filecoin-Titan/titan/node/repo"
 	titanrsa "github.com/Filecoin-Titan/titan/node/rsa"
 	"github.com/filecoin-project/go-jsonrpc"
+	"github.com/quic-go/quic-go/http3"
 	"github.com/urfave/cli/v2"
-	"golang.org/x/xerrors"
 )
 
 var EdgeCmds = []*cli.Command{
@@ -27,7 +30,8 @@ var EdgeCmds = []*cli.Command{
 	progressCmd,
 	keyCmds,
 	configCmds,
-	registerCmd,
+	importKeyCmd,
+	stateCmd,
 }
 
 var nodeInfoCmd = &cli.Command{
@@ -64,7 +68,7 @@ var nodeInfoCmd = &cli.Command{
 }
 
 var cacheStatCmd = &cli.Command{
-	Name:  "stat",
+	Name:  "cache",
 	Usage: "cache stat",
 	Flags: []cli.Flag{},
 	Action: func(cctx *cli.Context) error {
@@ -148,7 +152,7 @@ var generateRsaKey = &cli.Command{
 			return fmt.Errorf("rsa bits is 1024,2048,4096")
 		}
 
-		lr, err := openRepo(cctx)
+		_, lr, err := openRepo(cctx)
 		if err != nil {
 			return err
 		}
@@ -203,7 +207,7 @@ var importKey = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
-		lr, err := openRepo(cctx)
+		_, lr, err := openRepo(cctx)
 		if err != nil {
 			return err
 		}
@@ -283,38 +287,38 @@ var exportKey = &cli.Command{
 	},
 }
 
-func openRepo(cctx *cli.Context) (repo.LockedRepo, error) {
+func openRepo(cctx *cli.Context) (repo.Repo, repo.LockedRepo, error) {
 	repoPath, err := getRepoPath(cctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	r, err := repo.NewFS(repoPath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	repoType, err := getRepoType(cctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	ok, err := r.Exists()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !ok {
 		if err := r.Init(repoType); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
 	lr, err := r.Lock(repoType)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return lr, nil
+	return r, lr, nil
 }
 
 func getRepoPath(cctx *cli.Context) (string, error) {
@@ -379,6 +383,7 @@ var configCmds = &cli.Command{
 	Subcommands: []*cli.Command{
 		setConfigCmd,
 		showConfigCmd,
+		mergeConfigCmd,
 	},
 }
 
@@ -387,7 +392,7 @@ var showConfigCmd = &cli.Command{
 	Usage: "show config",
 	Flags: []cli.Flag{},
 	Action: func(cctx *cli.Context) error {
-		lr, err := openRepo(cctx)
+		_, lr, err := openRepo(cctx)
 		if err != nil {
 			return err
 		}
@@ -416,11 +421,6 @@ var setConfigCmd = &cli.Command{
 			Name:  "timeout",
 			Usage: "network connect timeout. example: --timeout=timeout",
 			Value: "30s",
-		},
-		&cli.StringFlag{
-			Name:  "node-id",
-			Usage: "example: --node-id=your_node_id",
-			Value: "",
 		},
 		&cli.StringFlag{
 			Name:  "area-id",
@@ -500,7 +500,7 @@ var setConfigCmd = &cli.Command{
 	},
 
 	Action: func(cctx *cli.Context) error {
-		lr, err := openRepo(cctx)
+		_, lr, err := openRepo(cctx)
 		if err != nil {
 			return err
 		}
@@ -518,14 +518,12 @@ var setConfigCmd = &cli.Command{
 			}
 
 			if cctx.IsSet("listen-address") {
-				cfg.ListenAddress = cctx.String("listen-address")
+				cfg.Network.ListenAddress = cctx.String("listen-address")
 			}
 			if cctx.IsSet("timeout") {
-				cfg.Timeout = cctx.String("timeout")
+				cfg.Network.Timeout = cctx.String("timeout")
 			}
-			if cctx.IsSet("node-id") {
-				cfg.NodeID = cctx.String("node-id")
-			}
+
 			if cctx.IsSet("area-id") {
 				cfg.AreaID = cctx.String("area-id")
 			}
@@ -581,15 +579,65 @@ var setConfigCmd = &cli.Command{
 	},
 }
 
-var registerCmd = &cli.Command{
-	Name:  "register",
-	Usage: "register node",
+var mergeConfigCmd = &cli.Command{
+	Name:  "merge",
+	Usage: "merge config",
+	Flags: []cli.Flag{},
+
+	Action: func(cctx *cli.Context) error {
+		configString := cctx.Args().Get(0)
+		reader := bytes.NewReader([]byte(configString))
+
+		edgeConfig := config.EdgeCfg{}
+		if _, err := toml.NewDecoder(reader).Decode(&edgeConfig); err != nil {
+			return err
+		}
+
+		// check quota
+
+		_, lr, err := openRepo(cctx)
+		if err != nil {
+			return err
+		}
+		defer lr.Close() //nolint:errcheck  // ignore error
+
+		// check token
+		cfg, err := lr.Config()
+		if err != nil {
+			return err
+		}
+
+		oldEdgeConfig := cfg.(*config.EdgeCfg)
+
+		if len(oldEdgeConfig.Token) > 0 && oldEdgeConfig.Token != edgeConfig.Token {
+			return fmt.Errorf("can not modify token")
+		}
+
+		if len(oldEdgeConfig.Token) == 0 && len(edgeConfig.Token) > 0 {
+			if err := importPrivateKey(cctx, edgeConfig.Token); err != nil {
+				return err
+			}
+		}
+
+		lr.SetConfig(func(raw interface{}) {
+			cfg, ok := raw.(*config.EdgeCfg)
+			if !ok {
+				return
+			}
+
+			cfg.Quota = edgeConfig.Quota
+
+		})
+
+		return nil
+	},
+}
+
+var importKeyCmd = &cli.Command{
+	Name:      "import",
+	Usage:     "import node private key",
+	UsageText: "import your-private-key",
 	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:     "key",
-			Usage:    "activation key",
-			Required: true,
-		},
 		&cli.IntFlag{
 			Name:  "bits",
 			Usage: "generate private key bits",
@@ -597,96 +645,127 @@ var registerCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
-		lr, err := openRepo(cctx)
-		if err != nil {
-			return err
-		}
-		defer lr.Close() //nolint:errcheck  // ignore error
-
-		key := cctx.String("key")
-		jsonString, err := base64.StdEncoding.DecodeString(key)
-		if err != nil {
-			return err
-		}
-
-		var activation types.ActivationDetail
-		err = json.Unmarshal([]byte(jsonString), &activation)
-		if err != nil {
-			return err
-		}
-
-		udpPacketConn, err := net.ListenPacket("udp", ":0")
-		if err != nil {
-			return err
-		}
-		defer udpPacketConn.Close() //nolint:errcheck  // ignore error
-
-		httpClient, err := cliutil.NewHTTP3Client(udpPacketConn, true, "")
-		if err != nil {
-			return xerrors.Errorf("new http3 client: %w", err)
-		}
-		jsonrpc.SetHttp3Client(httpClient)
-
-		schedulerURL, err := getAccessPoint(cctx, activation.NodeID, activation.AreaID)
-		if err != nil {
-			return err
-		}
-
-		schedulerAPI, closer, err := client.NewScheduler(context.Background(), schedulerURL, nil)
-		if err != nil {
-			return err
-		}
-		defer closer()
-
-		bits := cctx.Int("bits")
-		privateKey, err := titanrsa.GeneratePrivateKey(bits)
-		if err != nil {
-			return err
-		}
-
-		pem := titanrsa.PublicKey2Pem(&privateKey.PublicKey)
-
-		err = schedulerAPI.RegisterNode(context.Background(), activation.NodeID, string(pem), activation.ActivationKey)
-		if err != nil {
-			return err
-		}
-
-		privatePem := titanrsa.PrivateKey2Pem(privateKey)
-		if err := lr.SetPrivateKey(privatePem); err != nil {
-			return err
-		}
-
-		return lr.SetConfig(func(raw interface{}) {
-			cfg, ok := raw.(*config.EdgeCfg)
-			if !ok {
-				candidateCfg, ok := raw.(*config.CandidateCfg)
-				if !ok {
-					log.Errorf("can not convert interface to CandidateCfg")
-					return
-				}
-				cfg = &candidateCfg.EdgeCfg
-			}
-
-			cfg.NodeID = activation.NodeID
-			cfg.AreaID = activation.AreaID
-		})
+		key := cctx.Args().Get(0)
+		return importPrivateKey(cctx, key)
 	},
 }
 
-func getAccessPoint(cctx *cli.Context, nodeID, areaID string) (string, error) {
-	locator, closer, err := GetLocatorAPI(cctx)
+func importPrivateKey(cctx *cli.Context, key string) error {
+	r, lr, err := openRepo(cctx)
 	if err != nil {
-		return "", err
+		return err
+	}
+	defer lr.Close() //nolint:errcheck  // ignore error
+
+	privateKeyBuf, err := r.PrivateKey()
+	if err != nil && !errors.Is(err, repo.ErrPrivateKeyNotExist) {
+		return err
+	}
+
+	if privateKeyBuf != nil {
+		return fmt.Errorf("private key already exist")
+	}
+
+	jsonString, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		return err
+	}
+
+	var activationDetail types.ActivationDetail
+	err = json.Unmarshal([]byte(jsonString), &activationDetail)
+	if err != nil {
+		return err
+	}
+
+	httpClient := &http.Client{
+		Transport: &http3.RoundTripper{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+
+	schedulerURL, err := getAccessPoint(cctx, httpClient, &activationDetail)
+	if err != nil {
+		return err
+	}
+
+	schedulerAPI, closer, err := client.NewScheduler(context.Background(), schedulerURL, nil, jsonrpc.WithHTTPClient(httpClient))
+	if err != nil {
+		return err
 	}
 	defer closer()
 
-	schedulerURLs, err := locator.GetAccessPoints(context.Background(), nodeID, areaID)
+	bits := cctx.Int("bits")
+	privateKey, err := titanrsa.GeneratePrivateKey(bits)
+	if err != nil {
+		return err
+	}
+
+	pem := titanrsa.PublicKey2Pem(&privateKey.PublicKey)
+
+	err = schedulerAPI.RegisterNode(context.Background(), activationDetail.NodeID, string(pem), activationDetail.ActivationKey)
+	if err != nil {
+		return err
+	}
+
+	privatePem := titanrsa.PrivateKey2Pem(privateKey)
+	if err := lr.SetPrivateKey(privatePem); err != nil {
+		return err
+	}
+
+	if err := lr.SetNodeID([]byte(activationDetail.NodeID)); err != nil {
+		return err
+	}
+
+	return lr.SetConfig(func(raw interface{}) {
+		cfg, ok := raw.(*config.EdgeCfg)
+		if !ok {
+			candidateCfg, ok := raw.(*config.CandidateCfg)
+			if !ok {
+				log.Errorf("can not convert interface to CandidateCfg")
+				return
+			}
+			cfg = &candidateCfg.EdgeCfg
+		}
+		cfg.LocatorAPI = activationDetail.LocatorAPI
+		cfg.Token = key
+		cfg.AreaID = activationDetail.AreaID
+	})
+}
+
+var stateCmd = &cli.Command{
+	Name:  "state",
+	Usage: "check daemon state",
+	Flags: []cli.Flag{},
+	Action: func(cctx *cli.Context) error {
+		api, close, err := GetAPI(cctx)
+		if err != nil {
+			return err
+		}
+
+		defer close()
+
+		_, err = api.Version(cctx.Context)
+		return err
+	},
+}
+
+// getAccessPoint return locator url and scheduler url
+func getAccessPoint(cctx *cli.Context, httpClient *http.Client, activationDetail *types.ActivationDetail) (string, error) {
+	locator, close, err := client.NewLocator(cctx.Context, activationDetail.LocatorAPI, nil, jsonrpc.WithHTTPClient(httpClient))
+	if err != nil {
+		return "", err
+	}
+	defer close()
+
+	schedulerURLs, err := locator.GetAccessPoints(context.Background(), activationDetail.NodeID, activationDetail.AreaID)
 	if err != nil {
 		return "", err
 	}
 
 	if len(schedulerURLs) <= 0 {
-		return "", fmt.Errorf("no access point in area %s for node %s", areaID, nodeID)
+		return "", fmt.Errorf("no access point in area %s for node %s", activationDetail.AreaID, activationDetail.NodeID)
 	}
 
 	return schedulerURLs[0], nil

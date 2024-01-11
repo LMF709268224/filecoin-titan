@@ -2,15 +2,14 @@ package nat
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
-	"net"
+	"net/http"
 	"time"
 
 	"github.com/Filecoin-Titan/titan/api/types"
-	cliutil "github.com/Filecoin-Titan/titan/cli/util"
 	"github.com/Filecoin-Titan/titan/node/scheduler/node"
-
-	"golang.org/x/xerrors"
+	"github.com/quic-go/quic-go/http3"
 )
 
 // checks if an edge node is behind a Full Cone NAT
@@ -20,21 +19,14 @@ func detectFullConeNAT(ctx context.Context, candidate *node.Node, edgeURL string
 
 // checks if an edge node is behind a Restricted NAT
 func detectRestrictedNAT(ctx context.Context, edgeURL string) (bool, error) {
-	udpPacketConn, err := net.ListenPacket("udp", ":0")
-	if err != nil {
-		return false, err
+	httpClient := &http.Client{
+		Transport: &http3.RoundTripper{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
 	}
-	defer func() {
-		err = udpPacketConn.Close()
-		if err != nil {
-			log.Errorf("udpPacketConn Close err:%s", err.Error())
-		}
-	}()
 
-	httpClient, err := cliutil.NewHTTP3Client(udpPacketConn, true, "")
-	if err != nil {
-		return false, xerrors.Errorf("new http3 client %w", err)
-	}
 	httpClient.Timeout = 5 * time.Second
 
 	resp, err := httpClient.Get(edgeURL)

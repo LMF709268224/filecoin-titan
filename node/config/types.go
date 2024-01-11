@@ -4,14 +4,28 @@ package config
 // //
 // // After making edits here, run 'make cfgdoc-gen' (or 'make gen')
 
-// EdgeCfg edge node config
-type EdgeCfg struct {
+// configurable for user
+type Quota struct {
+	// Storage for use by node
+	Storage int64
+	// Memory for use by node
+	Memory int64
+	// CPU for use by node
+	CPUCore int
+	// Bandwidth for use by node
+	Bandwidth int64
+}
+
+type Network struct {
 	// host address and port the edge node api will listen on
 	ListenAddress string
 	// used when 'ListenAddress' is unspecified. must be a valid duration recognized by golang's time.ParseDuration function
 	Timeout string
-	// node id
-	NodeID string
+}
+
+// EdgeCfg edge node config
+type EdgeCfg struct {
+	Network Network
 	// area id
 	AreaID string
 	// used auth when connect to scheduler
@@ -47,6 +61,11 @@ type EdgeCfg struct {
 	// seconds
 	ValidateDuration    int
 	MaxSizeOfUploadFile int
+
+	Token      string
+	LocatorAPI string
+
+	Quota Quota
 }
 
 type MinioConfig struct {
@@ -153,6 +172,8 @@ type SchedulerCfg struct {
 	// Non vip user
 	MaxCountOfVisitShareLink int
 	// if the area has several scheduler, node will connect to the scheduler which weight is bigger
-	Weight    int
-	MaxAPIKey int
+	Weight     int
+	MaxAPIKey  int
+	LocatorAPI string
+	WebAPI     string
 }

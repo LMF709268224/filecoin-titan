@@ -33,7 +33,9 @@ var (
 	// an unrecognized domain is requested.
 	ErrInvalidBlockstoreDomain = errors.New("invalid blockstore domain")
 
-	ErrPrivateKeyNotExist = errors.New("Private key not exist")
+	ErrPrivateKeyNotExist = errors.New("private key not exist")
+	ErrNodeIDNotExist     = errors.New("node id not exist")
+	ErrServerAPINotExist  = errors.New("server api not exist")
 )
 
 type Repo interface {
@@ -48,6 +50,9 @@ type Repo interface {
 
 	// PrivateKey returns private key
 	PrivateKey() ([]byte, error)
+
+	// NodeID returns node id
+	NodeID() ([]byte, error)
 
 	// Lock locks the repo for exclusive use.
 	Lock(RepoType) (LockedRepo, error)
@@ -88,6 +93,9 @@ type LockedRepo interface {
 
 	// set node private key
 	SetPrivateKey([]byte) error
+
+	// set node id
+	SetNodeID([]byte) error
 
 	// KeyStore returns store of private keys for Filecoin transactions
 	KeyStore() (types.KeyStore, error)

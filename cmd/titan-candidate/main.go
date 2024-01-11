@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	cliutil "github.com/Filecoin-Titan/titan/cli/util"
 	"github.com/Filecoin-Titan/titan/node"
 	"github.com/Filecoin-Titan/titan/node/asset"
 	"github.com/Filecoin-Titan/titan/node/httpserver"
@@ -44,6 +43,7 @@ import (
 
 	"github.com/google/uuid"
 	logging "github.com/ipfs/go-log/v2"
+	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/urfave/cli/v2"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
@@ -66,7 +66,7 @@ func main() {
 	titanlog.SetupLogLevels()
 
 	local := []*cli.Command{
-		runCmd,
+		daemonCmd,
 	}
 
 	local = append(local, lcli.CommonCommands...)
@@ -114,8 +114,33 @@ func main() {
 	}
 }
 
-var runCmd = &cli.Command{
-	Name:  "run",
+var daemonCmd = &cli.Command{
+	Name:  "daemon",
+	Usage: "daemon cmd",
+	Subcommands: []*cli.Command{
+		daemonStartCmd,
+		daemonStopCmd,
+	},
+}
+
+var daemonStopCmd = &cli.Command{
+	Name:  "stop",
+	Usage: "stop a running daemon",
+	Flags: []cli.Flag{},
+	Action: func(cctx *cli.Context) error {
+		candidateAPI, close, err := lcli.GetCandidateAPI(cctx)
+		if err != nil {
+			return err
+		}
+
+		defer close()
+
+		return candidateAPI.Shutdown(cctx.Context)
+	},
+}
+
+var daemonStartCmd = &cli.Command{
+	Name:  "start",
 	Usage: "Start titan candidate node",
 	Flags: []cli.Flag{},
 
@@ -167,40 +192,42 @@ var runCmd = &cli.Command{
 
 		privateKey, err := loadPrivateKey(r)
 		if err != nil {
-			return fmt.Errorf(`please register your private key, example: 
-			titan-candidate register --key your_private_key`)
+			return fmt.Errorf(`please import your private key, example: 
+			titan-candidate import your_private_key`)
 		}
 
-		if len(candidateCfg.NodeID) == 0 || len(candidateCfg.AreaID) == 0 {
+		if len(candidateCfg.AreaID) == 0 {
 			return fmt.Errorf(`please config node id and area id, example:
 			titan-candidate config set --node-id=your_node_id --area-id=your_area_id`)
 		}
 
-		connectTimeout, err := time.ParseDuration(candidateCfg.Timeout)
+		nodeIDBuf, err := r.NodeID()
+		if err != nil {
+			return err
+		}
+		nodeID := string(nodeIDBuf)
+
+		connectTimeout, err := time.ParseDuration(candidateCfg.Network.Timeout)
 		if err != nil {
 			return err
 		}
 
-		udpPacketConn, err := net.ListenPacket("udp", candidateCfg.ListenAddress)
+		packetConn, err := net.ListenPacket("udp", candidateCfg.Network.ListenAddress)
 		if err != nil {
 			return err
 		}
-		defer udpPacketConn.Close() //nolint:errcheck // ignore error
+		defer packetConn.Close() //nolint:errcheck // ignore error
 
-		// all jsonrpc client use udp
-		httpClient, err := cliutil.NewHTTP3Client(udpPacketConn, candidateCfg.InsecureSkipVerify, candidateCfg.CaCertificatePath)
-		if err != nil {
-			return xerrors.Errorf("new http3 client error %w", err)
-		}
-		jsonrpc.SetHttp3Client(httpClient)
-
-		url, err := getSchedulerURL(cctx, candidateCfg.NodeID, candidateCfg.AreaID)
-		if err != nil {
-			return err
+		schedulerURL, _, _ := lcli.GetRawAPI(cctx, repo.Scheduler, "v0")
+		if len(schedulerURL) == 0 {
+			schedulerURL, err = getAccessPoint(cctx, candidateCfg.LocatorAPI, nodeID, candidateCfg.AreaID)
+			if err != nil {
+				return err
+			}
 		}
 
 		// Connect to scheduler
-		schedulerAPI, closer, err := newSchedulerAPI(cctx, url, candidateCfg.NodeID, privateKey)
+		schedulerAPI, closer, err := newSchedulerAPI(cctx, packetConn, schedulerURL, nodeID, privateKey)
 		if err != nil {
 			return err
 		}
@@ -220,14 +247,16 @@ var runCmd = &cli.Command{
 		}
 		log.Infof("Remote version %s", v)
 
+		var shutdownChan = make(chan struct{})
 		var httpServer *httpserver.HttpServer
 		var candidateAPI api.Candidate
 		stop, err := node.New(cctx.Context,
 			node.Candidate(&candidateAPI),
 			node.Base(),
 			node.Repo(r),
-			node.Override(new(dtypes.NodeID), dtypes.NodeID(candidateCfg.NodeID)),
+			node.Override(new(dtypes.NodeID), dtypes.NodeID(nodeID)),
 			node.Override(new(api.Scheduler), schedulerAPI),
+			node.Override(new(dtypes.ShutdownChan), shutdownChan),
 			node.Override(new(dtypes.NodeMetadataPath), func() dtypes.NodeMetadataPath {
 				metadataPath := candidateCfg.MetadataPath
 				if len(metadataPath) == 0 {
@@ -278,6 +307,9 @@ var runCmd = &cli.Command{
 			node.Override(new(*rsa.PrivateKey), func() *rsa.PrivateKey {
 				return privateKey
 			}),
+			node.Override(node.SetApiEndpointKey, func(lr repo.LockedRepo) error {
+				return setEndpointAPI(lr, candidateCfg.Network.ListenAddress)
+			}),
 		)
 		if err != nil {
 			return xerrors.Errorf("creating node: %w", err)
@@ -306,7 +338,7 @@ var runCmd = &cli.Command{
 			Handler:   handler,
 		}
 
-		go http3Srv.Serve(udpPacketConn)
+		go http3Srv.Serve(packetConn)
 
 		go func() {
 			<-ctx.Done()
@@ -322,12 +354,12 @@ var runCmd = &cli.Command{
 			log.Warn("Graceful shutdown successful")
 		}()
 
-		nl, err := net.Listen("tcp", candidateCfg.ListenAddress)
+		nl, err := net.Listen("tcp", candidateCfg.Network.ListenAddress)
 		if err != nil {
 			return err
 		}
 
-		log.Infof("Candidate listen on %s", candidateCfg.ListenAddress)
+		log.Infof("Candidate listen on %s", candidateCfg.Network.ListenAddress)
 
 		schedulerSession, err := schedulerAPI.Session(ctx)
 		if err != nil {
@@ -344,7 +376,7 @@ var runCmd = &cli.Command{
 			return xerrors.Errorf("convert tcp server port from string: %w", err)
 		}
 
-		token, err := candidateAPI.AuthNew(cctx.Context, &types.JWTPayload{Allow: []auth.Permission{api.RoleAdmin}, ID: candidateCfg.NodeID})
+		token, err := candidateAPI.AuthNew(cctx.Context, &types.JWTPayload{Allow: []auth.Permission{api.RoleAdmin}, ID: nodeID})
 		if err != nil {
 			return xerrors.Errorf("generate token for scheduler error: %w", err)
 		}
@@ -390,6 +422,9 @@ var runCmd = &cli.Command{
 					case <-heartbeats.C:
 					case <-ctx.Done():
 						return // graceful shutdown
+					case <-shutdownChan:
+						cancel()
+						return
 					}
 
 					curSession, err := keepalive(schedulerAPI, connectTimeout)
@@ -448,7 +483,7 @@ func getSchedulerVersion(api api.Scheduler, timeout time.Duration) (api.APIVersi
 }
 
 func newAuthTokenFromScheduler(schedulerURL, nodeID string, privateKey *rsa.PrivateKey) (string, error) {
-	schedulerAPI, closer, err := client.NewScheduler(context.Background(), schedulerURL, nil)
+	schedulerAPI, closer, err := client.NewScheduler(context.Background(), schedulerURL, nil, jsonrpc.WithHTTPClient(client.NewHTTP3Client()))
 	if err != nil {
 		return "", err
 	}
@@ -464,12 +499,12 @@ func newAuthTokenFromScheduler(schedulerURL, nodeID string, privateKey *rsa.Priv
 	return schedulerAPI.NodeLogin(context.Background(), nodeID, hex.EncodeToString(sign))
 }
 
-func getAccessPoint(cctx *cli.Context, nodeID, areaID string) (string, error) {
-	locator, closer, err := lcli.GetLocatorAPI(cctx)
+func getAccessPoint(cctx *cli.Context, locatorAPI, nodeID, areaID string) (string, error) {
+	locator, close, err := client.NewLocator(cctx.Context, locatorAPI, nil, jsonrpc.WithHTTPClient(client.NewHTTP3Client()))
 	if err != nil {
 		return "", err
 	}
-	defer closer()
+	defer close()
 
 	schedulerURLs, err := locator.GetAccessPoints(context.Background(), nodeID, areaID)
 	if err != nil {
@@ -483,26 +518,13 @@ func getAccessPoint(cctx *cli.Context, nodeID, areaID string) (string, error) {
 	return schedulerURLs[0], nil
 }
 
-func getSchedulerURL(cctx *cli.Context, nodeID, areaID string) (string, error) {
-	schedulerURL, _, err := lcli.GetRawAPI(cctx, repo.Scheduler, "v0")
-	if err == nil {
-		return schedulerURL, nil
-	}
-
-	log.Debugf("get scheduler raw api error %s", err.Error())
-
-	schedulerURL, err = getAccessPoint(cctx, nodeID, areaID)
-	if err == nil {
-		return schedulerURL, nil
-	}
-
-	log.Debugf("get access point error %s", err.Error())
-
-	return "", fmt.Errorf("please set SCHEDULER_API_INFO or LOCATOR_API_INFO")
-}
-
-func newSchedulerAPI(cctx *cli.Context, schedulerURL, nodeID string, privateKey *rsa.PrivateKey) (api.Scheduler, jsonrpc.ClientCloser, error) {
+func newSchedulerAPI(cctx *cli.Context, conn net.PacketConn, schedulerURL, nodeID string, privateKey *rsa.PrivateKey) (api.Scheduler, jsonrpc.ClientCloser, error) {
 	token, err := newAuthTokenFromScheduler(schedulerURL, nodeID, privateKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	httpClient, err := client.NewHTTP3ClientWithPacketConn(conn)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -511,7 +533,7 @@ func newSchedulerAPI(cctx *cli.Context, schedulerURL, nodeID string, privateKey 
 	headers.Add("Authorization", "Bearer "+token)
 	headers.Add("Node-ID", nodeID)
 
-	schedulerAPI, closer, err := client.NewScheduler(context.Background(), schedulerURL, headers)
+	schedulerAPI, closer, err := client.NewScheduler(context.Background(), schedulerURL, headers, jsonrpc.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -579,4 +601,22 @@ func loadPrivateKey(r *repo.FsRepo) (*rsa.PrivateKey, error) {
 		return nil, err
 	}
 	return titanrsa.Pem2PrivateKey(pem)
+}
+
+func setEndpointAPI(lr repo.LockedRepo, address string) error {
+	a, err := net.ResolveTCPAddr("tcp", address)
+	if err != nil {
+		return xerrors.Errorf("parsing address: %w", err)
+	}
+
+	ma, err := manet.FromNetAddr(a)
+	if err != nil {
+		return xerrors.Errorf("creating api multiaddress: %w", err)
+	}
+
+	if err := lr.SetAPIEndpoint(ma); err != nil {
+		return xerrors.Errorf("setting api endpoint: %w", err)
+	}
+
+	return nil
 }

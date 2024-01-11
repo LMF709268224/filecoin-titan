@@ -57,6 +57,7 @@ type Scheduler struct {
 	WorkloadManager        *workload.Manager
 
 	PrivateKey *rsa.PrivateKey
+	PConn      net.PacketConn
 }
 
 var _ api.Scheduler = &Scheduler{}
@@ -82,7 +83,7 @@ func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions,
 
 	log.Infof("node connected %s, address:%s", nodeID, remoteAddr)
 
-	err := cNode.ConnectRPC(remoteAddr, nodeType)
+	err := cNode.ConnectRPC(s.PConn, remoteAddr, nodeType)
 	if err != nil {
 		return xerrors.Errorf("nodeConnect ConnectRPC err:%s", err.Error())
 	}

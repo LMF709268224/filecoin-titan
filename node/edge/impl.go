@@ -8,7 +8,6 @@ import (
 	"github.com/Filecoin-Titan/titan/api"
 	"github.com/Filecoin-Titan/titan/api/client"
 	"github.com/Filecoin-Titan/titan/api/types"
-	cliutil "github.com/Filecoin-Titan/titan/cli/util"
 	"github.com/Filecoin-Titan/titan/node/asset"
 	"github.com/Filecoin-Titan/titan/node/common"
 	"github.com/Filecoin-Titan/titan/node/device"
@@ -59,7 +58,7 @@ func (edge *Edge) UserNATPunch(ctx context.Context, sourceURL string, req *types
 
 // checkNetworkConnectivity uses HTTP/3 to check network connectivity to a target URL.
 func (edge *Edge) checkNetworkConnectivity(targetURL string, timeout time.Duration) error {
-	httpClient, err := cliutil.NewHTTP3Client(edge.PConn, true, "")
+	httpClient, err := client.NewHTTP3ClientWithPacketConn(edge.PConn)
 	if err != nil {
 		return xerrors.Errorf("new http3 client %w", err)
 	}

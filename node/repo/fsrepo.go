@@ -11,8 +11,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/BurntSushi/toml"
-
 	"github.com/ipfs/go-datastore"
 	fslock "github.com/ipfs/go-fs-lock"
 	logging "github.com/ipfs/go-log/v2"
@@ -37,6 +35,7 @@ const (
 	fsKeystore      = "keystore"
 	fsServerID      = "sid"
 	fsPrivateKey    = "private.key"
+	fsNodeID        = "node_id"
 )
 
 func NewRepoTypeFromString(t string) RepoType {
@@ -379,6 +378,25 @@ func (fsr *FsRepo) PrivateKey() ([]byte, error) {
 	return bytes.TrimSpace(tb), nil
 }
 
+func (fsr *FsRepo) NodeID() ([]byte, error) {
+	p := filepath.Join(fsr.path, fsNodeID)
+	f, err := os.Open(p)
+
+	if os.IsNotExist(err) {
+		return nil, ErrNodeIDNotExist
+	} else if err != nil {
+		return nil, err
+	}
+	defer f.Close() //nolint: errcheck // Read only op
+
+	buf, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+
+	return bytes.TrimSpace(buf), nil
+}
+
 // Lock acquires exclusive lock on this repo
 func (fsr *FsRepo) Lock(repoType RepoType) (LockedRepo, error) {
 	locked, err := fslock.Locked(fsr.path, fsLock)
@@ -423,12 +441,10 @@ type fsLockedRepo struct {
 	dsErr  error
 	dsOnce sync.Once
 
-	ssPath string
-	ssErr  error
-	ssOnce sync.Once
-
-	storageLk sync.Mutex
-	configLk  sync.Mutex
+	ssPath   string
+	ssErr    error
+	ssOnce   sync.Once
+	configLk sync.Mutex
 }
 
 func (fsr *fsLockedRepo) RepoType() RepoType {
@@ -515,16 +531,18 @@ func (fsr *fsLockedRepo) SetConfig(c func(interface{})) error {
 	// mutate in-memory representation of config
 	c(cfg)
 
-	// buffer into which we write TOML bytes
-	buf := new(bytes.Buffer)
-
-	// encode now-mutated config as TOML and write to buffer
-	err = toml.NewEncoder(buf).Encode(cfg)
+	oldCfg, err := fsr.loadConfigFromDisk()
 	if err != nil {
 		return err
 	}
+
+	buf, err := config.GenerateConfigUpdate(cfg, oldCfg, true)
+	if err != nil {
+		return err
+	}
+
 	// write buffer of TOML bytes to config file
-	err = ioutil.WriteFile(fsr.configPath, buf.Bytes(), 0o644)
+	err = ioutil.WriteFile(fsr.configPath, buf, 0o644)
 	if err != nil {
 		return err
 	}
@@ -570,6 +588,13 @@ func (fsr *fsLockedRepo) SetPrivateKey(key []byte) error {
 		return err
 	}
 	return ioutil.WriteFile(fsr.join(fsPrivateKey), key, 0o600)
+}
+
+func (fsr *fsLockedRepo) SetNodeID(id []byte) error {
+	if err := fsr.stillValid(); err != nil {
+		return err
+	}
+	return os.WriteFile(fsr.join(fsNodeID), id, 0o600)
 }
 
 func (fsr *fsLockedRepo) KeyStore() (types.KeyStore, error) {
