@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/rsa"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -20,7 +18,6 @@ import (
 	"github.com/Filecoin-Titan/titan/node/repo"
 	titanrsa "github.com/Filecoin-Titan/titan/node/rsa"
 	"github.com/filecoin-project/go-jsonrpc"
-	"github.com/quic-go/quic-go/http3"
 	"github.com/urfave/cli/v2"
 )
 
@@ -527,12 +524,6 @@ var setConfigCmd = &cli.Command{
 			if cctx.IsSet("area-id") {
 				cfg.AreaID = cctx.String("area-id")
 			}
-			if cctx.IsSet("metadata-path") {
-				cfg.MetadataPath = cctx.String("metadata-path")
-			}
-			if cctx.IsSet("assets-paths") {
-				cfg.AssetsPaths = cctx.StringSlice("assets-paths")
-			}
 			if cctx.IsSet("bandwidth-up") {
 				cfg.BandwidthUp = cctx.Int64("bandwidth-up")
 			}
@@ -593,9 +584,17 @@ var mergeConfigCmd = &cli.Command{
 			return err
 		}
 
+		// check storage path
+		if len(edgeConfig.Storage.Path) > 0 {
+			if stat, err := os.Stat(edgeConfig.Storage.Path); err != nil {
+				return err
+			} else if !stat.IsDir() {
+				return fmt.Errorf("%s is not dir", edgeConfig.Storage.Path)
+			}
+		}
 		// check quota
 
-		_, lr, err := openRepo(cctx)
+		r, lr, err := openRepo(cctx)
 		if err != nil {
 			return err
 		}
@@ -609,12 +608,12 @@ var mergeConfigCmd = &cli.Command{
 
 		oldEdgeConfig := cfg.(*config.EdgeCfg)
 
-		if len(oldEdgeConfig.Token) > 0 && oldEdgeConfig.Token != edgeConfig.Token {
+		if isPrivateKeyExist(r) && oldEdgeConfig.Basic.Token != edgeConfig.Basic.Token {
 			return fmt.Errorf("can not modify token")
 		}
 
-		if len(oldEdgeConfig.Token) == 0 && len(edgeConfig.Token) > 0 {
-			if err := importPrivateKey(cctx, edgeConfig.Token); err != nil {
+		if !isPrivateKeyExist(r) && len(edgeConfig.Basic.Token) > 0 {
+			if err := importPrivateKey(cctx, lr, edgeConfig.Basic.Token); err != nil {
 				return err
 			}
 		}
@@ -625,12 +624,27 @@ var mergeConfigCmd = &cli.Command{
 				return
 			}
 
-			cfg.Quota = edgeConfig.Quota
-
+			cfg.Storage = edgeConfig.Storage
+			cfg.Memory = edgeConfig.Memory
+			cfg.Bandwidth = edgeConfig.Bandwidth
+			cfg.CPU = edgeConfig.CPU
 		})
 
 		return nil
 	},
+}
+
+func isPrivateKeyExist(r repo.Repo) bool {
+	key, err := r.PrivateKey()
+	if err == repo.ErrPrivateKeyNotExist {
+		return false
+	}
+
+	if len(key) > 0 {
+		return true
+	}
+
+	return false
 }
 
 var importKeyCmd = &cli.Command{
@@ -645,27 +659,18 @@ var importKeyCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
+		_, lr, err := openRepo(cctx)
+		if err != nil {
+			return err
+		}
+		defer lr.Close() //nolint:errcheck  // ignore error
+
 		key := cctx.Args().Get(0)
-		return importPrivateKey(cctx, key)
+		return importPrivateKey(cctx, lr, key)
 	},
 }
 
-func importPrivateKey(cctx *cli.Context, key string) error {
-	r, lr, err := openRepo(cctx)
-	if err != nil {
-		return err
-	}
-	defer lr.Close() //nolint:errcheck  // ignore error
-
-	privateKeyBuf, err := r.PrivateKey()
-	if err != nil && !errors.Is(err, repo.ErrPrivateKeyNotExist) {
-		return err
-	}
-
-	if privateKeyBuf != nil {
-		return fmt.Errorf("private key already exist")
-	}
-
+func importPrivateKey(cctx *cli.Context, lr repo.LockedRepo, key string) error {
 	jsonString, err := base64.StdEncoding.DecodeString(key)
 	if err != nil {
 		return err
@@ -677,26 +682,22 @@ func importPrivateKey(cctx *cli.Context, key string) error {
 		return err
 	}
 
-	httpClient := &http.Client{
-		Transport: &http3.RoundTripper{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		},
-	}
-
-	schedulerURL, err := getAccessPoint(cctx, httpClient, &activationDetail)
+	schedulerURL, err := getAccessPoint(cctx, client.NewHTTP3Client(), &activationDetail)
 	if err != nil {
 		return err
 	}
 
-	schedulerAPI, closer, err := client.NewScheduler(context.Background(), schedulerURL, nil, jsonrpc.WithHTTPClient(httpClient))
+	schedulerAPI, closer, err := client.NewScheduler(context.Background(), schedulerURL, nil, jsonrpc.WithHTTPClient(client.NewHTTP3Client()))
 	if err != nil {
 		return err
 	}
 	defer closer()
 
 	bits := cctx.Int("bits")
+	if bits == 0 {
+		bits = 1024
+	}
+
 	privateKey, err := titanrsa.GeneratePrivateKey(bits)
 	if err != nil {
 		return err
@@ -729,7 +730,7 @@ func importPrivateKey(cctx *cli.Context, key string) error {
 			cfg = &candidateCfg.EdgeCfg
 		}
 		cfg.LocatorAPI = activationDetail.LocatorAPI
-		cfg.Token = key
+		cfg.Basic.Token = key
 		cfg.AreaID = activationDetail.AreaID
 	})
 }

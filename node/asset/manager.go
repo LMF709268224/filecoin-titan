@@ -4,16 +4,15 @@ import (
 	"bytes"
 	"context"
 	"crypto"
-	"crypto/tls"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/Filecoin-Titan/titan/api"
+	"github.com/Filecoin-Titan/titan/api/client"
 	"github.com/Filecoin-Titan/titan/api/types"
 	"github.com/Filecoin-Titan/titan/node/asset/index"
 	"github.com/Filecoin-Titan/titan/node/asset/storage"
@@ -27,7 +26,6 @@ import (
 	carv2 "github.com/ipld/go-car/v2"
 	"github.com/ipld/go-car/v2/blockstore"
 	"github.com/multiformats/go-multihash"
-	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/xerrors"
 )
 
@@ -150,14 +148,6 @@ func (m *Manager) pullAssets() {
 
 // doPullAsset pulls a single asset from the waitList
 func (m *Manager) doPullAsset() {
-	httpClient := &http.Client{
-		Transport: &http3.RoundTripper{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		},
-	}
-
 	cw := m.headFromWaitList()
 	if cw == nil {
 		return
@@ -172,7 +162,7 @@ func (m *Manager) doPullAsset() {
 		parallel:   m.pullParallel,
 		timeout:    m.pullTimeout,
 		retry:      m.pullRetry,
-		httpClient: httpClient,
+		httpClient: client.NewHTTP3Client(),
 	}
 
 	assetPuller, err := m.restoreAssetPullerOrNew(opts)

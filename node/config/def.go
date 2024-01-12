@@ -32,8 +32,6 @@ func DefaultEdgeCfg() *EdgeCfg {
 			ListenAddress: "0.0.0.0:1234",
 			Timeout:       "30s",
 		},
-		MetadataPath:  "",
-		AssetsPaths:   []string{},
 		BandwidthUp:   104857600,
 		BandwidthDown: 1073741824,
 		Locator:       true,
@@ -47,11 +45,17 @@ func DefaultEdgeCfg() *EdgeCfg {
 		PullBlockRetry:    1,
 		PullBlockParallel: 5,
 
-		Quota: Quota{
-			Storage:   64, // 64GB
-			Memory:    1,  // 1GB
-			CPUCore:   1,  // 1core
-			Bandwidth: 10, // 10Mb/s
+		Storage: Storage{
+			StorageGB: 64,
+		},
+		Memory: Memory{
+			MemoryGB: 1,
+		},
+		Bandwidth: Bandwidth{
+			BandwidthMB: 10,
+		},
+		CPU: CPU{
+			Cores: 1,
 		},
 
 		LocatorAPI: "https://localhost:5000",
@@ -65,8 +69,6 @@ func DefaultCandidateCfg() *CandidateCfg {
 			ListenAddress: "0.0.0.0:2345",
 			Timeout:       "30s",
 		},
-		MetadataPath:  "",
-		AssetsPaths:   []string{},
 		BandwidthUp:   1073741824,
 		BandwidthDown: 1073741824,
 		Locator:       true,
@@ -85,16 +87,25 @@ func DefaultCandidateCfg() *CandidateCfg {
 		MaxSizeOfUploadFile: 104857600, // 100 MB
 		LocatorAPI:          "https://localhost:5000",
 
-		Quota: Quota{
-			Storage:   64, // 64GB
-			Memory:    1,  // 1GB
-			CPUCore:   1,  // 1core
-			Bandwidth: 10, // 10Mb/s
+		Storage: Storage{
+			StorageGB: 64,
+			Path:      "./",
+		},
+		Memory: Memory{
+			MemoryGB: 1,
+		},
+		Bandwidth: Bandwidth{
+			BandwidthMB: 10,
+		},
+		CPU: CPU{
+			Cores: 1,
 		},
 	}
 	return &CandidateCfg{
-		EdgeCfg:     edgeCfg,
-		WebRedirect: "https://storage.titannet.io/#/redirect",
+		EdgeCfg:      edgeCfg,
+		MetadataPath: "",
+		AssetsPaths:  []string{},
+		WebRedirect:  "https://storage.titannet.io/#/redirect",
 	}
 }
 

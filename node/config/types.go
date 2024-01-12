@@ -4,23 +4,32 @@ package config
 // //
 // // After making edits here, run 'make cfgdoc-gen' (or 'make gen')
 
-// configurable for user
-type Quota struct {
-	// Storage for use by node
-	Storage int64
-	// Memory for use by node
-	Memory int64
-	// CPU for use by node
-	CPUCore int
-	// Bandwidth for use by node
-	Bandwidth int64
-}
-
 type Network struct {
 	// host address and port the edge node api will listen on
 	ListenAddress string
 	// used when 'ListenAddress' is unspecified. must be a valid duration recognized by golang's time.ParseDuration function
 	Timeout string
+}
+
+type Storage struct {
+	StorageGB int64
+	Path      string
+}
+
+type Bandwidth struct {
+	BandwidthMB int64
+}
+
+type Memory struct {
+	MemoryGB int64
+}
+
+type CPU struct {
+	Cores int
+}
+
+type Basic struct {
+	Token string
 }
 
 // EdgeCfg edge node config
@@ -30,10 +39,6 @@ type EdgeCfg struct {
 	AreaID string
 	// used auth when connect to scheduler
 	Secret string
-	// metadata path
-	MetadataPath string
-	// assets path
-	AssetsPaths []string
 	// upload file bandwidth, unit is B/s
 	BandwidthUp int64
 	// download file bandwidth, unit is B/s
@@ -62,10 +67,13 @@ type EdgeCfg struct {
 	ValidateDuration    int
 	MaxSizeOfUploadFile int
 
-	Token      string
 	LocatorAPI string
 
-	Quota Quota
+	Bandwidth Bandwidth
+	Storage   Storage
+	Memory    Memory
+	CPU       CPU
+	Basic     Basic
 }
 
 type MinioConfig struct {
@@ -77,6 +85,10 @@ type MinioConfig struct {
 // CandidateCfg candidate node config
 type CandidateCfg struct {
 	EdgeCfg
+	// metadata path
+	MetadataPath string
+	// assets path
+	AssetsPaths []string
 	MinioConfig
 	WebRedirect string
 	ExternalURL string

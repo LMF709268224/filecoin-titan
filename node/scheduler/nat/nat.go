@@ -2,14 +2,12 @@ package nat
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"net/http"
 	"time"
 
+	"github.com/Filecoin-Titan/titan/api/client"
 	"github.com/Filecoin-Titan/titan/api/types"
 	"github.com/Filecoin-Titan/titan/node/scheduler/node"
-	"github.com/quic-go/quic-go/http3"
 )
 
 // checks if an edge node is behind a Full Cone NAT
@@ -19,14 +17,7 @@ func detectFullConeNAT(ctx context.Context, candidate *node.Node, edgeURL string
 
 // checks if an edge node is behind a Restricted NAT
 func detectRestrictedNAT(ctx context.Context, edgeURL string) (bool, error) {
-	httpClient := &http.Client{
-		Transport: &http3.RoundTripper{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		},
-	}
-
+	httpClient := client.NewHTTP3Client()
 	httpClient.Timeout = 5 * time.Second
 
 	resp, err := httpClient.Get(edgeURL)

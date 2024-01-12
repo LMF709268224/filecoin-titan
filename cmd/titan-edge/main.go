@@ -103,7 +103,7 @@ func main() {
 
 	if err := app.Run(os.Args); err != nil {
 		log.Errorf("%+v", err)
-		return
+		os.Exit(1)
 	}
 }
 
@@ -252,7 +252,7 @@ var daemonStartCmd = &cli.Command{
 			node.Override(new(dtypes.ShutdownChan), shutdownChan),
 			node.Override(new(net.PacketConn), udpPacketConn),
 			node.Override(new(dtypes.NodeMetadataPath), func() dtypes.NodeMetadataPath {
-				metadataPath := edgeCfg.MetadataPath
+				metadataPath := edgeCfg.Storage.Path
 				if len(metadataPath) == 0 {
 					metadataPath = path.Join(lr.Path(), DefaultStorageDir)
 				}
@@ -261,9 +261,9 @@ var daemonStartCmd = &cli.Command{
 				return dtypes.NodeMetadataPath(metadataPath)
 			}),
 			node.Override(new(dtypes.AssetsPaths), func() dtypes.AssetsPaths {
-				assetsPaths := edgeCfg.AssetsPaths
-				if len(assetsPaths) == 0 {
-					assetsPaths = []string{path.Join(lr.Path(), DefaultStorageDir)}
+				var assetsPaths = []string{path.Join(lr.Path(), DefaultStorageDir)}
+				if len(edgeCfg.Storage.Path) > 0 {
+					assetsPaths = []string{edgeCfg.Storage.Path}
 				}
 
 				log.Debugf("assetsPaths:%#v", assetsPaths)

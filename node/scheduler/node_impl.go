@@ -173,6 +173,7 @@ func (s *Scheduler) RequestActivationCodes(ctx context.Context, nodeType types.N
 			AreaID:        areaID,
 			ActivationKey: newNodeKey(),
 			LocatorAPI:    s.SchedulerCfg.LocatorAPI,
+			WebAPI:        s.SchedulerCfg.WebAPI,
 			NodeType:      nodeType,
 		}
 

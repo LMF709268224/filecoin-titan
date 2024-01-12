@@ -531,12 +531,7 @@ func (fsr *fsLockedRepo) SetConfig(c func(interface{})) error {
 	// mutate in-memory representation of config
 	c(cfg)
 
-	oldCfg, err := fsr.loadConfigFromDisk()
-	if err != nil {
-		return err
-	}
-
-	buf, err := config.GenerateConfigUpdate(cfg, oldCfg, true)
+	buf, err := config.GenerateConfigUpdate(cfg, fsr.repoType.Config(), true)
 	if err != nil {
 		return err
 	}

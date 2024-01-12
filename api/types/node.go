@@ -394,6 +394,7 @@ type ActivationDetail struct {
 	AreaID        string   `json:"area_id" `
 	ActivationKey string   `json:"activation_key" db:"activation_key"`
 	LocatorAPI    string   `json:"locator_api" db:"locator_api"`
+	WebAPI        string   `json:"web_api" db:"web_api"`
 	NodeType      NodeType `json:"node_type" db:"node_type"`
 }
 
