@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 	"github.com/Filecoin-Titan/titan/api"
@@ -586,10 +587,8 @@ var mergeConfigCmd = &cli.Command{
 
 		// check storage path
 		if len(edgeConfig.Storage.Path) > 0 {
-			if stat, err := os.Stat(edgeConfig.Storage.Path); err != nil {
+			if err := checkPath(edgeConfig.Storage.Path); err != nil {
 				return err
-			} else if !stat.IsDir() {
-				return fmt.Errorf("%s is not dir", edgeConfig.Storage.Path)
 			}
 		}
 		// check quota
@@ -632,6 +631,25 @@ var mergeConfigCmd = &cli.Command{
 
 		return nil
 	},
+}
+
+func checkPath(path string) error {
+	if stat, err := os.Stat(path); err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("check path %s error %s", path, err.Error())
+		}
+
+		parentDir := filepath.Dir(path)
+		if stat, err := os.Stat(parentDir); err != nil {
+			return fmt.Errorf("check path %s error %s", parentDir, err.Error())
+		} else if !stat.IsDir() {
+			return fmt.Errorf("%s is not dir", parentDir)
+		}
+	} else if !stat.IsDir() {
+		return fmt.Errorf("%s is not dir", path)
+	}
+
+	return nil
 }
 
 func isPrivateKeyExist(r repo.Repo) bool {
