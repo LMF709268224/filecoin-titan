@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	duration           = 10              // Validation duration per node (Unit:Second)
-	validationInterval = 5 * time.Minute // validation start-up time interval (Unit:minute)
+	duration           = 10               // Validation duration per node (Unit:Second)
+	validationInterval = 30 * time.Minute // validation start-up time interval (Unit:minute)
 
 	// Processing validation result data from 5 days ago
 	vResultDay = 5 * oneDay
@@ -140,6 +140,11 @@ func (m *Manager) getValidationDetails(vrs []*VWindow) (map[string]*api.Validate
 		}
 
 		for nodeID := range vr.ValidatableNodes {
+			err := m.nodeMgr.CalculateAndSavePoints(nodeID)
+			if err != nil {
+				log.Errorf("%s CalculateAndSavePoints err: %s", nodeID, err.Error())
+			}
+
 			cid, err := m.assetMgr.RandomAsset(nodeID, m.seed)
 			if err != nil {
 				if err != sql.ErrNoRows {

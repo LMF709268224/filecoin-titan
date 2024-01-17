@@ -938,7 +938,7 @@ func (m *Manager) chooseEdgeNodes(count int, bandwidthDown int64, filterNodes []
 		}
 
 		// Calculate node residual capacity
-		residual := (100 - node.DiskUsage) * node.DiskSpace
+		residual := (100 - node.DiskUsage) * node.Info.DiskSpace
 		if residual <= size {
 			log.Debugf("node %s disk residual %.2f", nodeID, residual)
 			return false

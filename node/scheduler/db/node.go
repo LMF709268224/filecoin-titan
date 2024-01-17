@@ -690,6 +690,13 @@ func (n *SQLDB) UpdateNodeInfosByValidationResult(sIDs []int, nodeProfits map[st
 	return tx.Commit()
 }
 
+// UpdateNodeProfit update the profit
+func (n *SQLDB) UpdateNodeProfit(nodeID string, profit int) error {
+	uQuery := fmt.Sprintf(`UPDATE %s SET profit=profit+? WHERE node_id=?`, nodeInfoTable)
+	_, err := n.db.Exec(uQuery, profit, nodeID)
+	return err
+}
+
 // SaveRetrieveEventInfo save retrieve event and update node info
 func (n *SQLDB) SaveRetrieveEventInfo(cInfo *types.RetrieveEvent) error {
 	tx, err := n.db.Beginx()

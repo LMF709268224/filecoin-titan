@@ -289,7 +289,7 @@ func (s *Scheduler) GetNodeInfo(ctx context.Context, nodeID string) (types.NodeI
 		nodeInfo.Status = nodeStatus(node)
 		nodeInfo.NATType = node.NATType.String()
 		nodeInfo.Type = node.Type
-		nodeInfo.ExternalIP = node.ExternalIP
+		nodeInfo.ExternalIP = node.Info.ExternalIP
 		nodeInfo.MemoryUsage = node.MemoryUsage
 		nodeInfo.CPUUsage = node.CPUUsage
 		nodeInfo.DiskUsage = node.DiskUsage
@@ -335,7 +335,7 @@ func (s *Scheduler) GetNodeList(ctx context.Context, offset int, limit int) (*ty
 			nodeInfo.Status = nodeStatus(node)
 			nodeInfo.NATType = node.NATType.String()
 			nodeInfo.Type = node.Type
-			nodeInfo.ExternalIP = node.ExternalIP
+			nodeInfo.ExternalIP = node.Info.ExternalIP
 			nodeInfo.MemoryUsage = node.MemoryUsage
 			nodeInfo.CPUUsage = node.CPUUsage
 			nodeInfo.DiskUsage = node.DiskUsage
@@ -754,7 +754,7 @@ func (s *Scheduler) GetCandidateIPs(ctx context.Context) ([]*types.NodeIPInfo, e
 		if len(externalURL) == 0 {
 			externalURL = fmt.Sprintf("http://%s", n.RemoteAddr)
 		}
-		list = append(list, &types.NodeIPInfo{NodeID: n.NodeID, IP: n.ExternalIP, ExternalURL: externalURL})
+		list = append(list, &types.NodeIPInfo{NodeID: n.NodeID, IP: n.Info.ExternalIP, ExternalURL: externalURL})
 	}
 
 	return list, nil

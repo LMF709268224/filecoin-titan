@@ -354,3 +354,75 @@ func (m *Manager) checkNodeDeactivate() {
 		}
 	}
 }
+
+// CalculateAndSavePoints Calculate and save the points of the node
+func (m *Manager) CalculateAndSavePoints(nID string) error {
+	n := m.GetNode(nID)
+	if n == nil {
+		return nil
+	}
+
+	mc := calculateMC(float64(n.Info.CPUCores), n.Info.Memory)
+	mb := 10 + min(float64(n.BandwidthUp)/100, 5)*2
+	mbn := float64(mb) * calculateMN(n.NATType)
+	size := bytesToGB(n.Info.DiskSpace)
+	ms := min(size, 2000) * (0.01 + float64(1/max(size, 1000)))
+
+	weighting := 1.0
+	online := 1.0
+
+	point := int((mc + mbn + ms) * weighting * online)
+	log.Debugf("calculatePoints [%s] cpu:[%d] memory:[%v] bandwidth:[%d] NAT:[%d] DiskSpace:[%v] point:[%v]", n.NodeID, n.Info.CPUCores, n.Info.Memory, n.BandwidthUp, n.NATType, n.Info.DiskSpace, point)
+
+	return m.UpdateNodeProfit(nID, point)
+}
+
+func bytesToGB(bytes float64) float64 {
+	return bytes / 1024 / 1024 / 1024
+}
+
+func calculateMN(natType types.NatType) float64 {
+	switch natType {
+	case types.NatTypeFullCone:
+		return 2.5
+	case types.NatTypeRestricted:
+		return 2
+	case types.NatTypePortRestricted:
+		return 1.5
+	case types.NatTypeSymmetric:
+		return 1
+	}
+
+	return 1
+}
+
+func min(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+
+	return b
+}
+
+func max(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+
+	return b
+}
+
+func calculateMC(i, j float64) float64 {
+	sum1 := 0.0
+	sum2 := 0.0
+
+	for k := 1.0; k <= min(i, 4); k++ {
+		sum1 += k
+	}
+
+	for k := 1.0; k <= min(j, 4); k++ {
+		sum2 += k
+	}
+
+	return sum1 + sum2
+}

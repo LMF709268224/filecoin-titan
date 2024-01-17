@@ -24,6 +24,7 @@ import (
 
 // Node represents an Edge or Candidate node
 type Node struct {
+	Info   *types.NodeInfo
 	NodeID string
 
 	*API
@@ -45,14 +46,12 @@ type Node struct {
 	CPUUsage    float64
 	MemoryUsage float64
 	DiskUsage   float64
-	ExternalIP  string
 
 	OnlineDuration int
 	Type           types.NodeType
 	PortMapping    string
 	BandwidthDown  int64
 	BandwidthUp    int64
-	DiskSpace      float64
 
 	DeactivateTime int64
 
