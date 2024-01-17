@@ -19,6 +19,7 @@ import (
 	"github.com/Filecoin-Titan/titan/node/repo"
 	titanrsa "github.com/Filecoin-Titan/titan/node/rsa"
 	"github.com/filecoin-project/go-jsonrpc"
+	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli/v2"
 )
 
@@ -580,56 +581,59 @@ var mergeConfigCmd = &cli.Command{
 		configString := cctx.Args().Get(0)
 		reader := bytes.NewReader([]byte(configString))
 
-		edgeConfig := config.EdgeCfg{}
-		if _, err := toml.NewDecoder(reader).Decode(&edgeConfig); err != nil {
+		newEdgeConfig := config.EdgeCfg{}
+		if _, err := toml.NewDecoder(reader).Decode(&newEdgeConfig); err != nil {
 			return err
 		}
 
 		// check storage path
-		if len(edgeConfig.Storage.Path) > 0 {
-			if err := checkPath(edgeConfig.Storage.Path); err != nil {
+		if len(newEdgeConfig.Storage.Path) > 0 {
+			if err := checkPath(newEdgeConfig.Storage.Path); err != nil {
 				return err
 			}
 		}
 		// check quota
 
-		r, lr, err := openRepo(cctx)
-		if err != nil {
-			return err
-		}
-		defer lr.Close() //nolint:errcheck  // ignore error
-
-		// check token
-		cfg, err := lr.Config()
+		repoPath, err := getRepoPath(cctx)
 		if err != nil {
 			return err
 		}
 
-		oldEdgeConfig := cfg.(*config.EdgeCfg)
-
-		if isPrivateKeyExist(r) && oldEdgeConfig.Basic.Token != edgeConfig.Basic.Token {
-			return fmt.Errorf("can not modify token")
+		repoPath, err = homedir.Expand(repoPath)
+		if err != nil {
+			return err
 		}
 
-		if !isPrivateKeyExist(r) && len(edgeConfig.Basic.Token) > 0 {
+		configPath := filepath.Join(repoPath, "config.toml")
+		cfg, err := config.FromFile(configPath, config.DefaultEdgeCfg())
+		if err != nil {
+			return err
+		}
+
+		edgeConfig := cfg.(*config.EdgeCfg)
+
+		if len(newEdgeConfig.Basic.Token) > 0 && newEdgeConfig.Basic.Token != edgeConfig.Basic.Token {
+			_, lr, err := openRepo(cctx)
+			if err != nil {
+				return err
+			}
+
 			if err := importPrivateKey(cctx, lr, edgeConfig.Basic.Token); err != nil {
 				return err
 			}
 		}
 
-		lr.SetConfig(func(raw interface{}) {
-			cfg, ok := raw.(*config.EdgeCfg)
-			if !ok {
-				return
-			}
+		edgeConfig.Storage = newEdgeConfig.Storage
+		edgeConfig.Memory = newEdgeConfig.Memory
+		edgeConfig.Bandwidth = newEdgeConfig.Bandwidth
+		edgeConfig.CPU = newEdgeConfig.CPU
 
-			cfg.Storage = edgeConfig.Storage
-			cfg.Memory = edgeConfig.Memory
-			cfg.Bandwidth = edgeConfig.Bandwidth
-			cfg.CPU = edgeConfig.CPU
-		})
+		configBytes, err := config.GenerateConfigUpdate(edgeConfig, config.DefaultEdgeCfg(), true)
+		if err != nil {
+			return err
+		}
 
-		return nil
+		return os.WriteFile(configPath, configBytes, 0o644)
 	},
 }
 
