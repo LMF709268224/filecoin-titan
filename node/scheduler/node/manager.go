@@ -368,11 +368,11 @@ func (m *Manager) CalculateAndSavePoints(nID string) error {
 	size := bytesToGB(n.Info.DiskSpace)
 	ms := min(size, 2000) * (0.01 + float64(1/max(size, 1000)))
 
-	weighting := 1.0
+	weighting := weighting(m.Edges)
 	online := 1.0
 
 	point := int((mc + mbn + ms) * weighting * online)
-	log.Debugf("calculatePoints [%s] cpu:[%d] memory:[%v] bandwidth:[%d] NAT:[%d] DiskSpace:[%v] point:[%v]", n.NodeID, n.Info.CPUCores, n.Info.Memory, n.BandwidthUp, n.NATType, n.Info.DiskSpace, point)
+	log.Debugf("calculatePoints [%s] cpu:[%d] memory:[%d] bandwidth:[%d] NAT:[%d] DiskSpace:[%d] point:[%d]", n.NodeID, n.Info.CPUCores, int(n.Info.Memory), n.BandwidthUp, n.NATType, int(n.Info.DiskSpace), point)
 
 	return m.UpdateNodeProfit(nID, point)
 }
@@ -410,6 +410,28 @@ func max(a, b float64) float64 {
 	}
 
 	return b
+}
+
+func weighting(num int) float64 {
+	if num <= 2000 {
+		return 2
+	} else if num <= 5000 {
+		return 1.8
+	} else if num <= 5000 {
+		return 1.8
+	} else if num <= 10000 {
+		return 1.6
+	} else if num <= 15000 {
+		return 1.4
+	} else if num <= 25000 {
+		return 1.3
+	} else if num <= 35000 {
+		return 1.2
+	} else if num <= 50000 {
+		return 1.1
+	} else {
+		return 1
+	}
 }
 
 func calculateMC(i, j float64) float64 {
