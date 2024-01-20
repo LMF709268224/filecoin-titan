@@ -13,6 +13,7 @@ import (
 	"github.com/Filecoin-Titan/titan/node/device"
 	datasync "github.com/Filecoin-Titan/titan/node/sync"
 	validate "github.com/Filecoin-Titan/titan/node/validation"
+	"github.com/filecoin-project/go-jsonrpc"
 	logging "github.com/ipfs/go-log/v2"
 	"go.uber.org/fx"
 	"golang.org/x/xerrors"
@@ -42,7 +43,12 @@ func (edge *Edge) WaitQuiet(ctx context.Context) error {
 
 // ExternalServiceAddress returns the external service address of the scheduler.
 func (edge *Edge) ExternalServiceAddress(ctx context.Context, candidateURL string) (string, error) {
-	candidateAPI, closer, err := client.NewCandidate(ctx, candidateURL, nil)
+	httpClient, err := client.NewHTTP3ClientWithPacketConn(edge.PConn)
+	if err != nil {
+		return "", err
+	}
+
+	candidateAPI, closer, err := client.NewCandidate(ctx, candidateURL, nil, jsonrpc.WithHTTPClient(httpClient))
 	if err != nil {
 		return "", err
 	}

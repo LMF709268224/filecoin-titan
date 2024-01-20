@@ -21,6 +21,7 @@ import (
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/xerrors"
 )
 
 var EdgeCmds = []*cli.Command{
@@ -583,7 +584,7 @@ var mergeConfigCmd = &cli.Command{
 
 		newEdgeConfig := config.EdgeCfg{}
 		if _, err := toml.NewDecoder(reader).Decode(&newEdgeConfig); err != nil {
-			return err
+			return xerrors.Errorf("decode config error %w", err)
 		}
 
 		// check storage path
@@ -607,7 +608,7 @@ var mergeConfigCmd = &cli.Command{
 		configPath := filepath.Join(repoPath, "config.toml")
 		cfg, err := config.FromFile(configPath, config.DefaultEdgeCfg())
 		if err != nil {
-			return err
+			return xerrors.Errorf("load local config file error %w", err)
 		}
 
 		edgeConfig := cfg.(*config.EdgeCfg)
@@ -615,12 +616,21 @@ var mergeConfigCmd = &cli.Command{
 		if len(newEdgeConfig.Basic.Token) > 0 && newEdgeConfig.Basic.Token != edgeConfig.Basic.Token {
 			_, lr, err := openRepo(cctx)
 			if err != nil {
-				return err
+				return xerrors.Errorf("open repo error %w", err)
+			}
+			defer lr.Close()
+
+			if err := importPrivateKey(cctx, lr, newEdgeConfig.Basic.Token); err != nil {
+				return xerrors.Errorf("import private key error %w", err)
 			}
 
-			if err := importPrivateKey(cctx, lr, edgeConfig.Basic.Token); err != nil {
-				return err
+			// reload config
+			cfg, err := config.FromFile(configPath, config.DefaultEdgeCfg())
+			if err != nil {
+				return xerrors.Errorf("load local config file error %w", err)
 			}
+
+			edgeConfig = cfg.(*config.EdgeCfg)
 		}
 
 		edgeConfig.Storage = newEdgeConfig.Storage
@@ -630,7 +640,7 @@ var mergeConfigCmd = &cli.Command{
 
 		configBytes, err := config.GenerateConfigUpdate(edgeConfig, config.DefaultEdgeCfg(), true)
 		if err != nil {
-			return err
+			return xerrors.Errorf("update config error %w", err)
 		}
 
 		return os.WriteFile(configPath, configBytes, 0o644)
@@ -654,19 +664,6 @@ func checkPath(path string) error {
 	}
 
 	return nil
-}
-
-func isPrivateKeyExist(r repo.Repo) bool {
-	key, err := r.PrivateKey()
-	if err == repo.ErrPrivateKeyNotExist {
-		return false
-	}
-
-	if len(key) > 0 {
-		return true
-	}
-
-	return false
 }
 
 var importKeyCmd = &cli.Command{
@@ -693,15 +690,15 @@ var importKeyCmd = &cli.Command{
 }
 
 func importPrivateKey(cctx *cli.Context, lr repo.LockedRepo, key string) error {
-	jsonString, err := base64.StdEncoding.DecodeString(key)
+	keyBytes, err := base64.StdEncoding.DecodeString(key)
 	if err != nil {
-		return err
+		return xerrors.Errorf("decode key error %w", err)
 	}
 
 	var activationDetail types.ActivationDetail
-	err = json.Unmarshal([]byte(jsonString), &activationDetail)
+	err = json.Unmarshal(keyBytes, &activationDetail)
 	if err != nil {
-		return err
+		return xerrors.Errorf("unmarshal key error %w, key:%s", err, string(keyBytes))
 	}
 
 	schedulerURL, err := getAccessPoint(cctx, client.NewHTTP3Client(), &activationDetail)

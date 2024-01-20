@@ -39,7 +39,7 @@ func analyzeEdgeNodeNATType(ctx context.Context, edgeNode *node.Node, candidateN
 	candidate1 := candidateNodes[0]
 	externalAddr, err := edgeNode.API.ExternalServiceAddress(ctx, candidate1.RPCURL())
 	if err != nil {
-		return types.NatTypeUnknown, err
+		return types.NatTypeUnknown, fmt.Errorf("ExternalServiceAddress error %s", err.Error())
 	}
 
 	if externalAddr != edgeNode.RemoteAddr {
