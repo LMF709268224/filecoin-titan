@@ -18,6 +18,7 @@ import (
 	"github.com/Filecoin-Titan/titan/node/scheduler/nat"
 	"github.com/Filecoin-Titan/titan/node/scheduler/validation"
 	"github.com/Filecoin-Titan/titan/node/scheduler/workload"
+	"github.com/docker/go-units"
 	"github.com/quic-go/quic-go"
 
 	"go.uber.org/fx"
@@ -142,7 +143,7 @@ func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions,
 		cNode.TCPPort = opts.TcpServerPort
 		cNode.IsPrivateMinioOnly = opts.IsPrivateMinioOnly
 
-		err = s.NodeManager.NodeOnline(cNode, &nodeInfo)
+		err = s.NodeManager.NodeOnline(cNode, checkNodeParameters(&nodeInfo))
 		if err != nil {
 			log.Errorf("nodeConnect err:%s,nodeID:%s", err.Error(), nodeID)
 			return err
@@ -156,6 +157,26 @@ func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions,
 	s.DataSync.AddNodeToList(nodeID)
 
 	return nil
+}
+
+func checkNodeParameters(nodeInfo *types.NodeInfo) *types.NodeInfo {
+	if nodeInfo.DiskSpace > units.PiB {
+		nodeInfo.DiskSpace = units.PiB
+	}
+
+	if nodeInfo.BandwidthDown > units.TB {
+		nodeInfo.BandwidthDown = units.TB
+	}
+
+	if nodeInfo.BandwidthUp > units.TB {
+		nodeInfo.BandwidthUp = units.TB
+	}
+
+	if nodeInfo.Memory > units.TiB {
+		nodeInfo.Memory = units.TiB
+	}
+
+	return nodeInfo
 }
 
 // NodeValidationResult processes the validation result for a node
