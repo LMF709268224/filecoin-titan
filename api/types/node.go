@@ -77,6 +77,8 @@ func (n NodeStatus) String() string {
 	return ""
 }
 
+const MaxNumberOfSameDayRegistrations = 10
+
 // NodeType node type
 type NodeType int
 
@@ -393,9 +395,9 @@ type ActivationDetail struct {
 	NodeID        string   `json:"node_id" db:"node_id"`
 	AreaID        string   `json:"area_id" `
 	ActivationKey string   `json:"activation_key" db:"activation_key"`
-	LocatorAPI    string   `json:"locator_api" db:"locator_api"`
-	WebAPI        string   `json:"web_api" db:"web_api"`
+	LocatorURL    string   `json:"locator_url" db:"locator_url"`
 	NodeType      NodeType `json:"node_type" db:"node_type"`
+	IP            string   `json:"ip" db:"ip"`
 }
 
 func (d *ActivationDetail) Marshal() (string, error) {

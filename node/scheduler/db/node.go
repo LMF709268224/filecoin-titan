@@ -276,8 +276,8 @@ func (n *SQLDB) UpdateOnlineDuration(infos []*types.NodeDynamicInfo) error {
 // SaveNodeRegisterInfos Insert Node register info
 func (n *SQLDB) SaveNodeRegisterInfos(details []*types.ActivationDetail) error {
 	query := fmt.Sprintf(
-		`INSERT INTO %s (node_id, created_time, node_type, activation_key)
-				VALUES (:node_id, NOW(), :node_type, :activation_key)`, nodeRegisterTable)
+		`INSERT INTO %s (node_id, created_time, node_type, activation_key, ip)
+				VALUES (:node_id, NOW(), :node_type, :activation_key, :ip)`, nodeRegisterTable)
 
 	_, err := n.db.NamedExec(query, details)
 
@@ -355,6 +355,23 @@ func (n *SQLDB) NodeExists(nodeID string, nodeType types.NodeType) error {
 	}
 
 	return nil
+}
+
+// TodayRegisterCount get the number of registrations for this ip today
+func (n *SQLDB) TodayRegisterCount(ip string) (int, error) {
+	now := time.Now()
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+	var count int
+	cQuery := fmt.Sprintf(`SELECT count(*) FROM %s WHERE ip=? AND created_time >=?`, nodeRegisterTable)
+	err := n.db.Get(&count, cQuery, ip, midnight)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			return 0, err
+		}
+	}
+
+	return count, nil
 }
 
 // LoadNodeInfos load nodes information.

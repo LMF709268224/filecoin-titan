@@ -31,6 +31,7 @@ func DefaultEdgeCfg() *EdgeCfg {
 		Network: Network{
 			ListenAddress: "0.0.0.0:1234",
 			Timeout:       "30s",
+			LocatorURL:    "https://localhost:5000/rpc/v0",
 		},
 		BandwidthUp:   104857600,
 		BandwidthDown: 1073741824,
@@ -57,8 +58,6 @@ func DefaultEdgeCfg() *EdgeCfg {
 		CPU: CPU{
 			Cores: 1,
 		},
-
-		LocatorAPI: "https://localhost:5000",
 	}
 }
 
@@ -68,6 +67,7 @@ func DefaultCandidateCfg() *CandidateCfg {
 		Network: Network{
 			ListenAddress: "0.0.0.0:2345",
 			Timeout:       "30s",
+			LocatorURL:    "https://localhost:5000/rpc/v0",
 		},
 		BandwidthUp:   1073741824,
 		BandwidthDown: 1073741824,
@@ -85,7 +85,6 @@ func DefaultCandidateCfg() *CandidateCfg {
 		IPFSAPIURL:          "http://127.0.0.1:5001",
 		ValidateDuration:    10,
 		MaxSizeOfUploadFile: 104857600, // 100 MB
-		LocatorAPI:          "https://localhost:5000",
 
 		Storage: Storage{
 			StorageGB: 64,
@@ -167,8 +166,7 @@ func DefaultSchedulerCfg() *SchedulerCfg {
 		MaxCountOfVisitShareLink: 10,
 		Weight:                   100,
 		MaxAPIKey:                5,
-		LocatorAPI:               "https://localhost:5000/rpc/v0",
-		WebAPI:                   "http://wapi-storage.container1.titannet.io",
+		LocatorURL:               "https://localhost:5000/rpc/v0",
 	}
 }
 

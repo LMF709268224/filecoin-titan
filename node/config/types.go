@@ -9,6 +9,8 @@ type Network struct {
 	ListenAddress string
 	// used when 'ListenAddress' is unspecified. must be a valid duration recognized by golang's time.ParseDuration function
 	Timeout string
+	// the url of locator
+	LocatorURL string
 }
 
 type Storage struct {
@@ -66,8 +68,6 @@ type EdgeCfg struct {
 	// seconds
 	ValidateDuration    int
 	MaxSizeOfUploadFile int
-
-	LocatorAPI string
 
 	Bandwidth Bandwidth
 	Storage   Storage
@@ -186,6 +186,5 @@ type SchedulerCfg struct {
 	// if the area has several scheduler, node will connect to the scheduler which weight is bigger
 	Weight     int
 	MaxAPIKey  int
-	LocatorAPI string
-	WebAPI     string
+	LocatorURL string
 }

@@ -220,7 +220,7 @@ var daemonStartCmd = &cli.Command{
 
 		schedulerURL, _, _ := lcli.GetRawAPI(cctx, repo.Scheduler, "v0")
 		if len(schedulerURL) == 0 {
-			schedulerURL, err = getAccessPoint(cctx, candidateCfg.LocatorAPI, nodeID, candidateCfg.AreaID)
+			schedulerURL, err = getAccessPoint(cctx, candidateCfg.Network.LocatorURL, nodeID, candidateCfg.AreaID)
 			if err != nil {
 				return err
 			}
@@ -499,8 +499,8 @@ func newAuthTokenFromScheduler(schedulerURL, nodeID string, privateKey *rsa.Priv
 	return schedulerAPI.NodeLogin(context.Background(), nodeID, hex.EncodeToString(sign))
 }
 
-func getAccessPoint(cctx *cli.Context, locatorAPI, nodeID, areaID string) (string, error) {
-	locator, close, err := client.NewLocator(cctx.Context, locatorAPI, nil, jsonrpc.WithHTTPClient(client.NewHTTP3Client()))
+func getAccessPoint(cctx *cli.Context, locatorURL, nodeID, areaID string) (string, error) {
+	locator, close, err := client.NewLocator(cctx.Context, locatorURL, nil, jsonrpc.WithHTTPClient(client.NewHTTP3Client()))
 	if err != nil {
 		return "", err
 	}

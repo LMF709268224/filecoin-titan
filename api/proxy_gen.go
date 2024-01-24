@@ -11,7 +11,7 @@ import (
 	"github.com/Filecoin-Titan/titan/journal/alerting"
 	"github.com/Filecoin-Titan/titan/node/modules/dtypes"
 	"github.com/google/uuid"
-	"golang.org/x/xerrors"
+	xerrors "golang.org/x/xerrors"
 )
 
 var ErrNotSupported = xerrors.New("method not supported")
@@ -264,6 +264,8 @@ type NodeAPIStruct struct {
 		NodeKeepaliveV2 func(p0 context.Context) (uuid.UUID, error) `perm:"edge,candidate"`
 
 		NodeLogin func(p0 context.Context, p1 string, p2 string) (string, error) `perm:"default"`
+
+		RegisterEdgeNode func(p0 context.Context, p1 string, p2 string) (*types.ActivationDetail, error) `perm:"default"`
 
 		RegisterNode func(p0 context.Context, p1 string, p2 string, p3 string) error `perm:"default"`
 
@@ -1209,6 +1211,17 @@ func (s *NodeAPIStruct) NodeLogin(p0 context.Context, p1 string, p2 string) (str
 
 func (s *NodeAPIStub) NodeLogin(p0 context.Context, p1 string, p2 string) (string, error) {
 	return "", ErrNotSupported
+}
+
+func (s *NodeAPIStruct) RegisterEdgeNode(p0 context.Context, p1 string, p2 string) (*types.ActivationDetail, error) {
+	if s.Internal.RegisterEdgeNode == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.RegisterEdgeNode(p0, p1, p2)
+}
+
+func (s *NodeAPIStub) RegisterEdgeNode(p0 context.Context, p1 string, p2 string) (*types.ActivationDetail, error) {
+	return nil, ErrNotSupported
 }
 
 func (s *NodeAPIStruct) RegisterNode(p0 context.Context, p1 string, p2 string, p3 string) error {

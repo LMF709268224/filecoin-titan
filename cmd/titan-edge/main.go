@@ -214,7 +214,7 @@ var daemonStartCmd = &cli.Command{
 
 		schedulerURL, _, _ := lcli.GetRawAPI(cctx, repo.Scheduler, "v0")
 		if len(schedulerURL) == 0 {
-			schedulerURL, err = getAccessPoint(cctx, edgeCfg.LocatorAPI, nodeID, edgeCfg.AreaID)
+			schedulerURL, err = getAccessPoint(cctx, edgeCfg.Network.LocatorURL, nodeID, edgeCfg.AreaID)
 			if err != nil {
 				return err
 			}
@@ -470,8 +470,8 @@ func newAuthTokenFromScheduler(schedulerURL, nodeID string, privateKey *rsa.Priv
 	return schedulerAPI.NodeLogin(context.Background(), nodeID, hex.EncodeToString(sign))
 }
 
-func getAccessPoint(cctx *cli.Context, locatorAPI, nodeID, areaID string) (string, error) {
-	locator, close, err := client.NewLocator(cctx.Context, locatorAPI, nil, jsonrpc.WithHTTPClient(client.NewHTTP3Client()))
+func getAccessPoint(cctx *cli.Context, locatorURL, nodeID, areaID string) (string, error) {
+	locator, close, err := client.NewLocator(cctx.Context, locatorURL, nil, jsonrpc.WithHTTPClient(client.NewHTTP3Client()))
 	if err != nil {
 		return "", err
 	}
@@ -509,10 +509,6 @@ func newSchedulerAPI(cctx *cli.Context, conn net.PacketConn, schedulerURL, nodeI
 		return nil, nil, err
 	}
 	log.Debugf("scheduler url:%s, token:%s", schedulerURL, token)
-
-	if err := os.Setenv("SCHEDULER_API_INFO", token+":"+schedulerURL); err != nil {
-		log.Errorf("set env error: %s", err.Error())
-	}
 
 	return schedulerAPI, closer, nil
 }

@@ -64,6 +64,8 @@ type NodeAPI interface {
 	GetOnlineNodeCount(ctx context.Context, nodeType types.NodeType) (int, error) //perm:web,admin
 	// RegisterNode adds new node to the scheduler
 	RegisterNode(ctx context.Context, nodeID, publicKey, key string) error //perm:default
+	// RegisterEdgeNode adds new edge node to the scheduler
+	RegisterEdgeNode(ctx context.Context, nodeID, publicKey string) (*types.ActivationDetail, error) //perm:default
 	// DeactivateNode is used to deactivate a node in the titan server.
 	// It stops the node from serving any requests and marks it as inactive.
 	// - nodeID: The ID of the node to deactivate.

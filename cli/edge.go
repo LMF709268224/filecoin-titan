@@ -19,6 +19,7 @@ import (
 	"github.com/Filecoin-Titan/titan/node/repo"
 	titanrsa "github.com/Filecoin-Titan/titan/node/rsa"
 	"github.com/filecoin-project/go-jsonrpc"
+	"github.com/google/uuid"
 	"github.com/mitchellh/go-homedir"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
@@ -613,14 +614,14 @@ var mergeConfigCmd = &cli.Command{
 
 		edgeConfig := cfg.(*config.EdgeCfg)
 
-		if len(newEdgeConfig.Basic.Token) > 0 && newEdgeConfig.Basic.Token != edgeConfig.Basic.Token {
+		if len(edgeConfig.Basic.Token) == 0 {
 			_, lr, err := openRepo(cctx)
 			if err != nil {
 				return xerrors.Errorf("open repo error %w", err)
 			}
 			defer lr.Close()
 
-			if err := importPrivateKey(cctx, lr, newEdgeConfig.Basic.Token); err != nil {
+			if err := regitsterEdgeNode(cctx, lr, newEdgeConfig.Network.LocatorURL); err != nil {
 				return xerrors.Errorf("import private key error %w", err)
 			}
 
@@ -689,6 +690,66 @@ var importKeyCmd = &cli.Command{
 	},
 }
 
+func regitsterEdgeNode(cctx *cli.Context, lr repo.LockedRepo, locatorURL string) error {
+	schedulerURL, err := getUserAccessPoint(cctx, client.NewHTTP3Client(), locatorURL)
+	if err != nil {
+		return err
+	}
+
+	schedulerAPI, closer, err := client.NewScheduler(context.Background(), schedulerURL, nil, jsonrpc.WithHTTPClient(client.NewHTTP3Client()))
+	if err != nil {
+		return err
+	}
+	defer closer()
+
+	bits := cctx.Int("bits")
+	if bits == 0 {
+		bits = 1024
+	}
+
+	privateKey, err := titanrsa.GeneratePrivateKey(bits)
+	if err != nil {
+		return err
+	}
+
+	pem := titanrsa.PublicKey2Pem(&privateKey.PublicKey)
+	nodeID := fmt.Sprintf("e_%s", uuid.NewString())
+
+	info, err := schedulerAPI.RegisterEdgeNode(context.Background(), nodeID, string(pem))
+	if err != nil {
+		return err
+	}
+
+	privatePem := titanrsa.PrivateKey2Pem(privateKey)
+	if err := lr.SetPrivateKey(privatePem); err != nil {
+		return err
+	}
+
+	if err := lr.SetNodeID([]byte(nodeID)); err != nil {
+		return err
+	}
+
+	tokenBytes, err := json.Marshal(info)
+	if err != nil {
+		return err
+	}
+
+	return lr.SetConfig(func(raw interface{}) {
+		cfg, ok := raw.(*config.EdgeCfg)
+		if !ok {
+			candidateCfg, ok := raw.(*config.CandidateCfg)
+			if !ok {
+				log.Errorf("can not convert interface to CandidateCfg")
+				return
+			}
+			cfg = &candidateCfg.EdgeCfg
+		}
+		cfg.Network.LocatorURL = locatorURL
+		cfg.Basic.Token = base64.StdEncoding.EncodeToString(tokenBytes)
+		cfg.AreaID = info.AreaID
+	})
+}
+
 func importPrivateKey(cctx *cli.Context, lr repo.LockedRepo, key string) error {
 	keyBytes, err := base64.StdEncoding.DecodeString(key)
 	if err != nil {
@@ -701,7 +762,7 @@ func importPrivateKey(cctx *cli.Context, lr repo.LockedRepo, key string) error {
 		return xerrors.Errorf("unmarshal key error %w, key:%s", err, string(keyBytes))
 	}
 
-	schedulerURL, err := getAccessPoint(cctx, client.NewHTTP3Client(), &activationDetail)
+	schedulerURL, err := getNodeAccessPoint(cctx, client.NewHTTP3Client(), &activationDetail)
 	if err != nil {
 		return err
 	}
@@ -748,7 +809,7 @@ func importPrivateKey(cctx *cli.Context, lr repo.LockedRepo, key string) error {
 			}
 			cfg = &candidateCfg.EdgeCfg
 		}
-		cfg.LocatorAPI = activationDetail.LocatorAPI
+		cfg.Network.LocatorURL = activationDetail.LocatorURL
 		cfg.Basic.Token = key
 		cfg.AreaID = activationDetail.AreaID
 	})
@@ -771,9 +832,9 @@ var stateCmd = &cli.Command{
 	},
 }
 
-// getAccessPoint return locator url and scheduler url
-func getAccessPoint(cctx *cli.Context, httpClient *http.Client, activationDetail *types.ActivationDetail) (string, error) {
-	locator, close, err := client.NewLocator(cctx.Context, activationDetail.LocatorAPI, nil, jsonrpc.WithHTTPClient(httpClient))
+// getNodeAccessPoint get scheduler url by node id
+func getNodeAccessPoint(cctx *cli.Context, httpClient *http.Client, activationDetail *types.ActivationDetail) (string, error) {
+	locator, close, err := client.NewLocator(cctx.Context, activationDetail.LocatorURL, nil, jsonrpc.WithHTTPClient(httpClient))
 	if err != nil {
 		return "", err
 	}
@@ -789,4 +850,24 @@ func getAccessPoint(cctx *cli.Context, httpClient *http.Client, activationDetail
 	}
 
 	return schedulerURLs[0], nil
+}
+
+// getNodeAccessPoint get scheduler url by user ip
+func getUserAccessPoint(cctx *cli.Context, httpClient *http.Client, locatorURL string) (string, error) {
+	locator, close, err := client.NewLocator(cctx.Context, locatorURL, nil, jsonrpc.WithHTTPClient(httpClient))
+	if err != nil {
+		return "", err
+	}
+	defer close()
+
+	accessPoint, err := locator.GetUserAccessPoint(context.Background(), "")
+	if err != nil {
+		return "", err
+	}
+
+	if accessPoint != nil && len(accessPoint.SchedulerURLs) > 0 {
+		return accessPoint.SchedulerURLs[0], nil
+	}
+
+	return "", fmt.Errorf("not scheduler exit")
 }

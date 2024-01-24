@@ -85,6 +85,57 @@ func (s *Scheduler) RegisterNode(ctx context.Context, nodeID, publicKey, key str
 	return s.db.SaveNodePublicKey(publicKey, nodeID)
 }
 
+// RegisterEdgeNode register edge node, return key
+func (s *Scheduler) RegisterEdgeNode(ctx context.Context, nodeID, publicKey string) (*types.ActivationDetail, error) {
+	remoteAddr := handler.GetRemoteAddr(ctx)
+	ip, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	if !strings.HasPrefix(nodeID, "e_") {
+		return nil, xerrors.New("invalid node id")
+	}
+
+	if publicKey == "" {
+		return nil, xerrors.New("public key is nil")
+	}
+
+	_, err = titanrsa.Pem2PublicKey([]byte(publicKey))
+	if err != nil {
+		return nil, xerrors.Errorf("pem to publicKey err : %s", err.Error())
+	}
+
+	if err = s.db.NodeExists(nodeID, types.NodeEdge); err != nil {
+		return nil, xerrors.Errorf("NodeExists %w", err)
+	}
+
+	if count, err := s.db.TodayRegisterCount(ip); err != nil {
+		return nil, xerrors.Errorf("TodayRegisterCount %w", err)
+	} else if count >= types.MaxNumberOfSameDayRegistrations {
+		return nil, xerrors.New("today's registrations exceeded the number")
+	}
+
+	detail := &types.ActivationDetail{
+		NodeID:        nodeID,
+		AreaID:        s.SchedulerCfg.AreaID,
+		ActivationKey: newNodeKey(),
+		LocatorURL:    s.SchedulerCfg.LocatorURL,
+		NodeType:      types.NodeEdge,
+		IP:            ip,
+	}
+
+	if err = s.db.SaveNodeRegisterInfos([]*types.ActivationDetail{detail}); err != nil {
+		return nil, xerrors.Errorf("SaveNodeRegisterInfos %w", err)
+	}
+
+	if err = s.db.SaveNodePublicKey(publicKey, nodeID); err != nil {
+		return nil, xerrors.Errorf("SaveNodePublicKey %w", err)
+	}
+
+	return detail, nil
+}
+
 // DeactivateNode is used to deactivate a node in the titan server.
 // It stops the node from serving any requests and marks it as inactive.
 // - nodeID: The ID of the node to deactivate.
@@ -172,9 +223,9 @@ func (s *Scheduler) RequestActivationCodes(ctx context.Context, nodeType types.N
 			NodeID:        nodeID,
 			AreaID:        areaID,
 			ActivationKey: newNodeKey(),
-			LocatorAPI:    s.SchedulerCfg.LocatorAPI,
-			WebAPI:        s.SchedulerCfg.WebAPI,
+			LocatorURL:    s.SchedulerCfg.LocatorURL,
 			NodeType:      nodeType,
+			IP:            "localhost",
 		}
 
 		code, err := detail.Marshal()

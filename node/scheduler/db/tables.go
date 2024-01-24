@@ -81,6 +81,7 @@ var cNodeRegisterTable = `
 		created_time    VARCHAR(64)   DEFAULT '' ,
 		node_type       VARCHAR(64)   DEFAULT '' ,
 		activation_key  VARCHAR(128)  DEFAULT '' ,
+		ip 				VARCHAR(16)  DEFAULT '' ,
 		PRIMARY KEY (node_id)
 	) ENGINE=InnoDB COMMENT='node register info';`
 
