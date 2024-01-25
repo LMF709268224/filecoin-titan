@@ -18,6 +18,7 @@ import (
 	"github.com/Filecoin-Titan/titan/node/scheduler/nat"
 	"github.com/Filecoin-Titan/titan/node/scheduler/validation"
 	"github.com/Filecoin-Titan/titan/node/scheduler/workload"
+	"github.com/quic-go/quic-go"
 
 	"go.uber.org/fx"
 
@@ -57,7 +58,7 @@ type Scheduler struct {
 	WorkloadManager        *workload.Manager
 
 	PrivateKey *rsa.PrivateKey
-	PConn      net.PacketConn
+	Transport  *quic.Transport
 }
 
 var _ api.Scheduler = &Scheduler{}
@@ -83,7 +84,7 @@ func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions,
 
 	log.Infof("node connected %s, address:%s", nodeID, remoteAddr)
 
-	err := cNode.ConnectRPC(s.PConn, remoteAddr, nodeType)
+	err := cNode.ConnectRPC(s.Transport, remoteAddr, nodeType)
 	if err != nil {
 		return xerrors.Errorf("nodeConnect ConnectRPC err:%s", err.Error())
 	}

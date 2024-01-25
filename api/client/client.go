@@ -151,18 +151,14 @@ func NewHTTP3Client() *http.Client {
 }
 
 // NewHTTP3ClientWithPacketConn new http3 client for nat trave
-func NewHTTP3ClientWithPacketConn(conn net.PacketConn) (*http.Client, error) {
+func NewHTTP3ClientWithPacketConn(tansport *quic.Transport) (*http.Client, error) {
 	dial := func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
 		remoteAddr, err := net.ResolveUDPAddr("udp", addr)
 		if err != nil {
 			return nil, err
 		}
 
-		host, _, err := net.SplitHostPort(addr)
-		if err != nil {
-			return nil, err
-		}
-		return quic.DialEarlyContext(ctx, conn, remoteAddr, host, tlsCfg, cfg)
+		return tansport.DialEarly(ctx, remoteAddr, tlsCfg, cfg)
 	}
 
 	roundTripper := &http3.RoundTripper{

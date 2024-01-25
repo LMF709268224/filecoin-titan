@@ -25,6 +25,7 @@ import (
 	"github.com/Filecoin-Titan/titan/node/modules/dtypes"
 	"github.com/Filecoin-Titan/titan/node/validation"
 	"github.com/gbrlsnchs/jwt/v3"
+	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 
 	"github.com/Filecoin-Titan/titan/api"
@@ -218,6 +219,8 @@ var daemonStartCmd = &cli.Command{
 		}
 		defer packetConn.Close() //nolint:errcheck // ignore error
 
+		transport := &quic.Transport{Conn: packetConn}
+
 		schedulerURL, _, _ := lcli.GetRawAPI(cctx, repo.Scheduler, "v0")
 		if len(schedulerURL) == 0 {
 			schedulerURL, err = getAccessPoint(cctx, candidateCfg.Network.LocatorURL, nodeID, candidateCfg.AreaID)
@@ -227,7 +230,7 @@ var daemonStartCmd = &cli.Command{
 		}
 
 		// Connect to scheduler
-		schedulerAPI, closer, err := newSchedulerAPI(cctx, packetConn, schedulerURL, nodeID, privateKey)
+		schedulerAPI, closer, err := newSchedulerAPI(cctx, transport, schedulerURL, nodeID, privateKey)
 		if err != nil {
 			return err
 		}
@@ -333,23 +336,20 @@ var daemonStartCmd = &cli.Command{
 			TLSConfig: tlsConfig,
 		}
 
-		http3Srv := http3.Server{
-			TLSConfig: tlsConfig,
-			Handler:   handler,
-		}
-
-		go http3Srv.Serve(packetConn)
+		go startHTTP3Server(transport, handler, candidateCfg)
 
 		go func() {
 			<-ctx.Done()
 			log.Warn("Shutting down...")
+
+			if err := transport.Close(); err != nil {
+				log.Errorf("shutting down http3Srv failed: %s", err)
+			}
+
 			if err := httpSrv.Shutdown(context.TODO()); err != nil {
 				log.Errorf("shutting down httpSrv failed: %s", err)
 			}
 
-			if err := http3Srv.Close(); err != nil {
-				log.Errorf("shutting down http3Srv failed: %s", err)
-			}
 			stop(ctx) //nolint:errcheck
 			log.Warn("Graceful shutdown successful")
 		}()
@@ -518,13 +518,13 @@ func getAccessPoint(cctx *cli.Context, locatorURL, nodeID, areaID string) (strin
 	return schedulerURLs[0], nil
 }
 
-func newSchedulerAPI(cctx *cli.Context, conn net.PacketConn, schedulerURL, nodeID string, privateKey *rsa.PrivateKey) (api.Scheduler, jsonrpc.ClientCloser, error) {
+func newSchedulerAPI(cctx *cli.Context, tansport *quic.Transport, schedulerURL, nodeID string, privateKey *rsa.PrivateKey) (api.Scheduler, jsonrpc.ClientCloser, error) {
 	token, err := newAuthTokenFromScheduler(schedulerURL, nodeID, privateKey)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	httpClient, err := client.NewHTTP3ClientWithPacketConn(conn)
+	httpClient, err := client.NewHTTP3ClientWithPacketConn(tansport)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -591,6 +591,7 @@ func defaultTLSConfig() (*tls.Config, error) {
 	return &tls.Config{
 		MinVersion:         tls.VersionTLS12,
 		Certificates:       []tls.Certificate{tlsCert},
+		NextProtos:         []string{"h2", "h3"},
 		InsecureSkipVerify: true, //nolint:gosec // skip verify in default config
 	}, nil
 }
@@ -619,4 +620,40 @@ func setEndpointAPI(lr repo.LockedRepo, address string) error {
 	}
 
 	return nil
+}
+
+func startHTTP3Server(transport *quic.Transport, handler http.Handler, config *config.CandidateCfg) error {
+	var tlsConfig *tls.Config
+	if len(config.CaCertificatePath) == 0 && len(config.PrivateKeyPath) == 0 {
+		config, err := defaultTLSConfig()
+		if err != nil {
+			log.Errorf("startUDPServer, defaultTLSConfig error:%s", err.Error())
+			return err
+		}
+		tlsConfig = config
+	} else {
+		cert, err := tls.LoadX509KeyPair(config.CaCertificatePath, config.PrivateKeyPath)
+		if err != nil {
+			log.Errorf("startUDPServer, LoadX509KeyPair error:%s", err.Error())
+			return err
+		}
+
+		tlsConfig = &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			Certificates:       []tls.Certificate{cert},
+			NextProtos:         []string{"h2", "h3"},
+			InsecureSkipVerify: false,
+		}
+	}
+
+	ln, err := transport.ListenEarly(tlsConfig, nil)
+	if err != nil {
+		return err
+	}
+
+	srv := http3.Server{
+		TLSConfig: tlsConfig,
+		Handler:   handler,
+	}
+	return srv.ServeListener(ln)
 }

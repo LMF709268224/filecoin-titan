@@ -7,7 +7,6 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"github.com/Filecoin-Titan/titan/api/types"
 	titanrsa "github.com/Filecoin-Titan/titan/node/rsa"
 	"github.com/google/uuid"
+	"github.com/quic-go/quic-go"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-jsonrpc"
@@ -115,8 +115,8 @@ func APIFromCandidate(api api.Candidate) *API {
 }
 
 // ConnectRPC connects to the node RPC
-func (n *Node) ConnectRPC(conn net.PacketConn, addr string, nodeType types.NodeType) error {
-	httpClient, err := client.NewHTTP3ClientWithPacketConn(conn)
+func (n *Node) ConnectRPC(transport *quic.Transport, addr string, nodeType types.NodeType) error {
+	httpClient, err := client.NewHTTP3ClientWithPacketConn(transport)
 	if err != nil {
 		return err
 	}

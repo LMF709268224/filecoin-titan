@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -26,6 +27,7 @@ import (
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/filecoin-project/go-jsonrpc/auth"
 	"github.com/gbrlsnchs/jwt/v3"
+	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/xerrors"
 
@@ -223,13 +225,15 @@ var runCmd = &cli.Command{
 			}
 		}()
 
+		transport := &quic.Transport{Conn: udpPacketConn}
+
 		var shutdownChan = make(chan struct{})
 		var schedulerAPI api.Scheduler
 		stop, err := node.New(cctx.Context,
 			node.Scheduler(&schedulerAPI),
 			node.Base(),
 			node.Repo(r),
-			node.Override(new(net.PacketConn), udpPacketConn),
+			node.Override(new(*quic.Transport), transport),
 			node.Override(new(dtypes.ShutdownChan), shutdownChan),
 			node.Override(node.SetApiEndpointKey, func(lr repo.LockedRepo) error {
 				return setEndpointAPI(lr, schedulerCfg.ListenAddress)
@@ -251,7 +255,11 @@ var runCmd = &cli.Command{
 			return fmt.Errorf("failed to instantiate rpc handler: %s", err.Error())
 		}
 
-		go startHTTP3Server(udpPacketConn, h, schedulerCfg) //nolint:errcheck
+		var stopHTTP3Server = func(context.Context) error {
+			return transport.Close()
+		}
+
+		go startHTTP3Server(transport, h, schedulerCfg) //nolint:errcheck
 
 		// Serve the RPC.
 		rpcStopper, err := node.ServeRPC(h, "scheduler", schedulerCfg.ListenAddress)
@@ -265,6 +273,7 @@ var runCmd = &cli.Command{
 		finishCh := node.MonitorShutdown(shutdownChan,
 			node.ShutdownHandler{Component: "rpc server", StopFunc: rpcStopper},
 			node.ShutdownHandler{Component: "node", StopFunc: stop},
+			node.ShutdownHandler{Component: "http3 server", StopFunc: stopHTTP3Server},
 		)
 		<-finishCh // fires when shutdown is complete.
 		return nil
@@ -296,9 +305,9 @@ func openRepo(cctx *cli.Context) (repo.LockedRepo, error) {
 	return lr, nil
 }
 
-func startHTTP3Server(conn net.PacketConn, handler http.Handler, schedulerCfg *config.SchedulerCfg) error {
+func startHTTP3Server(transport *quic.Transport, handler http.Handler, schedulerCfg *config.SchedulerCfg) error {
 	var tlsConfig *tls.Config
-	if schedulerCfg.InsecureSkipVerify {
+	if len(schedulerCfg.CertificatePath) == 0 || len(schedulerCfg.PrivateKeyPath) == 0 {
 		config, err := defaultTLSConfig()
 		if err != nil {
 			log.Errorf("startUDPServer, defaultTLSConfig error:%s", err.Error())
@@ -306,7 +315,7 @@ func startHTTP3Server(conn net.PacketConn, handler http.Handler, schedulerCfg *c
 		}
 		tlsConfig = config
 	} else {
-		cert, err := tls.LoadX509KeyPair(schedulerCfg.CaCertificatePath, schedulerCfg.PrivateKeyPath)
+		cert, err := tls.LoadX509KeyPair(schedulerCfg.CertificatePath, schedulerCfg.PrivateKeyPath)
 		if err != nil {
 			log.Errorf("startUDPServer, LoadX509KeyPair error:%s", err.Error())
 			return err
@@ -315,8 +324,14 @@ func startHTTP3Server(conn net.PacketConn, handler http.Handler, schedulerCfg *c
 		tlsConfig = &tls.Config{
 			MinVersion:         tls.VersionTLS12,
 			Certificates:       []tls.Certificate{cert},
+			NextProtos:         []string{"h2", "h3"},
 			InsecureSkipVerify: false,
 		}
+	}
+
+	ln, err := transport.ListenEarly(tlsConfig, nil)
+	if err != nil {
+		return err
 	}
 
 	srv := http3.Server{
@@ -324,7 +339,11 @@ func startHTTP3Server(conn net.PacketConn, handler http.Handler, schedulerCfg *c
 		Handler:   handler,
 	}
 
-	return srv.Serve(conn)
+	if err = srv.ServeListener(ln); err != nil {
+		log.Warn("http3 server ", err.Error())
+	}
+
+	return err
 }
 
 func defaultTLSConfig() (*tls.Config, error) {
@@ -347,6 +366,7 @@ func defaultTLSConfig() (*tls.Config, error) {
 	return &tls.Config{
 		MinVersion:         tls.VersionTLS12,
 		Certificates:       []tls.Certificate{tlsCert},
+		NextProtos:         []string{"h2", "h3"},
 		InsecureSkipVerify: true, //nolint:gosec // skip verify in default config
 	}, nil
 }
