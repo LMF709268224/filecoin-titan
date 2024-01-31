@@ -298,6 +298,8 @@ type SchedulerStruct struct {
 
 		GetEdgeUpdateConfigs func(p0 context.Context) (map[int]*EdgeUpdateConfig, error) `perm:"edge"`
 
+		GetNodePublicKey func(p0 context.Context, p1 string) (string, error) `perm:"web,admin"`
+
 		GetRetrieveEventRecords func(p0 context.Context, p1 string, p2 int, p3 int) (*types.ListRetrieveEventRsp, error) `perm:"web,admin"`
 
 		GetSchedulerPublicKey func(p0 context.Context) (string, error) `perm:"edge,candidate"`
@@ -1310,6 +1312,17 @@ func (s *SchedulerStruct) GetEdgeUpdateConfigs(p0 context.Context) (map[int]*Edg
 
 func (s *SchedulerStub) GetEdgeUpdateConfigs(p0 context.Context) (map[int]*EdgeUpdateConfig, error) {
 	return *new(map[int]*EdgeUpdateConfig), ErrNotSupported
+}
+
+func (s *SchedulerStruct) GetNodePublicKey(p0 context.Context, p1 string) (string, error) {
+	if s.Internal.GetNodePublicKey == nil {
+		return "", ErrNotSupported
+	}
+	return s.Internal.GetNodePublicKey(p0, p1)
+}
+
+func (s *SchedulerStub) GetNodePublicKey(p0 context.Context, p1 string) (string, error) {
+	return "", ErrNotSupported
 }
 
 func (s *SchedulerStruct) GetRetrieveEventRecords(p0 context.Context, p1 string, p2 int, p3 int) (*types.ListRetrieveEventRsp, error) {

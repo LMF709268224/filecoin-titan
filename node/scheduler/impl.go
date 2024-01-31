@@ -223,6 +223,16 @@ func (s *Scheduler) GetSchedulerPublicKey(ctx context.Context) (string, error) {
 	return string(pem), nil
 }
 
+// GetNodePublicKey get node publicKey
+func (s *Scheduler) GetNodePublicKey(ctx context.Context, nodeID string) (string, error) {
+	pem, err := s.NodeManager.LoadNodePublicKey(nodeID)
+	if err != nil {
+		return "", xerrors.Errorf("%s load node public key failed: %w", nodeID, err)
+	}
+
+	return string(pem), nil
+}
+
 // GetValidationInfo  get information related to validation and election
 func (s *Scheduler) GetValidationInfo(ctx context.Context) (*types.ValidationInfo, error) {
 	eTime := s.ValidationMgr.GetNextElectionTime()

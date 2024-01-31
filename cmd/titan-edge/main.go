@@ -262,7 +262,7 @@ var daemonStartCmd = &cli.Command{
 					metadataPath = path.Join(lr.Path(), DefaultStorageDir)
 				}
 
-				log.Infof("metadataPath:%s", metadataPath)
+				log.Debugf("metadataPath:%s", metadataPath)
 				return dtypes.NodeMetadataPath(metadataPath)
 			}),
 			node.Override(new(dtypes.AssetsPaths), func() dtypes.AssetsPaths {
@@ -271,7 +271,7 @@ var daemonStartCmd = &cli.Command{
 					assetsPaths = []string{edgeCfg.Storage.Path}
 				}
 
-				log.Debugf("assetsPaths:%#v", assetsPaths)
+				log.Debugf("storage path:%#v", assetsPaths)
 				return dtypes.AssetsPaths(assetsPaths)
 			}),
 			node.Override(new(dtypes.InternalIP), func() (dtypes.InternalIP, error) {
@@ -343,7 +343,7 @@ var daemonStartCmd = &cli.Command{
 			return err
 		}
 
-		log.Infof("Edge listen on tcp %s", edgeCfg.Network.ListenAddress)
+		log.Infof("Edge listen on tcp/udp %s", edgeCfg.Network.ListenAddress)
 
 		schedulerSession, err := schedulerAPI.Session(ctx)
 		if err != nil {

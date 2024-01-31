@@ -194,6 +194,8 @@ type Scheduler interface {
 	// Server-related methods
 	// GetSchedulerPublicKey retrieves the scheduler's public key in PEM format
 	GetSchedulerPublicKey(ctx context.Context) (string, error) //perm:edge,candidate
+	// GetNodePublicKey retrieves the node's public key in PEM format
+	GetNodePublicKey(ctx context.Context, nodeID string) (string, error) //perm:web,admin
 	// TriggerElection starts a new election process
 	TriggerElection(ctx context.Context) error //perm:admin
 	// GetEdgeUpdateConfigs retrieves edge update configurations for different node types
