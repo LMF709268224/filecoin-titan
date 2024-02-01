@@ -3,8 +3,10 @@ package cli
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/rsa"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -33,6 +35,7 @@ var EdgeCmds = []*cli.Command{
 	configCmds,
 	importKeyCmd,
 	stateCmd,
+	signCmd,
 }
 
 var nodeInfoCmd = &cli.Command{
@@ -153,7 +156,7 @@ var generateRsaKey = &cli.Command{
 			return fmt.Errorf("rsa bits is 1024,2048,4096")
 		}
 
-		_, lr, err := openRepo(cctx)
+		_, lr, err := openRepoAndLock(cctx)
 		if err != nil {
 			return err
 		}
@@ -208,7 +211,7 @@ var importKey = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
-		_, lr, err := openRepo(cctx)
+		_, lr, err := openRepoAndLock(cctx)
 		if err != nil {
 			return err
 		}
@@ -288,13 +291,37 @@ var exportKey = &cli.Command{
 	},
 }
 
-func openRepo(cctx *cli.Context) (repo.Repo, repo.LockedRepo, error) {
+func openRepo(cctx *cli.Context) (repo.Repo, error) {
 	repoPath, err := getRepoPath(cctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	r, err := repo.NewFS(repoPath)
+	if err != nil {
+		return nil, err
+	}
+
+	repoType, err := getRepoType(cctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ok, err := r.Exists()
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		if err := r.Init(repoType); err != nil {
+			return nil, err
+		}
+	}
+
+	return r, nil
+}
+
+func openRepoAndLock(cctx *cli.Context) (repo.Repo, repo.LockedRepo, error) {
+	r, err := openRepo(cctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -302,16 +329,6 @@ func openRepo(cctx *cli.Context) (repo.Repo, repo.LockedRepo, error) {
 	repoType, err := getRepoType(cctx)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	ok, err := r.Exists()
-	if err != nil {
-		return nil, nil, err
-	}
-	if !ok {
-		if err := r.Init(repoType); err != nil {
-			return nil, nil, err
-		}
 	}
 
 	lr, err := r.Lock(repoType)
@@ -393,7 +410,7 @@ var showConfigCmd = &cli.Command{
 	Usage: "show config",
 	Flags: []cli.Flag{},
 	Action: func(cctx *cli.Context) error {
-		_, lr, err := openRepo(cctx)
+		_, lr, err := openRepoAndLock(cctx)
 		if err != nil {
 			return err
 		}
@@ -501,7 +518,7 @@ var setConfigCmd = &cli.Command{
 	},
 
 	Action: func(cctx *cli.Context) error {
-		_, lr, err := openRepo(cctx)
+		_, lr, err := openRepoAndLock(cctx)
 		if err != nil {
 			return err
 		}
@@ -615,7 +632,7 @@ var mergeConfigCmd = &cli.Command{
 		edgeConfig := cfg.(*config.EdgeCfg)
 
 		if len(edgeConfig.Basic.Token) == 0 {
-			_, lr, err := openRepo(cctx)
+			_, lr, err := openRepoAndLock(cctx)
 			if err != nil {
 				return xerrors.Errorf("open repo error %w", err)
 			}
@@ -679,7 +696,7 @@ var importKeyCmd = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
-		_, lr, err := openRepo(cctx)
+		_, lr, err := openRepoAndLock(cctx)
 		if err != nil {
 			return err
 		}
@@ -829,6 +846,43 @@ var stateCmd = &cli.Command{
 
 		_, err = api.Version(cctx.Context)
 		return err
+	},
+}
+
+var signCmd = &cli.Command{
+	Name:      "sign",
+	Usage:     "sign with the hash",
+	UsageText: "sign your-hash-here",
+	Flags:     []cli.Flag{},
+	Action: func(cctx *cli.Context) error {
+		hash := cctx.Args().Get(0)
+		if len(hash) == 0 {
+			return fmt.Errorf("hash can not empty")
+		}
+
+		r, err := openRepo(cctx)
+		if err != nil {
+			return err
+		}
+
+		privateKeyPem, err := r.PrivateKey()
+		if err != nil {
+			return err
+		}
+
+		privateKey, err := titanrsa.Pem2PrivateKey(privateKeyPem)
+		if err != nil {
+			return err
+		}
+
+		titanRsa := titanrsa.New(crypto.SHA256, crypto.SHA256.New())
+		sign, err := titanRsa.Sign(privateKey, []byte(hash))
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(hex.EncodeToString(sign))
+		return nil
 	},
 }
 
