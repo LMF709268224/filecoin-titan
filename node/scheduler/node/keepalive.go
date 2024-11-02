@@ -42,7 +42,7 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 
 	saveDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
-	eList := m.GetAllEdgeNode()
+	eList := m.GetValidEdgeNode()
 	for _, node := range eList {
 		if m.checkNodeStatus(node, t) {
 			node.OnlineDuration += minute
@@ -63,14 +63,17 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 			node.TodayOnlineTimeWindow = 0
 		}
 	}
-	_, cList := m.GetAllCandidateNodes()
+
+	cList := m.GetAllCandidateNodes()
 	for _, node := range cList {
 		if m.checkNodeStatus(node, t) {
-			node.OnlineDuration += minute
-			node.TodayOnlineTimeWindow += timeWindow
+			if !node.IsAbnormal() {
+				node.OnlineDuration += minute
+				node.TodayOnlineTimeWindow += timeWindow
+			}
 		}
 
-		if isSave {
+		if isSave && !node.IsAbnormal() {
 			if qualifiedNAT(node.NATType) {
 				profitMinute := node.TodayOnlineTimeWindow * 5 / 60
 
@@ -85,7 +88,7 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 			node.TodayOnlineTimeWindow = 0
 		}
 	}
-	l3List := m.GetAllL3Node()
+	l3List := m.GetValidL3Node()
 	for _, node := range l3List {
 		if m.checkNodeStatus(node, t) {
 			node.OnlineDuration += minute
@@ -106,7 +109,7 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 			node.TodayOnlineTimeWindow = 0
 		}
 	}
-	l5List := m.GetAllL5Node()
+	l5List := m.GetValidL5Node()
 	for _, node := range l5List {
 		if m.checkNodeStatus(node, t) {
 			node.OnlineDuration += minute

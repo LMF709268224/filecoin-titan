@@ -185,7 +185,7 @@ func (m *Manager) retryCandidateDetectNatType(rInfo *retryNode) {
 
 	cNodes := make([]*node.Node, 0)
 
-	_, caNodes := m.nodeManager.GetAllCandidateNodes()
+	_, caNodes := m.nodeManager.GetValidCandidateNodes()
 	for _, node := range caNodes {
 		if node.NodeID == nodeID {
 			continue
@@ -251,7 +251,7 @@ func (m *Manager) DetermineCandidateNATType(ctx context.Context, nodeID string) 
 		return
 	}
 
-	_, caNodes := m.nodeManager.GetAllCandidateNodes()
+	_, caNodes := m.nodeManager.GetValidCandidateNodes()
 	cNodes := make([]*node.Node, 0)
 	for _, node := range caNodes {
 		if node.NodeID == nodeID {

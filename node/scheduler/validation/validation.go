@@ -137,7 +137,7 @@ func (m *Manager) startValidate() error {
 	m.seed = seed
 
 	validateReqs := make(map[string]*api.ValidateReq)
-	_, candidates := m.nodeMgr.GetAllCandidateNodes()
+	_, candidates := m.nodeMgr.GetValidCandidateNodes()
 
 	if len(candidates) == 0 {
 		return nil

@@ -763,9 +763,11 @@ func (m *Manager) updateAssetPullResults(nodeID string, result *types.PullResult
 
 		node := m.nodeMgr.GetNode(nodeID)
 		if node != nil {
-			err := node.AddAssetView(context.Background(), succeededCIDs)
-			if err != nil {
-				log.Errorf("updateAssetPullResults %s %v AddAssetView send err:%s", nodeID, succeededCIDs, err.Error())
+			for _, cid := range succeededCIDs {
+				err := node.AddAssetView(context.Background(), []string{cid})
+				if err != nil {
+					log.Errorf("updateAssetPullResults %s %v AddAssetView send err:%s", nodeID, succeededCIDs, err.Error())
+				}
 			}
 		}
 	}

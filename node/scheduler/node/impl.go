@@ -46,8 +46,8 @@ func (m *Manager) GetResourceCandidateNodes() ([]string, []*Node) {
 	return ids, nodes
 }
 
-// GetAllEdgeNode load all edge node
-func (m *Manager) GetAllEdgeNode() []*Node {
+// GetValidEdgeNode load all edge node
+func (m *Manager) GetValidEdgeNode() []*Node {
 	nodes := make([]*Node, 0)
 
 	m.edgeNodes.Range(func(key, value interface{}) bool {
@@ -65,8 +65,8 @@ func (m *Manager) GetAllEdgeNode() []*Node {
 	return nodes
 }
 
-// GetAllL3Node load all edge node
-func (m *Manager) GetAllL3Node() []*Node {
+// GetValidL3Node load all edge node
+func (m *Manager) GetValidL3Node() []*Node {
 	nodes := make([]*Node, 0)
 
 	m.l3Nodes.Range(func(key, value interface{}) bool {
@@ -84,8 +84,8 @@ func (m *Manager) GetAllL3Node() []*Node {
 	return nodes
 }
 
-// GetAllL5Node load all edge node
-func (m *Manager) GetAllL5Node() []*Node {
+// GetValidL5Node load all edge node
+func (m *Manager) GetValidL5Node() []*Node {
 	nodes := make([]*Node, 0)
 
 	m.l5Nodes.Range(func(key, value interface{}) bool {
@@ -103,8 +103,8 @@ func (m *Manager) GetAllL5Node() []*Node {
 	return nodes
 }
 
-// GetAllCandidateNodes  Get all valid candidate nodes
-func (m *Manager) GetAllCandidateNodes() ([]string, []*Node) {
+// GetValidCandidateNodes  Get all valid candidate nodes
+func (m *Manager) GetValidCandidateNodes() ([]string, []*Node) {
 	var ids []string
 	var nodes []*Node
 	m.candidateNodes.Range(func(key, value interface{}) bool {
@@ -121,6 +121,19 @@ func (m *Manager) GetAllCandidateNodes() ([]string, []*Node) {
 	})
 
 	return ids, nodes
+}
+
+// GetAllCandidateNodes  Get all valid candidate nodes
+func (m *Manager) GetAllCandidateNodes() []*Node {
+	var nodes []*Node
+	m.candidateNodes.Range(func(key, value interface{}) bool {
+		node := value.(*Node)
+
+		nodes = append(nodes, node)
+		return true
+	})
+
+	return nodes
 }
 
 // GetCandidateNodes return n candidate node

@@ -65,7 +65,7 @@ func (ds *DataSync) startCheckNodeTimer() {
 }
 
 func (ds *DataSync) notifyCandidateSyncAsset() {
-	_, cList := ds.nodeManager.GetAllCandidateNodes()
+	_, cList := ds.nodeManager.GetValidCandidateNodes()
 	for _, node := range cList {
 		ds.AddNodeToList(node.NodeID)
 	}

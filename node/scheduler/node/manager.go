@@ -128,7 +128,7 @@ func (m *Manager) startUpdateNodeMetricsTimer() {
 	for {
 		<-ticker.C
 
-		_, cList := m.GetAllCandidateNodes()
+		_, cList := m.GetValidCandidateNodes()
 		for _, node := range cList {
 			if node.IsAbnormal() {
 				continue
@@ -321,7 +321,7 @@ func (m *Manager) redistributeNodeSelectWeights() {
 	m.updateServerOnlineCounts()
 
 	// redistribute weights
-	_, cList := m.GetAllCandidateNodes()
+	_, cList := m.GetValidCandidateNodes()
 	for _, node := range cList {
 		info, err := m.LoadNodeInfo(node.NodeID)
 		if err != nil {
@@ -338,7 +338,7 @@ func (m *Manager) redistributeNodeSelectWeights() {
 		node.selectWeights = m.weightMgr.distributeCandidateWeight(node.NodeID, wNum)
 	}
 
-	eList := m.GetAllEdgeNode()
+	eList := m.GetValidEdgeNode()
 	for _, node := range eList {
 		// info, err := m.LoadNodeInfo(node.NodeID)
 		// if err != nil {
