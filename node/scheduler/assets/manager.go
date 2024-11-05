@@ -171,7 +171,7 @@ func (m *Manager) startCheckAssetsTimer() {
 
 		log.Debugln("start assets check ")
 
-		// m.processExpiredAssets()
+		m.processExpiredAssets()
 		offset = m.processMissingAssetReplicas(offset)
 		m.cleanUploadFailedAssetReplicas()
 
