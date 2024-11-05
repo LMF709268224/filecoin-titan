@@ -51,9 +51,6 @@ func (s *lazySeeker) Read(b []byte) (int, error) {
 		s.realOffset = off
 	}
 	off, err := s.reader.Read(b)
-	if err != nil {
-		return off, err
-	}
 	// using aes-ctr to decrypt
 	if s.ctr != nil {
 		s.ctr.XORKeyStream(b[:off], b[:off])
