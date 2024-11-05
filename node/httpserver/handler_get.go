@@ -29,6 +29,7 @@ const (
 	formatDagCbor = "application/vnd.ipld.dag-cbor"
 	formatJSON    = "application/json"
 	formatCbor    = "application/cbor"
+	formatRefs    = "application/cid-refs"
 )
 
 func (hs *HttpServer) isNeedRedirect(r *http.Request) bool {
@@ -92,13 +93,15 @@ func (hs *HttpServer) getHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case formatRaw:
-		statusCode, err = hs.serveRawBlock(speedCountWriter, r, assetCID)
+		statusCode, err = hs.serveRawBlock(speedCountWriter, r, tkPayload.RootCID, assetCID)
 	case formatCar:
 		statusCode, err = hs.serveCar(speedCountWriter, r, assetCID, formatParams["version"])
 	case formatTar:
 		statusCode, err = hs.serveTAR(speedCountWriter, r, assetCID)
 	case formatDagJSON, formatDagCbor:
 		statusCode, err = hs.serveCodec(speedCountWriter, r, assetCID)
+	case formatRefs:
+		statusCode, err = hs.serveCidList(speedCountWriter, r, tkPayload.RootCID)
 	default: // catch-all for unsuported application/vnd.*
 		statusCode = http.StatusBadRequest
 		err = fmt.Errorf("unsupported format %s", respFormat)
@@ -145,11 +148,22 @@ func (hs *HttpServer) verifyToken(w http.ResponseWriter, r *http.Request) (*type
 			return nil, nil, err
 		}
 
-		rootCID, err := getCIDFromURLPath(r.URL.Path)
+		payload := &types.AuthUserUploadDownloadAsset{}
+		if err = json.Unmarshal([]byte(ut.Extend), payload); err != nil {
+			return nil, nil, err
+		}
+
+		assetCID, err := getCIDFromURLPath(r.URL.Path)
 		if err != nil {
 			return nil, nil, err
 		}
-		return &types.TokenPayload{AssetCID: rootCID.String()}, ut, nil
+
+		if assetCID.String() != payload.AssetCID {
+			// return nil, nil, fmt.Errorf("request asset cid %s, parse token cid %s", root.String(), payload.AssetCID)
+			log.Debugf("request asset cid %s, parse token root cid %s", assetCID.String(), payload.AssetCID)
+		}
+
+		return &types.TokenPayload{AssetCID: assetCID.String(), RootCID: payload.AssetCID}, ut, nil
 	}
 
 	if token := r.URL.Query().Get("token"); len(token) > 0 {
@@ -222,16 +236,17 @@ func (hs *HttpServer) parseJWTToken(token string, r *http.Request) (*types.Token
 		return nil, nil, err
 	}
 
-	root, err := getCIDFromURLPath(r.URL.Path)
+	assetCID, err := getCIDFromURLPath(r.URL.Path)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if root.String() != payload.AssetCID {
-		return nil, nil, fmt.Errorf("request asset cid %s, parse token cid %s", root.String(), payload.AssetCID)
+	if assetCID.String() != payload.AssetCID {
+		// return nil, nil, fmt.Errorf("request asset cid %s, parse token cid %s", root.String(), payload.AssetCID)
+		log.Debugf("request asset cid %s, parse token root cid %s", assetCID.String(), payload.AssetCID)
 	}
 
-	return &types.TokenPayload{AssetCID: payload.AssetCID, ClientID: payload.UserID, Expiration: payload.Expiration}, jwtPayload, nil
+	return &types.TokenPayload{AssetCID: assetCID.String(), RootCID: payload.AssetCID, ClientID: payload.UserID, Expiration: payload.Expiration}, jwtPayload, nil
 }
 
 // customResponseFormat checks the request's Accept header and query parameters to determine the desired response format
@@ -253,6 +268,8 @@ func customResponseFormat(r *http.Request) (mediaType string, params map[string]
 			return formatDagJSON, nil, nil
 		case "dag-cbor":
 			return formatDagCbor, nil, nil
+		case "refs":
+			return formatRefs, nil, nil
 		}
 	}
 	// Browsers and other user agents will send Accept header with generic types like:

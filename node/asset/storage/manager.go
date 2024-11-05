@@ -166,6 +166,11 @@ func (m *Manager) AssetCount() (int, error) {
 	return m.asset.count()
 }
 
+// ListBlocks returns the sub-cids of a certain root-cid
+func (m *Manager) ListBlocks(ctx context.Context, root cid.Cid) ([]cid.Cid, error) {
+	return m.asset.listBlocks(ctx, root)
+}
+
 // AssetsView API
 // GetTopHash retrieves the top hash of assets
 func (m *Manager) GetTopHash(ctx context.Context) (string, error) {
