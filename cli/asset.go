@@ -44,6 +44,7 @@ var assetCmds = &cli.Command{
 		switchFillDiskTimerCmd,
 		listAWSDataCmd,
 		assetViewCmd,
+		lostFileCmd,
 	},
 }
 
@@ -746,6 +747,183 @@ var assetViewCmd = &cli.Command{
 		}
 		return nil
 	},
+}
+
+var lostFileCmd = &cli.Command{
+	Name:  "lost-file",
+	Usage: "Get asset view of node",
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "show",
+			Usage: "show lost assets",
+		},
+		&cli.BoolFlag{
+			Name:  "clean",
+			Usage: "clean lost assets",
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		ctx := ReqContext(cctx)
+		schedulerAPI, closer, err := GetSchedulerAPI(cctx, "")
+		if err != nil {
+			return err
+		}
+		defer closer()
+
+		limit := cctx.Int("limit")
+		offset := cctx.Int("offset")
+
+		r, err := schedulerAPI.GetNodeList(ctx, offset, limit)
+		if err != nil {
+			return err
+		}
+
+		candidates := make([]string, 0)
+		for _, nodeInfo := range r.Data {
+			if nodeInfo.Type == types.NodeCandidate && nodeInfo.Status == types.NodeServicing {
+				candidates = append(candidates, nodeInfo.NodeID)
+			}
+		}
+
+		candidateAssets := make(map[string][]string)
+		for _, candidate := range candidates {
+			lostAssets, _, err := getLostAndextraAssetsFromNode(ctx, schedulerAPI, candidate)
+			if err != nil {
+				return err
+			}
+
+			assets := make([]string, 0)
+			for _, v := range lostAssets {
+				assets = append(assets, v...)
+			}
+			candidateAssets[candidate] = assets
+		}
+
+		lostAssetCandidatesMap := make(map[string][]string)
+		for candidate, assets := range candidateAssets {
+			for _, asset := range assets {
+				if candidates, ok := lostAssetCandidatesMap[asset]; ok {
+					lostAssetCandidatesMap[asset] = append(candidates, candidate)
+				} else {
+					lostAssetCandidatesMap[asset] = []string{candidate}
+				}
+			}
+		}
+
+		assetCandidatesMap := make(map[string][]string)
+		for assetHash := range lostAssetCandidatesMap {
+			cid, err := cidutil.HashToCID(assetHash)
+			if err != nil {
+				return err
+			}
+			info, err := schedulerAPI.GetAssetRecord(ctx, cid)
+			if err != nil {
+				return err
+			}
+
+			candidates := make([]string, 0)
+			for _, replicaInfo := range info.ReplicaInfos {
+				if replicaInfo.IsCandidate {
+					candidates = append(candidates, replicaInfo.NodeID)
+				}
+			}
+			assetCandidatesMap[assetHash] = candidates
+		}
+
+		isShow := cctx.Bool("show")
+		if isShow {
+			//TODO show lost assets
+			for assetHash, candidates := range assetCandidatesMap {
+				cid, _ := cidutil.CIDToHash(assetHash)
+				fmt.Printf("%s  %s \n %#v \n %#v\n", assetHash, cid, candidates, lostAssetCandidatesMap[assetHash])
+			}
+			return nil
+		}
+
+		isClean := cctx.Bool("clean")
+		if isClean {
+			//TODO show lost assets
+			return nil
+		}
+
+		return nil
+	},
+}
+
+func getLostAndextraAssetsFromNode(ctx context.Context, schedulerAPI api.Scheduler, nodeID string) (map[uint32][]string, map[uint32][]string, error) {
+	schedulerAssetView, err := schedulerAPI.GetAssetView(ctx, nodeID, false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	nodeAssetView, err := schedulerAPI.GetAssetView(ctx, nodeID, true)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if schedulerAssetView.TopHash == nodeAssetView.TopHash {
+		fmt.Println("Asset view is sync")
+		return nil, nil, err
+	}
+
+	bucketIDs := make([]uint32, 0, len(schedulerAssetView.BucketHashes))
+	for id := range schedulerAssetView.BucketHashes {
+		bucketIDs = append(bucketIDs, id)
+	}
+
+	misMatchBucketIDs := make([]uint32, 0)
+	for _, id := range bucketIDs {
+		if hash, ok := nodeAssetView.BucketHashes[id]; ok {
+			targetHash := schedulerAssetView.BucketHashes[id]
+			if hash != targetHash {
+				misMatchBucketIDs = append(misMatchBucketIDs, id)
+			}
+			delete(nodeAssetView.BucketHashes, id)
+			delete(schedulerAssetView.BucketHashes, id)
+		}
+	}
+
+	lostAssets := make(map[uint32][]string)
+	for id := range schedulerAssetView.BucketHashes {
+		assetHashs, err := schedulerAPI.GetAssetsInBucket(ctx, nodeID, int(id), false)
+		if err != nil {
+			return nil, nil, err
+		}
+		lostAssets[id] = assetHashs
+	}
+
+	extraAssets := make(map[uint32][]string)
+	for id := range nodeAssetView.BucketHashes {
+		assetHashs, err := schedulerAPI.GetAssetsInBucket(ctx, nodeID, int(id), true)
+		if err != nil {
+			return nil, nil, err
+		}
+		extraAssets[id] = assetHashs
+	}
+
+	for _, id := range misMatchBucketIDs {
+		assetHashes1, err := schedulerAPI.GetAssetsInBucket(ctx, nodeID, int(id), false)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		assetHashes2, err := schedulerAPI.GetAssetsInBucket(ctx, nodeID, int(id), true)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		complement1, complement2 := complement(assetHashes1, assetHashes2)
+		if len(complement1) > 0 {
+			lostAssets[id] = complement1
+		}
+
+		if len(complement2) > 0 {
+			extraAssets[id] = complement2
+		}
+	}
+
+	return lostAssets, extraAssets, nil
+
 }
 
 func compareAssetView(ctx context.Context, schedulerAPI api.Scheduler, nodeID string) error {
