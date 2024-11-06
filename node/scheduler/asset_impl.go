@@ -105,27 +105,34 @@ func (s *Scheduler) GetAssetRecordsWithCIDs(ctx context.Context, cids []string) 
 	}
 	defer rows.Close()
 
-	list := make([]*types.AssetRecord, 0)
+	aList := make([]*types.AssetRecord, 0)
 
 	// loading assets to local
 	for rows.Next() {
-		cInfo := &types.AssetRecord{}
-		err = rows.StructScan(cInfo)
+		dInfo := &types.AssetRecord{}
+		err = rows.StructScan(dInfo)
 		if err != nil {
 			log.Errorf("asset StructScan err: %s", err.Error())
 			continue
 		}
 
-		// cInfo.ReplicaInfos, err = s.db.LoadReplicasByStatus(cInfo.Hash, types.ReplicaStatusAll)
-		// if err != nil {
-		// 	log.Errorf("asset %s load replicas err: %s", cInfo.CID, err.Error())
-		// 	continue
-		// }
+		list, err := s.db.LoadReplicasByStatus(dInfo.Hash, []types.ReplicaStatus{types.ReplicaStatusPulling, types.ReplicaStatusWaiting, types.ReplicaStatusSucceeded})
+		if err != nil {
+			log.Errorf("GetAssetRecordInfo hash:%s, LoadReplicasByStatus err:%s", dInfo.Hash, err.Error())
+		} else {
+			for _, info := range list {
+				if info.Status == types.ReplicaStatusSucceeded {
+					dInfo.ReplicaInfos = append(dInfo.ReplicaInfos, info)
+				} else {
+					dInfo.PullingReplicaInfos = append(dInfo.PullingReplicaInfos, info)
+				}
+			}
+		}
 
-		list = append(list, cInfo)
+		aList = append(aList, dInfo)
 	}
 
-	return list, nil
+	return aList, nil
 }
 
 // GetAssetRecords lists asset records with optional filtering by status, limit, and offset.
@@ -876,4 +883,12 @@ func (s *Scheduler) GetFailedReplicaByNode(ctx context.Context, nodeID string, l
 	}
 
 	return info, nil
+}
+
+// Function to convert AssetRecord to ReplicaInfo
+func convertToReplicaInfo(dInfo *types.AssetRecord) *types.ReplicaInfo {
+	// Implement the conversion logic here
+	return &types.ReplicaInfo{
+		// Map fields from AssetRecord to ReplicaInfo
+	}
 }

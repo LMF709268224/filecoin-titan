@@ -122,7 +122,7 @@ func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions,
 	}
 
 	if !s.NodeManager.IPMgr.StoreNodeIP(nodeID, externalIP) {
-		return xerrors.Errorf("nodeConnect err %s The number of IPs %s exceeds the limit", nodeID, externalIP)
+		return xerrors.Errorf("nodeConnect err %s The number of IPs exceeds the limit %s ", nodeID, externalIP)
 	}
 
 	if cNode == nil {
