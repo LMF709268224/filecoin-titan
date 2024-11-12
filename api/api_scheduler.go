@@ -89,6 +89,8 @@ type AssetAPI interface {
 	GetSucceededReplicaByNode(ctx context.Context, nodeID string, limit, offset int) (*types.ListReplicaRsp, error) //perm:web,admin
 	// GetFailedReplicaByNode
 	GetFailedReplicaByNode(ctx context.Context, nodeID string, limit, offset int) (*types.ListAssetReplicaEventRsp, error) //perm:web,admin
+	// GetAssetReplica
+	GetAssetReplica(ctx context.Context, nodeID, cid string) (*types.ReplicaInfo, error) //perm:web,admin
 }
 
 // NodeAPI is an interface for node

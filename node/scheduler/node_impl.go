@@ -587,7 +587,7 @@ func (s *Scheduler) lnNodeConnected(ctx context.Context, opts *types.ConnectOpti
 
 	nNode := s.NodeManager.GetNode(nodeID)
 	if nNode == nil {
-		if err := s.db.NodeExists(nodeID); err != nil {
+		if err := s.db.NodeExistsFromType(nodeID, nType); err != nil {
 			return xerrors.Errorf("node: %s, type: %d, error: %w", nodeID, nType, err)
 		}
 	}
@@ -626,10 +626,12 @@ func (s *Scheduler) lnNodeConnected(ctx context.Context, opts *types.ConnectOpti
 	}
 
 	// init node info
-	nodeInfo, err := nNode.API.GetNodeInfo(context.Background())
+	nInfo, err := nNode.API.GetNodeInfo(context.Background())
 	if err != nil {
 		return xerrors.Errorf("%s nodeConnect err NodeInfo err:%s", nodeID, err.Error())
 	}
+
+	nodeInfo := s.nodeParametersApplyLimits(nInfo)
 
 	ver := api.NewVerFromString(nodeInfo.SystemVersion)
 	nodeInfo.Version = int64(ver)
@@ -663,17 +665,17 @@ func (s *Scheduler) lnNodeConnected(ctx context.Context, opts *types.ConnectOpti
 
 	nNode.OnlineRate = s.NodeManager.ComputeNodeOnlineRate(nodeID, nodeInfo.FirstTime)
 
-	nNode.InitInfo(&nodeInfo)
+	nNode.InitInfo(nodeInfo)
 
 	log.Infof("ln node %s connected, version %s remoteAddr %s", nodeID, ver, remoteAddr)
 
-	err = s.saveNodeInfo(&nodeInfo)
+	err = s.saveNodeInfo(nodeInfo)
 	if err != nil {
 		return err
 	}
 
 	// node
-	return s.NodeManager.NodeOnline(nNode, &nodeInfo)
+	return s.NodeManager.NodeOnline(nNode, nodeInfo)
 }
 
 // GetExternalAddress retrieves the external address of the caller.

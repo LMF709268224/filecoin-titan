@@ -850,6 +850,21 @@ func (s *Scheduler) GetSucceededReplicaByCID(ctx context.Context, cid string, li
 	return dInfo, nil
 }
 
+// GetAssetReplica retrieves replica by CID and node.
+func (s *Scheduler) GetAssetReplica(ctx context.Context, nodeID, cid string) (*types.ReplicaInfo, error) {
+	hash, err := cidutil.CIDToHash(cid)
+	if err != nil {
+		return nil, xerrors.Errorf("%s cid to hash err:%s", cid, err.Error())
+	}
+
+	dInfo, err := s.db.LoadReplica(hash, nodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	return dInfo, nil
+}
+
 // GetFailedReplicaByCID retrieves failed replicas by CID with a specified limit and offset.
 func (s *Scheduler) GetFailedReplicaByCID(ctx context.Context, cid string, limit, offset int) (*types.ListAssetReplicaEventRsp, error) {
 	hash, err := cidutil.CIDToHash(cid)

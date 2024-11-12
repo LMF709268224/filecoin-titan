@@ -18,8 +18,23 @@ import (
 // It sets the end time and updates the status and done size of the replica specified by hash and node_id.
 // It returns an error if no rows were affected (i.e., if the replica is already finished or does not exist).
 func (n *SQLDB) UpdateReplicaInfo(cInfo *types.ReplicaInfo) error {
-	query := fmt.Sprintf(`UPDATE %s SET end_time=NOW(), status=?, done_size=?, client_id=?, speed=? WHERE hash=? AND node_id=? AND (status=? or status=?)`, replicaInfoTable)
-	result, err := n.db.Exec(query, cInfo.Status, cInfo.DoneSize, cInfo.ClientID, cInfo.Speed, cInfo.Hash, cInfo.NodeID, types.ReplicaStatusPulling, types.ReplicaStatusWaiting)
+	query := `UPDATE ` + replicaInfoTable + ` 
+              SET end_time = NOW(), 
+                  status = ?, 
+                  done_size = ?, 
+                  client_id = ?`
+
+	args := []interface{}{cInfo.Status, cInfo.DoneSize, cInfo.ClientID}
+
+	if cInfo.Speed > 0 {
+		query += `, speed = ?`
+		args = append(args, cInfo.Speed)
+	}
+
+	query += ` WHERE hash = ? AND node_id = ? AND (status = ? OR status = ?)`
+	args = append(args, cInfo.Hash, cInfo.NodeID, types.ReplicaStatusPulling, types.ReplicaStatusWaiting)
+
+	result, err := n.db.Exec(query, args...)
 	if err != nil {
 		return err
 	}
@@ -35,6 +50,35 @@ func (n *SQLDB) UpdateReplicaInfo(cInfo *types.ReplicaInfo) error {
 
 	return nil
 }
+
+// // UpdateReplicaInfo updates information of unfinished replicas in the database.
+// // It sets the end time and updates the status and done size of the replica specified by hash and node_id.
+// // It returns an error if no rows were affected (i.e., if the replica is already finished or does not exist).
+// func (n *SQLDB) UpdateReplicaInfo(cInfo *types.ReplicaInfo) error {
+// 	var result sql.Result
+// 	var err error
+// 	if cInfo.Speed <= 0 {
+// 		query := fmt.Sprintf(`UPDATE %s SET end_time=NOW(), status=?, done_size=?, client_id=?, WHERE hash=? AND node_id=? AND (status=? or status=?)`, replicaInfoTable)
+// 		result, err = n.db.Exec(query, cInfo.Status, cInfo.DoneSize, cInfo.ClientID, cInfo.Hash, cInfo.NodeID, types.ReplicaStatusPulling, types.ReplicaStatusWaiting)
+// 	} else {
+// 		query := fmt.Sprintf(`UPDATE %s SET end_time=NOW(), status=?, done_size=?, client_id=?, speed=? WHERE hash=? AND node_id=? AND (status=? or status=?)`, replicaInfoTable)
+// 		result, err = n.db.Exec(query, cInfo.Status, cInfo.DoneSize, cInfo.ClientID, cInfo.Speed, cInfo.Hash, cInfo.NodeID, types.ReplicaStatusPulling, types.ReplicaStatusWaiting)
+// 	}
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	r, err := result.RowsAffected()
+// 	if err != nil {
+// 		return err
+// 	}
+
+// 	if r < 1 {
+// 		return xerrors.New("nothing to update")
+// 	}
+
+// 	return nil
+// }
 
 // LoadNodesOfPullingReplica retrieves a list of node IDs for replicas that are either pulling or waiting.
 func (n *SQLDB) LoadNodesOfPullingReplica(hash string) ([]string, error) {
@@ -178,6 +222,16 @@ func (n *SQLDB) LoadReplicasByStatus(hash string, statuses []types.ReplicaStatus
 	}
 
 	return out, nil
+}
+
+// LoadReplica retrieves the ReplicaInfo for a given hash and nodeID.
+func (n *SQLDB) LoadReplica(hash, nodeID string) (*types.ReplicaInfo, error) {
+	var info types.ReplicaInfo
+	query := fmt.Sprintf(`SELECT * FROM %s WHERE hash=? AND node_id=?`, replicaInfoTable)
+	if err := n.db.Get(&info, query, hash, nodeID); err != nil {
+		return nil, err
+	}
+	return &info, nil
 }
 
 // LoadReplicaCountByStatus retrieves a count of replica information for a specific hash filtered by status.

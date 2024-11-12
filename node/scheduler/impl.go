@@ -48,7 +48,7 @@ const (
 	cpuLimit           = 140
 	memoryLimit        = 2250 * units.GiB
 	diskSpaceLimit     = 500 * units.TiB
-	bandwidthUpLimit   = 1500 * units.MiB
+	bandwidthLimit     = 100 * units.GiB
 	availableDiskLimit = 2 * units.TiB
 
 	l1CpuLimit       = 8
@@ -105,7 +105,7 @@ func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions,
 
 	cNode := s.NodeManager.GetNode(nodeID)
 	if cNode == nil {
-		if err := s.NodeManager.NodeExists(nodeID); err != nil {
+		if err := s.NodeManager.NodeExistsFromType(nodeID, nodeType); err != nil {
 			return xerrors.Errorf("nodeConnect err node: %s, type: %d, error: %w", nodeID, nodeType, err)
 		}
 		alreadyConnect = false
@@ -325,32 +325,77 @@ func roundUpToNextGB(bytes int64) int64 {
 	return ((bytes / GB) + 1) * GB
 }
 
+func (s *Scheduler) nodeParametersApplyLimits(nodeInfo types.NodeInfo) *types.NodeInfo {
+	if nodeInfo.Memory > memoryLimit {
+		nodeInfo.Memory = memoryLimit
+	}
+
+	if nodeInfo.CPUCores > cpuLimit {
+		nodeInfo.CPUCores = cpuLimit
+	}
+
+	if nodeInfo.DiskSpace > diskSpaceLimit {
+		nodeInfo.DiskSpace = diskSpaceLimit
+	}
+
+	if nodeInfo.BandwidthDown > bandwidthLimit {
+		nodeInfo.BandwidthDown = bandwidthLimit
+	}
+
+	if nodeInfo.BandwidthUp > bandwidthLimit {
+		nodeInfo.BandwidthUp = bandwidthLimit
+	}
+
+	if nodeInfo.Memory < 0 {
+		nodeInfo.Memory = 0
+	}
+
+	if nodeInfo.CPUCores < 0 {
+		nodeInfo.CPUCores = 0
+	}
+
+	if nodeInfo.DiskSpace < 0 {
+		nodeInfo.DiskSpace = 0
+	}
+
+	if nodeInfo.BandwidthDown < 0 {
+		nodeInfo.BandwidthDown = 0
+	}
+
+	if nodeInfo.BandwidthUp < 0 {
+		nodeInfo.BandwidthUp = 0
+	}
+
+	return &nodeInfo
+}
+
 func (s *Scheduler) checkNodeParameters(nodeInfo types.NodeInfo, nodeType types.NodeType) (*types.NodeInfo, error) {
-	if nodeInfo.AvailableDiskSpace <= 0 {
-		nodeInfo.AvailableDiskSpace = 2 * units.GiB
+	nInfo := s.nodeParametersApplyLimits(nodeInfo)
+	if nInfo.AvailableDiskSpace <= 0 {
+		nInfo.AvailableDiskSpace = 2 * units.GiB
 	}
 
-	if nodeInfo.AvailableDiskSpace > nodeInfo.DiskSpace {
-		nodeInfo.AvailableDiskSpace = nodeInfo.DiskSpace
+	if nInfo.AvailableDiskSpace > nInfo.DiskSpace {
+		nInfo.AvailableDiskSpace = nInfo.DiskSpace
 	}
 
-	nodeInfo.Type = nodeType
+	nInfo.Type = nodeType
 
-	useSize, err := s.db.LoadReplicaSizeByNodeID(nodeInfo.NodeID)
+	useSize, err := s.db.LoadReplicaSizeByNodeID(nInfo.NodeID)
 	if err != nil {
-		return nil, xerrors.Errorf("LoadReplicaSizeByNodeID %s err:%s", nodeInfo.NodeID, err.Error())
+		return nil, xerrors.Errorf("LoadReplicaSizeByNodeID %s err:%s", nInfo.NodeID, err.Error())
 	}
 
 	if nodeType == types.NodeEdge {
-		if nodeInfo.AvailableDiskSpace > availableDiskLimit {
-			nodeInfo.AvailableDiskSpace = availableDiskLimit
+		if nInfo.AvailableDiskSpace > availableDiskLimit {
+			nInfo.AvailableDiskSpace = availableDiskLimit
 		}
 
-		nodeInfo.ClientType = checkNodeClientType(nodeInfo.SystemVersion, s.SchedulerCfg.AndroidSymbol, s.SchedulerCfg.IOSSymbol, s.SchedulerCfg.WindowsSymbol, s.SchedulerCfg.MacosSymbol)
+		nInfo.ClientType = checkNodeClientType(nInfo.SystemVersion, s.SchedulerCfg.AndroidSymbol, s.SchedulerCfg.IOSSymbol, s.SchedulerCfg.WindowsSymbol, s.SchedulerCfg.MacosSymbol)
 		// limit node availableDiskSpace to 5 GiB when using phone
-		if nodeInfo.ClientType == types.NodeAndroid || nodeInfo.ClientType == types.NodeIOS {
-			if nodeInfo.AvailableDiskSpace > float64(5*units.GiB) {
-				nodeInfo.AvailableDiskSpace = float64(5 * units.GiB)
+		if nInfo.ClientType == types.NodeAndroid || nInfo.ClientType == types.NodeIOS {
+			if nInfo.AvailableDiskSpace > float64(5*units.GiB) {
+				nInfo.AvailableDiskSpace = float64(5 * units.GiB)
 			}
 
 			if useSize > 5*units.GiB {
@@ -358,63 +403,33 @@ func (s *Scheduler) checkNodeParameters(nodeInfo types.NodeInfo, nodeType types.
 			}
 		}
 
-		if nodeInfo.DiskSpace > diskSpaceLimit || nodeInfo.DiskSpace < 0 {
-			return nil, xerrors.Errorf("checkNodeParameters [%s] DiskSpace [%s]", nodeInfo.NodeID, units.BytesSize(nodeInfo.DiskSpace))
-		}
-
-		if nodeInfo.BandwidthDown < 0 {
-			return nil, xerrors.Errorf("checkNodeParameters [%s] BandwidthDown [%s]", nodeInfo.NodeID, units.BytesSize(float64(nodeInfo.BandwidthDown)))
-		}
-
-		if nodeInfo.BandwidthUp > bandwidthUpLimit || nodeInfo.BandwidthUp < 0 {
-			return nil, xerrors.Errorf("checkNodeParameters [%s] BandwidthUp [%s]", nodeInfo.NodeID, units.BytesSize(float64(nodeInfo.BandwidthUp)))
-		}
-
-		if nodeInfo.Memory > memoryLimit || nodeInfo.Memory < 0 {
-			return nil, xerrors.Errorf("checkNodeParameters [%s] Memory [%s]", nodeInfo.NodeID, units.BytesSize(nodeInfo.Memory))
-		}
-
-		if nodeInfo.CPUCores > cpuLimit || nodeInfo.CPUCores < 0 {
-			return nil, xerrors.Errorf("checkNodeParameters [%s] CPUCores [%d]", nodeInfo.NodeID, nodeInfo.CPUCores)
-		}
 	} else if nodeType == types.NodeCandidate {
-		info, err := s.db.GetCandidateCodeInfoForNodeID(nodeInfo.NodeID)
+		info, err := s.db.GetCandidateCodeInfoForNodeID(nInfo.NodeID)
 		if err != nil {
-			return nil, xerrors.Errorf("nodeID GetCandidateCodeInfoForNodeID %s, %s", nodeInfo.NodeID, err.Error())
+			return nil, xerrors.Errorf("nodeID GetCandidateCodeInfoForNodeID %s, %s", nInfo.NodeID, err.Error())
 		}
-		nodeInfo.IsTestNode = info.IsTest
+		nInfo.IsTestNode = info.IsTest
 
-		if !nodeInfo.IsTestNode {
-			if nodeInfo.Memory < l1MemoryLimit {
-				return nil, xerrors.Errorf("Memory [%s]<[%s]", units.BytesSize(nodeInfo.Memory), units.BytesSize(l1MemoryLimit))
+		if !nInfo.IsTestNode {
+			if nInfo.Memory < l1MemoryLimit {
+				return nil, xerrors.Errorf("Memory [%s]<[%s]", units.BytesSize(nInfo.Memory), units.BytesSize(l1MemoryLimit))
 			}
 
-			if nodeInfo.CPUCores < l1CpuLimit {
-				return nil, xerrors.Errorf("CPUCores [%d]<[%d]", nodeInfo.CPUCores, l1CpuLimit)
+			if nInfo.CPUCores < l1CpuLimit {
+				return nil, xerrors.Errorf("CPUCores [%d]<[%d]", nInfo.CPUCores, l1CpuLimit)
 			}
 
-			if nodeInfo.DiskSpace < l1DiskSpaceLimit {
-				return nil, xerrors.Errorf("DiskSpace [%s]<[%s]", units.BytesSize(nodeInfo.DiskSpace), units.BytesSize(l1DiskSpaceLimit))
+			if nInfo.DiskSpace < l1DiskSpaceLimit {
+				return nil, xerrors.Errorf("DiskSpace [%s]<[%s]", units.BytesSize(nInfo.DiskSpace), units.BytesSize(l1DiskSpaceLimit))
 			}
 		}
 
-		// isValidator, err := s.db.IsValidator(nodeInfo.NodeID)
-		// if err != nil {
-		// 	return nil, false, xerrors.Errorf("checkNodeParameters %s IsValidator err:%s", nodeInfo.NodeID, err.Error())
-		// }
-
-		// if isValidator {
-		// nodeInfo.Type = types.NodeValidator
-		// }
-		nodeInfo.AvailableDiskSpace = nodeInfo.DiskSpace * 0.9
+		nInfo.AvailableDiskSpace = nInfo.DiskSpace * 0.9
 	}
 
-	nodeInfo.TitanDiskUsage = float64(useSize)
-	// if nodeInfo.AvailableDiskSpace < float64(useSize) {
-	// 	nodeInfo.AvailableDiskSpace = float64(roundUpToNextGB(useSize))
-	// }
+	nInfo.TitanDiskUsage = float64(useSize)
 
-	return &nodeInfo, nil
+	return nInfo, nil
 }
 
 // NodeValidationResult processes the validation result for a node
