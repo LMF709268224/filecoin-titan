@@ -224,14 +224,21 @@ func (n *SQLDB) LoadReplicasByStatus(hash string, statuses []types.ReplicaStatus
 	return out, nil
 }
 
-// LoadReplica retrieves the ReplicaInfo for a given hash and nodeID.
-func (n *SQLDB) LoadReplica(hash, nodeID string) (*types.ReplicaInfo, error) {
-	var info types.ReplicaInfo
-	query := fmt.Sprintf(`SELECT * FROM %s WHERE hash=? AND node_id=?`, replicaInfoTable)
-	if err := n.db.Get(&info, query, hash, nodeID); err != nil {
+// LoadReplicasByHashes retrieves replica information based on the provided hashes and node ID.
+func (n *SQLDB) LoadReplicasByHashes(hashes []string, nodeID string) ([]*types.ReplicaInfo, error) {
+	sQuery := fmt.Sprintf(`SELECT * FROM %s WHERE node_id=? AND hash in (?)`, replicaInfoTable)
+	query, args, err := sqlx.In(sQuery, nodeID, hashes)
+	if err != nil {
 		return nil, err
 	}
-	return &info, nil
+
+	var out []*types.ReplicaInfo
+	query = n.db.Rebind(query)
+	if err := n.db.Select(&out, query, args...); err != nil {
+		return nil, err
+	}
+
+	return out, nil
 }
 
 // LoadReplicaCountByStatus retrieves a count of replica information for a specific hash filtered by status.

@@ -850,14 +850,9 @@ func (s *Scheduler) GetSucceededReplicaByCID(ctx context.Context, cid string, li
 	return dInfo, nil
 }
 
-// GetAssetReplica retrieves replica by CID and node.
-func (s *Scheduler) GetAssetReplica(ctx context.Context, nodeID, cid string) (*types.ReplicaInfo, error) {
-	hash, err := cidutil.CIDToHash(cid)
-	if err != nil {
-		return nil, xerrors.Errorf("%s cid to hash err:%s", cid, err.Error())
-	}
-
-	dInfo, err := s.db.LoadReplica(hash, nodeID)
+// GetNodeAssetReplicasByHashes retrieves replica by CID and node.
+func (s *Scheduler) GetNodeAssetReplicasByHashes(ctx context.Context, nodeID string, hashes []string) ([]*types.ReplicaInfo, error) {
+	dInfo, err := s.db.LoadReplicasByHashes(hashes, nodeID)
 	if err != nil {
 		return nil, err
 	}

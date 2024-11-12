@@ -97,7 +97,7 @@ type AssetAPIStruct struct {
 
 		GetFailedReplicaByNode func(p0 context.Context, p1 string, p2 int, p3 int) (*types.ListAssetReplicaEventRsp, error) `perm:"web,admin"`
 
-		GetReplica func(p0 context.Context, p1 string, p2 string) (*types.ReplicaInfo, error) `perm:"web,admin"`
+		GetNodeAssetReplicasByHashes func(p0 context.Context, p1 string, p2 []string) ([]*types.ReplicaInfo, error) `perm:"web,admin"`
 
 		GetReplicaEventsForNode func(p0 context.Context, p1 string, p2 int, p3 int) (*types.ListAssetReplicaEventRsp, error) `perm:"web,admin"`
 
@@ -975,15 +975,15 @@ func (s *AssetAPIStub) GetFailedReplicaByNode(p0 context.Context, p1 string, p2 
 	return nil, ErrNotSupported
 }
 
-func (s *AssetAPIStruct) GetAssetReplica(p0 context.Context, p1 string, p2 string) (*types.ReplicaInfo, error) {
-	if s.Internal.GetReplica == nil {
-		return nil, ErrNotSupported
+func (s *AssetAPIStruct) GetNodeAssetReplicasByHashes(p0 context.Context, p1 string, p2 []string) ([]*types.ReplicaInfo, error) {
+	if s.Internal.GetNodeAssetReplicasByHashes == nil {
+		return *new([]*types.ReplicaInfo), ErrNotSupported
 	}
-	return s.Internal.GetReplica(p0, p1, p2)
+	return s.Internal.GetNodeAssetReplicasByHashes(p0, p1, p2)
 }
 
-func (s *AssetAPIStub) GetReplica(p0 context.Context, p1 string, p2 string) (*types.ReplicaInfo, error) {
-	return nil, ErrNotSupported
+func (s *AssetAPIStub) GetNodeAssetReplicasByHashes(p0 context.Context, p1 string, p2 []string) ([]*types.ReplicaInfo, error) {
+	return *new([]*types.ReplicaInfo), ErrNotSupported
 }
 
 func (s *AssetAPIStruct) GetReplicaEventsForNode(p0 context.Context, p1 string, p2 int, p3 int) (*types.ListAssetReplicaEventRsp, error) {
