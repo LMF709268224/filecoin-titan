@@ -41,6 +41,8 @@ type NodeStatisticsInfo struct {
 	ProjectCount           int64 `db:"project_count"`
 	ProjectSucceededCount  int64 `db:"project_succeeded_count"`
 	ProjectFailedCount     int64 `db:"project_failed_count"`
+
+	ReplicaCount int64
 }
 
 // NodeInfo contains information about a node.

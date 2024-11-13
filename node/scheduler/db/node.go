@@ -864,7 +864,7 @@ func (n *SQLDB) CleanData() {
 		log.Warnf("CleanData retrieveEventTable err:%s", err.Error())
 	}
 
-	query = fmt.Sprintf(`DELETE FROM %s WHERE client_end_time<DATE_SUB(NOW(), INTERVAL 5 DAY) `, workloadRecordTable)
+	query = fmt.Sprintf(`DELETE FROM %s WHERE client_end_time<DATE_SUB(NOW(), INTERVAL 20 DAY) `, workloadRecordTable)
 	_, err = n.db.Exec(query)
 	if err != nil {
 		log.Warnf("CleanData workloadRecordTable err:%s", err.Error())

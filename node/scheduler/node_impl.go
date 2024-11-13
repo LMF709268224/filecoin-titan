@@ -746,6 +746,8 @@ func (s *Scheduler) GetNodeInfo(ctx context.Context, nodeID string) (*types.Node
 
 	nodeInfo.Status = types.NodeOffline
 
+	nodeInfo.ReplicaCount, err = s.NodeManager.LoadSucceedReplicaCountNodeID(nodeInfo.NodeID)
+
 	n := s.NodeManager.GetNode(nodeID)
 	if n != nil {
 		nodeInfo.Status = types.NodeServicing
@@ -801,6 +803,8 @@ func (s *Scheduler) GetNodeList(ctx context.Context, offset int, limit int) (*ty
 		if err == nil {
 			nodeInfo.NodeStatisticsInfo = sInfo
 		}
+
+		nodeInfo.ReplicaCount, err = s.NodeManager.LoadSucceedReplicaCountNodeID(nodeInfo.NodeID)
 
 		n := s.NodeManager.GetNode(nodeInfo.NodeID)
 		if n != nil {

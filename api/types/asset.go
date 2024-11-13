@@ -87,6 +87,7 @@ type ReplicaInfo struct {
 	EndTime     time.Time     `db:"end_time"`
 	DoneSize    int64         `db:"done_size"`
 	StartTime   time.Time     `db:"start_time"`
+	WorkloadID  string        `db:"workload_id"`
 
 	TotalSize int64  `db:"total_size"`
 	ClientID  string `db:"client_id"`

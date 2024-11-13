@@ -150,8 +150,8 @@ func doExec(d *SQLDB, serverID dtypes.ServerID) {
 	// if err != nil {
 	// 	log.Errorf("InitTables doExec err:%s", err.Error())
 	// }
-	// _, err := d.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD hash            VARCHAR(128) NOT NULL", assetDataTable))
-	// if err != nil {
-	// 	log.Errorf("InitTables doExec err:%s", err.Error())
-	// }
+	_, err := d.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD workload_id   VARCHAR(128) DEFAULT '',", replicaInfoTable))
+	if err != nil {
+		log.Errorf("InitTables doExec err:%s", err.Error())
+	}
 }

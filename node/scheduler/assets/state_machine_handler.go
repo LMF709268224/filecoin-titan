@@ -276,6 +276,7 @@ func (m *Manager) handleCandidatesSelect(ctx statemachine.Context, info AssetPul
 				Hash:        info.Hash.String(),
 				IsCandidate: true,
 				TotalSize:   info.Size,
+				WorkloadID:  workload.WorkloadID,
 			})
 			if err != nil {
 				log.Errorf("%s SaveReplicaStatus err:%s", cNode.NodeID, err.Error())
@@ -387,6 +388,7 @@ func (m *Manager) handleEdgesSelect(ctx statemachine.Context, info AssetPullingI
 				Hash:        info.Hash.String(),
 				IsCandidate: false,
 				TotalSize:   info.Size,
+				WorkloadID:  workload.WorkloadID,
 			})
 			if err != nil {
 				log.Errorf("%s SaveReplicaStatus err:%s", cNode.NodeID, err.Error())

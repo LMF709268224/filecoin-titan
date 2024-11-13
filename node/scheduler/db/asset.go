@@ -21,14 +21,18 @@ func (n *SQLDB) UpdateReplicaInfo(cInfo *types.ReplicaInfo) error {
 	query := `UPDATE ` + replicaInfoTable + ` 
               SET end_time = NOW(), 
                   status = ?, 
-                  done_size = ?, 
-                  client_id = ?`
+                  done_size = ?`
 
-	args := []interface{}{cInfo.Status, cInfo.DoneSize, cInfo.ClientID}
+	args := []interface{}{cInfo.Status, cInfo.DoneSize}
 
 	if cInfo.Speed > 0 {
 		query += `, speed = ?`
 		args = append(args, cInfo.Speed)
+	}
+
+	if cInfo.ClientID != "" {
+		query += `, client_id = ?`
+		args = append(args, cInfo.ClientID)
 	}
 
 	query += ` WHERE hash = ? AND node_id = ? AND (status = ? OR status = ?)`
@@ -103,9 +107,9 @@ func (n *SQLDB) UpdateReplicasStatusToFailed(hash string) error {
 // SaveReplicaStatus inserts or updates the status of a single replica in the database.
 func (n *SQLDB) SaveReplicaStatus(info *types.ReplicaInfo) error {
 	query := fmt.Sprintf(
-		`INSERT INTO %s (hash, node_id, status, is_candidate, start_time, total_size)
-				VALUES (:hash, :node_id, :status, :is_candidate, NOW(), total_size)
-				ON DUPLICATE KEY UPDATE status=:status, start_time=NOW(), total_size=:total_size`, replicaInfoTable)
+		`INSERT INTO %s (hash, node_id, status, is_candidate, start_time, total_size, workload_id)
+				VALUES (:hash, :node_id, :status, :is_candidate, NOW(), :total_size, :workload_id)
+				ON DUPLICATE KEY UPDATE status=:status, start_time=NOW(), total_size=:total_size, workload_id=:workload_id`, replicaInfoTable)
 
 	_, err := n.db.NamedExec(query, info)
 	return err
@@ -295,6 +299,17 @@ func (n *SQLDB) LoadReplicasByHash(hash string, limit, offset int) (*types.ListR
 	res.Total = count
 
 	return res, nil
+}
+
+func (n *SQLDB) LoadSucceedReplicaCountNodeID(nodeID string) (int64, error) {
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE node_id=? AND status=?", replicaInfoTable)
+	var count int64
+	err := n.db.Get(&count, countQuery, nodeID, types.ReplicaStatusSucceeded)
+	if err != nil {
+		return count, err
+	}
+
+	return count, nil
 }
 
 // LoadSucceedReplicasByNodeID retrieves a list of successful replica information for a given node ID, with pagination support.

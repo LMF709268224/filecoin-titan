@@ -22,6 +22,7 @@ var cReplicaInfoTable = `
 		total_size    BIGINT       DEFAULT 0,
 		client_id     VARCHAR(128) DEFAULT '',
 		speed         INT          DEFAULT 0,
+		workload_id   VARCHAR(128) DEFAULT '',
 		PRIMARY KEY (hash,node_id),
 		KEY idx_node_id (node_id),
 		KEY idx_hash (hash)
