@@ -143,8 +143,12 @@ func (m *Manager) startValidate() error {
 		return nil
 	}
 
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].BandwidthDown < candidates[j].BandwidthDown
+	})
+
 	// mixup nodes
-	rand.Shuffle(len(candidates), func(i, j int) { candidates[i], candidates[j] = candidates[j], candidates[i] })
+	// rand.Shuffle(len(candidates), func(i, j int) { candidates[i], candidates[j] = candidates[j], candidates[i] })
 	candidates = candidates[:len(candidates)/2]
 
 	for _, candidate := range candidates {

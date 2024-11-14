@@ -633,6 +633,8 @@ func (m *Manager) updateAssetPullResults(nodeID string, result *types.PullResult
 	doneCount := 0
 	downloadTraffic := int64(0)
 
+	speeds := []int64{}
+
 	for _, progress := range result.Progresses {
 		log.Infof("updateAssetPullResults node_id: %s, status: %d, block:%d/%d, size: %d/%d, cid: %s , msg:%s", nodeID, progress.Status, progress.DoneBlocksCount, progress.BlocksCount, progress.DoneSize, progress.Size, progress.CID, progress.Msg)
 
@@ -656,6 +658,10 @@ func (m *Manager) updateAssetPullResults(nodeID string, result *types.PullResult
 
 		if progress.Status == types.ReplicaStatusWaiting {
 			continue
+		}
+
+		if progress.Speed > 0 {
+			speeds = append(speeds, progress.Speed)
 		}
 
 		// save replica info to db
@@ -755,6 +761,17 @@ func (m *Manager) updateAssetPullResults(nodeID string, result *types.PullResult
 	if node != nil {
 		node.DiskUsage = result.DiskUsage
 		node.DownloadTraffic += downloadTraffic
+
+		// update node BandwidthDown
+		if len(speeds) > 0 {
+			tSp := int64(0)
+			for _, speed := range speeds {
+				tSp += speed
+			}
+
+			s := tSp / int64(len(speeds))
+			m.nodeMgr.UpdateNodeBandwidths(nodeID, s, 0)
+		}
 	}
 
 	if haveChange {

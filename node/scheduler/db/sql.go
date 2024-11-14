@@ -142,7 +142,16 @@ func InitTables(d *SQLDB, serverID dtypes.ServerID) error {
 }
 
 func doExec(d *SQLDB, serverID dtypes.ServerID) {
-	// _, err := d.db.Exec(fmt.Sprintf("ALTER TABLE %s CHANGE area_id area_id       VARCHAR(256)   DEFAULT ''", onlineCountTable))
+	// _, err := d.db.Exec(fmt.Sprintf("ALTER TABLE %s CHANGE speed speed         BIGINT       DEFAULT 0", replicaEventTable))
+	// if err != nil {
+	// 	log.Errorf("InitTables doExec err:%s", err.Error())
+	// }
+	// _, err = d.db.Exec(fmt.Sprintf("ALTER TABLE %s CHANGE speed speed         BIGINT       DEFAULT 0", nodeRetrieveTable))
+	// if err != nil {
+	// 	log.Errorf("InitTables doExec err:%s", err.Error())
+	// }
+
+	// _, err = d.db.Exec(fmt.Sprintf("ALTER TABLE %s CHANGE speed speed         BIGINT       DEFAULT 0", replicaInfoTable))
 	// if err != nil {
 	// 	log.Errorf("InitTables doExec err:%s", err.Error())
 	// }
@@ -150,8 +159,8 @@ func doExec(d *SQLDB, serverID dtypes.ServerID) {
 	// if err != nil {
 	// 	log.Errorf("InitTables doExec err:%s", err.Error())
 	// }
-	_, err := d.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD workload_id   VARCHAR(128) DEFAULT '',", replicaInfoTable))
-	if err != nil {
-		log.Errorf("InitTables doExec err:%s", err.Error())
-	}
+	// _, err = d.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD workload_id   VARCHAR(128) DEFAULT ''", replicaInfoTable))
+	// if err != nil {
+	// 	log.Errorf("InitTables doExec err:%s", err.Error())
+	// }
 }

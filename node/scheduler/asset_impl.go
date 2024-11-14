@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sort"
 	"time"
 
 	"github.com/Filecoin-Titan/titan/api"
@@ -716,8 +717,12 @@ func (s *Scheduler) getUploadInfo(userID string, urlMode bool, traceID string) (
 		return nil, &api.ErrWeb{Code: terrors.NodeOffline.Int(), Message: fmt.Sprintf("storage's nodes not found")}
 	}
 
+	sort.Slice(cNodes, func(i, j int) bool {
+		return cNodes[i].BandwidthDown > cNodes[j].BandwidthDown
+	})
+
 	// mixup nodes
-	rand.Shuffle(len(cNodes), func(i, j int) { cNodes[i], cNodes[j] = cNodes[j], cNodes[i] })
+	// rand.Shuffle(len(cNodes), func(i, j int) { cNodes[i], cNodes[j] = cNodes[j], cNodes[i] })
 
 	ret := &types.UploadInfo{
 		List:          make([]*types.NodeUploadInfo, 0),
@@ -745,11 +750,12 @@ func (s *Scheduler) getUploadInfo(userID string, urlMode bool, traceID string) (
 
 		ret.List = append(ret.List, &types.NodeUploadInfo{UploadURL: uploadURL, Token: token, NodeID: cNode.NodeID})
 
-		if len(ret.List) >= 3 {
+		if len(ret.List) >= 5 {
 			break
 		}
 	}
 
+	rand.Shuffle(len(cNodes), func(i, j int) { ret.List[i], ret.List[j] = ret.List[j], ret.List[i] })
 	// return &types.UploadInfo{UploadURL: uploadURL, Token: token, NodeID: cNode.NodeID}, nil
 	return ret, nil
 }

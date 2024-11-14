@@ -1085,6 +1085,7 @@ func (s *Scheduler) GetAssetSourceDownloadInfo(ctx context.Context, cid string) 
 		}
 	}
 
+	// TODO need good BandwidthUp
 	log.Infof("GetAssetSourceDownloadInfo clientID:%s, cid:%s , nodeID:%s", clientID, cid, nodeID)
 	out, totalSize, err := s.getDownloadInfos(cid, false)
 	if err != nil {

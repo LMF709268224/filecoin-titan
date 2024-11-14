@@ -808,7 +808,7 @@ func (n *SQLDB) LoadSucceededReplicasByNode(nodeID string, limit, offset int) (*
 	res := new(types.ListReplicaRsp)
 	var infos []*types.ReplicaInfo
 
-	query := fmt.Sprintf("SELECT * FROM %s WHERE node_id=? AND status=? order by node_id desc LIMIT ? OFFSET ?", replicaInfoTable)
+	query := fmt.Sprintf("SELECT * FROM %s WHERE node_id=? AND status=? order by start_time asc LIMIT ? OFFSET ?", replicaInfoTable)
 	if limit > loadReplicaDefaultLimit {
 		limit = loadReplicaDefaultLimit
 	}
