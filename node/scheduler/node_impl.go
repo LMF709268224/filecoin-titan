@@ -641,7 +641,8 @@ func (s *Scheduler) lnNodeConnected(ctx context.Context, opts *types.ConnectOpti
 	nodeInfo.RemoteAddr = remoteAddr
 	nodeInfo.SchedulerID = s.ServerID
 	nodeInfo.ExternalIP = externalIP
-	nodeInfo.BandwidthUp = units.KiB
+	nodeInfo.BandwidthUp = units.MiB
+	nodeInfo.BandwidthDown = units.GiB
 	nodeInfo.NATType = types.NatTypeUnknown.String()
 	nodeInfo.LastSeen = time.Now()
 	nodeInfo.FirstTime = time.Now()

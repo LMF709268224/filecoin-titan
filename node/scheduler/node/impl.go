@@ -7,8 +7,8 @@ import (
 	"github.com/Filecoin-Titan/titan/api/types"
 )
 
-// GetResourceEdgeNode retrieves all edge nodes that are available for resource utilization.
-func (m *Manager) GetResourceEdgeNode() []*Node {
+// GetResourceEdgeNodes retrieves all edge nodes that are available for resource utilization.
+func (m *Manager) GetResourceEdgeNodes() []*Node {
 	nodes := make([]*Node, 0)
 
 	m.edgeNodes.Range(func(key, value interface{}) bool {

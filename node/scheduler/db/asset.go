@@ -301,10 +301,23 @@ func (n *SQLDB) LoadReplicasByHash(hash string, limit, offset int) (*types.ListR
 	return res, nil
 }
 
+// LoadSucceedReplicaCountNodeID retrieves the count of successful replicas for a given node ID.
 func (n *SQLDB) LoadSucceedReplicaCountNodeID(nodeID string) (int64, error) {
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE node_id=? AND status=?", replicaInfoTable)
 	var count int64
 	err := n.db.Get(&count, countQuery, nodeID, types.ReplicaStatusSucceeded)
+	if err != nil {
+		return count, err
+	}
+
+	return count, nil
+}
+
+// LoadPullingReplicaCountNodeID retrieves the count of pulling replicas for a given node ID.
+func (n *SQLDB) LoadPullingReplicaCountNodeID(nodeID string) (int64, error) {
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE node_id=? AND (status=? or status=?)", replicaInfoTable)
+	var count int64
+	err := n.db.Get(&count, countQuery, nodeID, types.ReplicaStatusWaiting, types.ReplicaStatusPulling)
 	if err != nil {
 		return count, err
 	}

@@ -109,7 +109,7 @@ func (m *Manager) handleSeedSelect(ctx statemachine.Context, info AssetPullingIn
 	nodes := make(map[string]*node.Node)
 	if len(info.SeedNodeIDs) > 0 {
 		for _, nodeID := range info.SeedNodeIDs {
-			cNode := m.nodeMgr.GetCandidateNode(nodeID)
+			cNode := m.nodeMgr.GetNode(nodeID)
 			if cNode == nil {
 				return ctx.Send(SelectFailed{error: xerrors.Errorf("node not found; %s", info.SeedNodeIDs)})
 			}

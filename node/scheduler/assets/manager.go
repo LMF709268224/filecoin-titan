@@ -1186,7 +1186,7 @@ func (m *Manager) chooseEdgeNodes(count int, bandwidthDown int64, filterNodes []
 	// if count >= m.nodeMgr.Edges-len(filterNodes) {
 	// choose all
 	if m.sortEdges {
-		nodes := m.nodeMgr.GetResourceEdgeNode()
+		nodes := m.nodeMgr.GetResourceEdgeNodes()
 		sort.Slice(nodes, func(i, j int) bool {
 			return nodes[i].TitanDiskUsage < nodes[j].TitanDiskUsage
 		})

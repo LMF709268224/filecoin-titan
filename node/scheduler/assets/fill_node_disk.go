@@ -167,9 +167,9 @@ func (m *Manager) pullAssetFromAWSs() bool {
 		return true
 	}
 
-	if m.nodeMgr.Candidates < 2 {
-		return false
-	}
+	// if m.nodeMgr.Candidates < 2 {
+	// 	return false
+	// }
 
 	// download data from aws
 	list, err := m.ListAWSData(1, 0, false)
@@ -233,6 +233,9 @@ func (m *Manager) fillDiskTasks() {
 
 func (m *Manager) requestNodePullAsset(bucket, cid string, candidateCount int64, size float64) {
 	_, nodes := m.nodeMgr.GetResourceCandidateNodes()
+	if len(nodes) == 0 {
+		nodes = m.nodeMgr.GetResourceEdgeNodes()
+	}
 
 	sort.Slice(nodes, func(i, j int) bool {
 		return nodes[i].TitanDiskUsage < nodes[j].TitanDiskUsage

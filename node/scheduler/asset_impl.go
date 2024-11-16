@@ -19,6 +19,7 @@ import (
 	"github.com/Filecoin-Titan/titan/node/modules/dtypes"
 	"github.com/Filecoin-Titan/titan/node/scheduler/assets"
 	"github.com/Filecoin-Titan/titan/node/scheduler/node"
+	"github.com/docker/go-units"
 	"github.com/filecoin-project/go-jsonrpc/auth"
 	"golang.org/x/xerrors"
 )
@@ -737,7 +738,16 @@ func (s *Scheduler) getUploadInfo(userID string, urlMode bool, traceID string) (
 		suffix = "/uploadv3"
 	}
 
-	for _, cNode := range cNodes {
+	for i := 0; i < len(cNodes); i++ {
+		cNode := cNodes[i]
+		if cNode.BandwidthDown < units.MiB && len(ret.List) > 2 {
+			break
+		}
+
+		if len(ret.List) > 5 {
+			break
+		}
+
 		token, err := cNode.API.AuthNew(context.Background(), payload)
 		if err != nil {
 			return nil, &api.ErrWeb{Code: terrors.RequestNodeErr.Int(), Message: err.Error()}
@@ -748,14 +758,19 @@ func (s *Scheduler) getUploadInfo(userID string, urlMode bool, traceID string) (
 			uploadURL = fmt.Sprintf("%s%s", cNode.ExternalURL, suffix)
 		}
 
+		// count, err := s.db.LoadPullingReplicaCountNodeID(cNode.NodeID)
+		// if err != nil {
+		// 	log.Errorf("LoadPullingReplicaCountNodeID %s , err :%s", cNode.NodeID, err.Error())
+		// }
+
 		ret.List = append(ret.List, &types.NodeUploadInfo{UploadURL: uploadURL, Token: token, NodeID: cNode.NodeID})
 
-		if len(ret.List) >= 5 {
-			break
-		}
 	}
 
-	rand.Shuffle(len(cNodes), func(i, j int) { ret.List[i], ret.List[j] = ret.List[j], ret.List[i] })
+	// sort.Slice(ret.List, func(i, j int) bool {
+	// 	return ret.List[i].PullingCount < ret.List[j].PullingCount
+	// })
+	rand.Shuffle(len(ret.List), func(i, j int) { ret.List[i], ret.List[j] = ret.List[j], ret.List[i] })
 	// return &types.UploadInfo{UploadURL: uploadURL, Token: token, NodeID: cNode.NodeID}, nil
 	return ret, nil
 }

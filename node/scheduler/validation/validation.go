@@ -51,7 +51,7 @@ func (m *Manager) startValidationTicker() {
 		} else {
 			m.cleanValidator()
 
-			nodes := m.nodeMgr.GetResourceEdgeNode()
+			nodes := m.nodeMgr.GetResourceEdgeNodes()
 			m.computeNodeProfits(nodes)
 		}
 	}
@@ -175,7 +175,7 @@ func (m *Manager) startValidate() error {
 		validateReqs[candidate.NodeID] = req
 	}
 
-	edges := m.nodeMgr.GetResourceEdgeNode()
+	edges := m.nodeMgr.GetResourceEdgeNodes()
 	sort.Slice(edges, func(i, j int) bool {
 		return edges[i].LastValidateTime < edges[j].LastValidateTime
 	})
@@ -419,6 +419,7 @@ func (m *Manager) updateResultInfo(status types.ValidationStatus, vr *api.Valida
 	}
 
 	profit := 0.0
+	bandwidth := int64(0)
 	// update node bandwidths
 	node := m.nodeMgr.GetNode(vr.NodeID)
 	if node != nil {
@@ -426,7 +427,9 @@ func (m *Manager) updateResultInfo(status types.ValidationStatus, vr *api.Valida
 			node.BandwidthUp = 0
 		} else {
 			if status != types.ValidationStatusCancel {
-				node.BandwidthUp = int64(vr.Bandwidth)
+				bandwidth = int64(vr.Bandwidth)
+
+				m.nodeMgr.UpdateNodeBandwidths(node.NodeID, 0, bandwidth)
 			}
 
 			dInfo := m.nodeMgr.GetNodeValidatableProfitDetails(node, size)
@@ -462,6 +465,8 @@ func (m *Manager) updateResultInfo(status types.ValidationStatus, vr *api.Valida
 	vNode := m.nodeMgr.GetNode(vr.Validator)
 	if vNode != nil {
 		vNode.DownloadTraffic += int64(size)
+
+		m.nodeMgr.UpdateNodeBandwidths(vr.Validator, bandwidth, 0)
 	}
 
 	return m.nodeMgr.UpdateValidationResultInfo(resultInfo)

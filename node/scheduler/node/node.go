@@ -77,6 +77,8 @@ type Node struct {
 	// Memory         float64
 	// CPUCores       int
 	ResourcesStatistics *types.ResourcesStatistics
+
+	bandwidthTracker *BandwidthTracker
 }
 
 // API represents the node API
@@ -145,6 +147,12 @@ func APIFromCandidate(api api.Candidate) *API {
 
 // InitInfo initializes the node information.
 func (n *Node) InitInfo(nodeInfo *types.NodeInfo) {
+	if n.Type == types.NodeCandidate {
+		n.bandwidthTracker = NewBandwidthTracker(20)
+	} else {
+		n.bandwidthTracker = NewBandwidthTracker(5)
+	}
+
 	oldValue := n.TodayOnlineTimeWindow
 
 	n.NodeDynamicInfo = nodeInfo.NodeDynamicInfo
@@ -175,6 +183,8 @@ func (n *Node) InitInfo(nodeInfo *types.NodeInfo) {
 	n.Level = nodeInfo.Level
 	n.IncomeIncr = nodeInfo.IncomeIncr
 	n.LastSeen = nodeInfo.LastSeen
+
+	n.bandwidthTracker.PutBandwidthDown(nodeInfo.BandwidthDown)
 }
 
 // SetCountOfIPChanges node change ip count

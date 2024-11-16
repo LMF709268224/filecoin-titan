@@ -25,6 +25,7 @@ var cReplicaInfoTable = `
 		workload_id   VARCHAR(128) DEFAULT '',
 		PRIMARY KEY (hash,node_id),
 		KEY idx_node_id (node_id),
+		KEY idx_status (status),
 		KEY idx_hash (hash)
 	) ENGINE=InnoDB COMMENT='asset replica info';`
 

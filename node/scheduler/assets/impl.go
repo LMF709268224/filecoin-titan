@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/rand"
+	"sort"
 	"time"
 
 	"github.com/Filecoin-Titan/titan/api"
@@ -130,10 +131,11 @@ func (m *Manager) CreateAssetUploadTask(hash string, req *types.CreateAssetReq) 
 		_, nodes := m.nodeMgr.GetResourceCandidateNodes()
 
 		// mixup nodes
-		rand.Shuffle(len(nodes), func(i, j int) { nodes[i], nodes[j] = nodes[j], nodes[i] })
+		// rand.Shuffle(len(nodes), func(i, j int) { nodes[i], nodes[j] = nodes[j], nodes[i] })
 
 		for _, node := range nodes {
-			if node.IsStorageNode && !m.validationMgr.IsValidator(node.NodeID) && len(cNodes) <= maxCandidateForSelect {
+			// if node.IsStorageNode && !m.validationMgr.IsValidator(node.NodeID) && len(cNodes) <= maxCandidateForSelect {
+			if node.IsStorageNode && !m.validationMgr.IsValidator(node.NodeID) {
 				cNodes = append(cNodes, node)
 			}
 		}
@@ -156,8 +158,14 @@ func (m *Manager) CreateAssetUploadTask(hash string, req *types.CreateAssetReq) 
 		AlreadyExists: false,
 	}
 
+	sort.Slice(cNodes, func(i, j int) bool {
+		return cNodes[i].BandwidthDown > cNodes[j].BandwidthDown
+	})
+
 	seedIDs := make([]string, 0)
-	for _, cNode := range cNodes {
+	for i := 0; i < len(cNodes); i++ {
+		cNode := cNodes[i]
+
 		token, err := cNode.API.CreateAsset(context.Background(), payload)
 		if err != nil {
 			log.Errorf("%s CreateAsset err:%s \n", cNode.NodeID, err.Error())
@@ -207,6 +215,8 @@ func (m *Manager) CreateAssetUploadTask(hash string, req *types.CreateAssetReq) 
 	if err := m.assetStateMachines.Send(AssetHash(hash), rInfo); err != nil {
 		return nil, &api.ErrWeb{Code: terrors.NotFound.Int(), Message: err.Error()}
 	}
+
+	rand.Shuffle(len(ret.List), func(i, j int) { ret.List[i], ret.List[j] = ret.List[j], ret.List[i] })
 
 	return ret, nil
 }
