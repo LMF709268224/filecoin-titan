@@ -420,9 +420,8 @@ const (
 
 // TokenPayload payload of token
 type TokenPayload struct {
-	ID          string `db:"token_id"`
-	NodeID      string `db:"node_id"`
-	RootCID     string
+	ID          string    `db:"token_id"`
+	NodeID      string    `db:"node_id"`
 	AssetCID    string    `db:"asset_id"`
 	ClientID    string    `db:"client_id"`
 	LimitRate   int64     `db:"limit_rate"`

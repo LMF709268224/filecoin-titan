@@ -484,6 +484,7 @@ func (m *Manager) progressForPulling(root cid.Cid) (*types.AssetPullProgress, er
 	if m.puller().root.Hash().String() == root.Hash().String() {
 		return m.puller().getAssetProgress(), nil
 	}
+
 	if v, ok := m.uploadingAssets.Load(root.Hash().String()); ok {
 		asset := v.(*types.UploadingAsset)
 		return &types.AssetPullProgress{
@@ -491,6 +492,7 @@ func (m *Manager) progressForPulling(root cid.Cid) (*types.AssetPullProgress, er
 			Status:   types.ReplicaStatusPulling,
 			Size:     asset.Progress.TotalSize,
 			DoneSize: asset.Progress.DoneSize,
+			ClientID: asset.UserID,
 		}, nil
 	}
 

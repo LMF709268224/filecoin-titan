@@ -93,7 +93,7 @@ func (hs *HttpServer) getHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case formatRaw:
-		statusCode, err = hs.serveRawBlock(speedCountWriter, r, tkPayload.RootCID, assetCID)
+		statusCode, err = hs.serveRawBlock(speedCountWriter, r, assetCID)
 	case formatCar:
 		statusCode, err = hs.serveCar(speedCountWriter, r, assetCID, formatParams["version"])
 	case formatTar:
@@ -101,7 +101,7 @@ func (hs *HttpServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	case formatDagJSON, formatDagCbor:
 		statusCode, err = hs.serveCodec(speedCountWriter, r, assetCID)
 	case formatRefs:
-		statusCode, err = hs.serveCidList(speedCountWriter, r, tkPayload.RootCID)
+		statusCode, err = hs.serveCidList(speedCountWriter, r, assetCID)
 	default: // catch-all for unsuported application/vnd.*
 		statusCode = http.StatusBadRequest
 		err = fmt.Errorf("unsupported format %s", respFormat)
@@ -118,7 +118,8 @@ func (hs *HttpServer) getHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Errorf("cid %s to hash error %s", tkPayload.AssetCID, err.Error())
 	}
-	hs.scheduler.UserAssetDownloadResultV2(context.Background(), &types.RetrieveEvent{
+
+	if err := hs.scheduler.UserAssetDownloadResultV2(context.Background(), &types.RetrieveEvent{
 		TraceID:       traceID,
 		ClientID:      tkPayload.ClientID,
 		Hash:          hash,
@@ -127,7 +128,9 @@ func (hs *HttpServer) getHandler(w http.ResponseWriter, r *http.Request) {
 		Status:        success,
 		CreatedTime:   time.Now(),
 		PeakBandwidth: speedCountWriter.PeakSpeed(),
-	})
+	}); err != nil {
+		log.Errorf("scheduler UserAssetDownloadResult error %s", err.Error())
+	}
 
 	log.Debugf("[Download] tokenID:%s, clientID:%s, assetCid:%s, hash:%s, download size:%d, avg speed:%d, peak speed:%d,  cost time %fms", tkPayload.ID, tkPayload.ClientID, tkPayload.AssetCID, hash, speedCountWriter.dataSize, speedCountWriter.Speed(), speedCountWriter.PeakSpeed(), speedCountWriter.CostTime())
 
@@ -159,11 +162,10 @@ func (hs *HttpServer) verifyToken(w http.ResponseWriter, r *http.Request) (*type
 		}
 
 		if assetCID.String() != payload.AssetCID {
-			// return nil, nil, fmt.Errorf("request asset cid %s, parse token cid %s", root.String(), payload.AssetCID)
 			log.Debugf("request asset cid %s, parse token root cid %s", assetCID.String(), payload.AssetCID)
 		}
 
-		return &types.TokenPayload{AssetCID: assetCID.String(), RootCID: payload.AssetCID}, ut, nil
+		return &types.TokenPayload{AssetCID: assetCID.String()}, ut, nil
 	}
 
 	if token := r.URL.Query().Get("token"); len(token) > 0 {
@@ -235,18 +237,18 @@ func (hs *HttpServer) parseJWTToken(token string, r *http.Request) (*types.Token
 	if err = json.Unmarshal([]byte(jwtPayload.Extend), payload); err != nil {
 		return nil, nil, err
 	}
+	rootCid := payload.AssetCID
 
-	assetCID, err := getCIDFromURLPath(r.URL.Path)
+	subCid, err := getCIDFromURLPath(r.URL.Path)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if assetCID.String() != payload.AssetCID {
-		// return nil, nil, fmt.Errorf("request asset cid %s, parse token cid %s", root.String(), payload.AssetCID)
-		log.Debugf("request asset cid %s, parse token root cid %s", assetCID.String(), payload.AssetCID)
+	if subCid.String() != rootCid {
+		log.Debugf("request asset cid %s, parse token cid %s", subCid.String(), rootCid)
 	}
 
-	return &types.TokenPayload{AssetCID: assetCID.String(), RootCID: payload.AssetCID, ClientID: payload.UserID, Expiration: payload.Expiration}, jwtPayload, nil
+	return &types.TokenPayload{AssetCID: rootCid, ClientID: payload.UserID, Expiration: payload.Expiration}, jwtPayload, nil
 }
 
 // customResponseFormat checks the request's Accept header and query parameters to determine the desired response format

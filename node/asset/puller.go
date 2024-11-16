@@ -42,6 +42,7 @@ type assetPuller struct {
 
 	workloads map[string]*types.Workload
 	startTime time.Time
+	// endTime   time.Time // stop time of sucess or fail
 
 	errMsgs     []*fetcher.ErrMsg
 	rateLimiter *rate.Limiter
@@ -144,6 +145,8 @@ func (ap *assetPuller) pullAsset() error {
 
 		nextLayerCIDs = ret.nextLayerCIDs
 	}
+	// ap.endTime = time.Now()
+
 	return nil
 }
 
@@ -392,6 +395,11 @@ func (ap *assetPuller) decode(data []byte) error {
 
 // getAssetProgress returns the current progress of the asset
 func (ap *assetPuller) getAssetProgress() *types.AssetPullProgress {
+	seconds, speed := time.Since(ap.startTime).Seconds(), int64(0)
+	if seconds > 0 {
+		speed = int64(float64(ap.doneSize) / seconds)
+	}
+
 	return &types.AssetPullProgress{
 		CID:             ap.root.String(),
 		Status:          types.ReplicaStatusPulling,
@@ -399,6 +407,8 @@ func (ap *assetPuller) getAssetProgress() *types.AssetPullProgress {
 		DoneBlocksCount: len(ap.blocksPulledSuccessList),
 		Size:            int64(ap.totalSize),
 		DoneSize:        int64(ap.doneSize),
+		Speed:           speed,
+		// ClientID:        ,
 	}
 }
 
@@ -468,6 +478,7 @@ func (ap *assetPuller) pullAssetFromAWS() error {
 
 	ap.totalSize = uint64(size)
 	ap.doneSize = uint64(size)
+	// ap.endTime = time.Now()
 
 	costTime := time.Since(startTime) / time.Millisecond
 	ap.workloads["aws"] = &types.Workload{SourceID: "aws", DownloadSize: int64(size), CostTime: int64(costTime)}
