@@ -1016,15 +1016,36 @@ func (s *Scheduler) getDownloadInfos(cid string, needCandidate bool) (*types.Ass
 		return out, 0, nil
 	}
 
-	// Shuffle array
-	for i := len(replicas) - 1; i > 0; i-- {
-		j := rand.Intn(i + 1)
-		replicas[i], replicas[j] = replicas[j], replicas[i]
+	type nodeBandwidthUp struct {
+		NodeID      string
+		BandwidthUp int64
 	}
+
+	list := []*nodeBandwidthUp{}
+	for _, rInfo := range replicas {
+		nodeID := rInfo.NodeID
+
+		cNode := s.NodeManager.GetNode(nodeID)
+		if cNode != nil {
+			list = append(list, &nodeBandwidthUp{NodeID: nodeID, BandwidthUp: cNode.BandwidthUp})
+		}
+	}
+
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].BandwidthUp > list[j].BandwidthUp
+	})
+
+	// // Shuffle array
+	// for i := len(replicas) - 1; i > 0; i-- {
+	// 	j := rand.Intn(i + 1)
+	// 	replicas[i], replicas[j] = replicas[j], replicas[i]
+	// }
+
 	titanRsa := titanrsa.New(crypto.SHA256, crypto.SHA256.New())
 	sources := make([]*types.SourceDownloadInfo, 0)
 
-	for _, rInfo := range replicas {
+	for i := 0; i < len(list); i++ {
+		rInfo := list[i]
 		nodeID := rInfo.NodeID
 		// candidate
 		cNode := s.NodeManager.GetCandidateNode(nodeID)
@@ -1087,7 +1108,7 @@ func (s *Scheduler) GetAssetSourceDownloadInfo(ctx context.Context, cid string) 
 	}
 
 	// TODO need good BandwidthUp
-	log.Infof("GetAssetSourceDownloadInfo clientID:%s, cid:%s , nodeID:%s", clientID, cid, nodeID)
+	// log.Infof("GetAssetSourceDownloadInfo clientID:%s, cid:%s , nodeID:%s", clientID, cid, nodeID)
 	out, totalSize, err := s.getDownloadInfos(cid, false)
 	if err != nil {
 		return nil, err

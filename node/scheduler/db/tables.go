@@ -64,7 +64,8 @@ var cNodeInfoTable = `
 		free_up_disk_time    DATETIME        DEFAULT '2024-04-20 12:10:15',
 		ws_server_id         VARCHAR(128)    DEFAULT '',
 		force_offline        BOOLEAN         DEFAULT false,
-	    PRIMARY KEY (node_id)
+	    PRIMARY KEY (node_id),
+		KEY idx_last_seen (last_seen)
 	) ENGINE=InnoDB COMMENT='node info';`
 
 var cNodeStatisticsTable = `

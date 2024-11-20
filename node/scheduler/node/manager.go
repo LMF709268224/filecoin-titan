@@ -403,10 +403,10 @@ func (m *Manager) UpdateNodeBandwidths(nodeID string, bandwidthDown, bandwidthUp
 
 	if bandwidthDown > 0 {
 		node.BandwidthDown = node.bandwidthTracker.PutBandwidthDown(bandwidthDown)
-		log.Infof("UpdateNodeBandwidths node:[%s] [%d]", nodeID, node.BandwidthDown)
+		// log.Infof("UpdateNodeBandwidths node:[%s] [%d]", nodeID, node.BandwidthDown)
 	}
 	if bandwidthUp > 0 {
-		node.BandwidthUp = bandwidthUp
+		node.BandwidthUp = node.bandwidthTracker.PutBandwidthUp(bandwidthUp)
 	}
 }
 

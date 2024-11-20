@@ -185,6 +185,7 @@ func (n *Node) InitInfo(nodeInfo *types.NodeInfo) {
 	n.LastSeen = nodeInfo.LastSeen
 
 	n.bandwidthTracker.PutBandwidthDown(nodeInfo.BandwidthDown)
+	n.bandwidthTracker.PutBandwidthUp(nodeInfo.BandwidthUp)
 }
 
 // SetCountOfIPChanges node change ip count

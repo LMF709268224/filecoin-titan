@@ -424,7 +424,7 @@ func (m *Manager) updateResultInfo(status types.ValidationStatus, vr *api.Valida
 	node := m.nodeMgr.GetNode(vr.NodeID)
 	if node != nil {
 		if status == types.ValidationStatusNodeTimeOut || status == types.ValidationStatusValidateFail {
-			node.BandwidthUp = 0
+			// node.BandwidthUp = 0
 		} else {
 			if status != types.ValidationStatusCancel {
 				bandwidth = int64(vr.Bandwidth)
