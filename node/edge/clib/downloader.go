@@ -11,12 +11,13 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/Filecoin-Titan/titan/api/client"
 	"github.com/Filecoin-Titan/titan/api/types"
 	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/google/uuid"
+	sdkclient "github.com/utopiosphe/titan-storage-sdk/client"
+	byterange "github.com/utopiosphe/titan-storage-sdk/range"
 )
 
 const (
@@ -244,27 +245,66 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 		return fmt.Errorf("can not get node for asset %s", dt.req.CID)
 	}
 
+	r := byterange.New(1 << 20)
+
+	req := &sdkclient.ShareAssetResult{AssetCID: dt.req.CID}
 	for _, downloadInfo := range downloadInfos {
 		for _, source := range downloadInfo.SourceList {
-			startTime := time.Now()
-
-			if err := dt.doDownloadFile(ctx, source); err != nil {
-				log.Warnf("download file from %s error %s", source.NodeID, err.Error())
-				continue
-			}
-
-			// submit workload
-			costTime := time.Since(startTime) / time.Millisecond
-			workload := types.Workload{SourceID: source.NodeID, DownloadSize: dt.progress.TotalSize, CostTime: int64(costTime)}
-			req := &types.WorkloadRecordReq{WorkloadID: downloadInfo.WorkloadID, AssetCID: dt.req.CID, Workloads: []types.Workload{workload}}
-			err = dt.submitWorkload(ctx, req, downloadInfo.SchedulerURL)
-			if err != nil {
-				return fmt.Errorf("sumbitWorkload failed: %s", err.Error())
-			}
-
-			return nil
+			req.URLs = append(req.URLs, fmt.Sprintf("https://%s/ipfs/%s?filename=%s&download=true", source.Address, dt.req.CID, source.Tk))
+			req.Token = append(req.Token, &sdkclient.BodyToken{ID: source.Tk.ID, CipherText: source.Tk.CipherText, Sign: source.Tk.Sign})
 		}
 	}
+
+	reader, progressFunc, err := r.GetFile(ctx, req)
+	if err != nil {
+		return fmt.Errorf("get file error %s", err.Error())
+	}
+
+	templateFile := filepath.Join(filepath.Dir(dt.req.DownloadPath), dt.req.CID)
+	defer removeTemplateFileIfExist(templateFile)
+
+	file, err := os.Create(templateFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	dt.progress.TotalSize = progressFunc().Total
+	progressReader := newProgressReader(reader, func(doneSize int64) {
+		dt.progress.DoneSize = progressFunc().Written()
+	})
+
+	_, err = io.Copy(file, progressReader)
+	if err != nil {
+		return err
+	}
+
+	file.Close()
+	if err = os.Rename(templateFile, dt.req.DownloadPath); err != nil {
+		return err
+	}
+
+	// for _, downloadInfo := range downloadInfos {
+	// 	for _, source := range downloadInfo.SourceList {
+	// 		startTime := time.Now()
+
+	// 		if err := dt.doDownloadFile(ctx, source); err != nil {
+	// 			log.Warnf("download file from %s error %s", source.NodeID, err.Error())
+	// 			continue
+	// 		}
+
+	// 		// submit workload
+	// 		costTime := time.Since(startTime) / time.Millisecond
+	// 		workload := types.Workload{SourceID: source.NodeID, DownloadSize: dt.progress.TotalSize, CostTime: int64(costTime)}
+	// 		req := &types.WorkloadRecordReq{WorkloadID: downloadInfo.WorkloadID, AssetCID: dt.req.CID, Workloads: []types.Workload{workload}}
+	// 		err = dt.submitWorkload(ctx, req, downloadInfo.SchedulerURL)
+	// 		if err != nil {
+	// 			return fmt.Errorf("sumbitWorkload failed: %s", err.Error())
+	// 		}
+
+	// 		return nil
+	// 	}
+	// }
 
 	return nil
 }
