@@ -30,6 +30,24 @@ type NodeDynamicInfo struct {
 	TodayOnlineTimeWindow int // today online time window
 }
 
+type DeviceRunningStat struct {
+	CPUCores      int
+	CPUInfo       string
+	CPUUsage      []float64
+	CPUTotalUsage float64
+
+	Memory      uint64
+	MemoryUsed  uint64
+	MemoryUsage float64
+
+	// ProcessBandWidthUp   int64
+	// ProcessBandWidthDown int64
+	NicBandWidthUp   int64 // network interface card bandwidth
+	NicBandWidthDown int64
+
+	LastSampleTime time.Time
+}
+
 // NodeStatisticsInfo holds statistics about node assets.
 type NodeStatisticsInfo struct {
 	AssetCount             int64 `db:"asset_count"`
