@@ -1277,7 +1277,7 @@ var udpTestCmd = &cli.Command{
 				TLSClientConfig: &tls.Config{
 					InsecureSkipVerify: true,
 				},
-				QuicConfig: &quic.Config{
+				QUICConfig: &quic.Config{
 					MaxIncomingStreams:    100,
 					MaxIncomingUniStreams: 100,
 				},
