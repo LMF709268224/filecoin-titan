@@ -29,7 +29,7 @@ const (
 
 type Progress struct {
 	TotalSize int64
-	DoneSize  int64
+	DoneSize  func() int64
 }
 
 type Downloader struct {
@@ -47,7 +47,7 @@ func newDownloader() *Downloader {
 }
 
 func (d *Downloader) downloadFile(req *DownloadFileReq) error {
-	task := &downloadingTask{id: uuid.NewString(), req: req, progress: &Progress{}, httpClient: d.httpClient}
+	task := &downloadingTask{id: uuid.NewString(), req: req, progress: &Progress{DoneSize: func() int64 { return 0 }}, httpClient: d.httpClient}
 	if err := d.addTask(task); err != nil {
 		return err
 	}
@@ -183,7 +183,7 @@ func taskToDownloadProgress(task *downloadingTask) *DownloadProgressResult {
 	result := &DownloadProgressResult{FilePath: task.req.DownloadPath}
 	result.Status = downloadTaskStatusDownloading
 	result.TotalSize = task.progress.TotalSize
-	result.DoneSize = task.progress.DoneSize
+	result.DoneSize = task.progress.DoneSize()
 	return result
 }
 
@@ -270,11 +270,9 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 	defer file.Close()
 
 	dt.progress.TotalSize = progressFunc().Total
-	progressReader := newProgressReader(reader, func(doneSize int64) {
-		dt.progress.DoneSize = progressFunc().Written()
-	})
+	dt.progress.DoneSize = progressFunc().Written
 
-	_, err = io.Copy(file, progressReader)
+	_, err = io.Copy(file, reader)
 	if err != nil {
 		return err
 	}
@@ -309,66 +307,66 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 	return nil
 }
 
-func (dt *downloadingTask) doDownloadFile(ctx context.Context, downloadInfo *types.SourceDownloadInfo) error {
-	if dt.httpClient == nil {
-		dt.httpClient = client.NewHTTP3Client()
-	}
-	buf, err := encode(downloadInfo.Tk)
-	if err != nil {
-		return fmt.Errorf("encode %s", err.Error())
-	}
+// func (dt *downloadingTask) doDownloadFile(ctx context.Context, downloadInfo *types.SourceDownloadInfo) error {
+// 	if dt.httpClient == nil {
+// 		dt.httpClient = client.NewHTTP3Client()
+// 	}
+// 	buf, err := encode(downloadInfo.Tk)
+// 	if err != nil {
+// 		return fmt.Errorf("encode %s", err.Error())
+// 	}
 
-	log.Infof("doDownloadFile %s %s", dt.req.CID, dt.req.DownloadPath)
+// 	log.Infof("doDownloadFile %s %s", dt.req.CID, dt.req.DownloadPath)
 
-	filename := filepath.Base(dt.req.DownloadPath)
-	url := fmt.Sprintf("https://%s/ipfs/%s?filename=%s&download=true", downloadInfo.Address, dt.req.CID, filename)
+// 	filename := filepath.Base(dt.req.DownloadPath)
+// 	url := fmt.Sprintf("https://%s/ipfs/%s?filename=%s&download=true", downloadInfo.Address, dt.req.CID, filename)
 
-	req, err := http.NewRequest(http.MethodGet, url, buf)
-	if err != nil {
-		return fmt.Errorf("newRequest %s", err.Error())
-	}
-	req = req.WithContext(ctx)
+// 	req, err := http.NewRequest(http.MethodGet, url, buf)
+// 	if err != nil {
+// 		return fmt.Errorf("newRequest %s", err.Error())
+// 	}
+// 	req = req.WithContext(ctx)
 
-	resp, err := dt.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("doRequest %s", err.Error())
-	}
-	defer resp.Body.Close() //nolint:errcheck // ignore error
+// 	resp, err := dt.httpClient.Do(req)
+// 	if err != nil {
+// 		return fmt.Errorf("doRequest %s", err.Error())
+// 	}
+// 	defer resp.Body.Close() //nolint:errcheck // ignore error
 
-	if resp.StatusCode != http.StatusOK {
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("http status code: %d, read body error %s", resp.StatusCode, err.Error())
-		}
-		return fmt.Errorf("http status code: %d, error msg: %s", resp.StatusCode, string(data))
-	}
+// 	if resp.StatusCode != http.StatusOK {
+// 		data, err := io.ReadAll(resp.Body)
+// 		if err != nil {
+// 			return fmt.Errorf("http status code: %d, read body error %s", resp.StatusCode, err.Error())
+// 		}
+// 		return fmt.Errorf("http status code: %d, error msg: %s", resp.StatusCode, string(data))
+// 	}
 
-	dt.progress.TotalSize = resp.ContentLength
-	progressReader := newProgressReader(resp.Body, func(doneSize int64) {
-		dt.progress.DoneSize = doneSize
-	})
+// 	dt.progress.TotalSize = resp.ContentLength
+// 	progressReader := newProgressReader(resp.Body, func(doneSize int64) {
+// 		dt.progress.DoneSize = doneSize
+// 	})
 
-	templateFile := filepath.Join(filepath.Dir(dt.req.DownloadPath), dt.req.CID)
-	defer removeTemplateFileIfExist(templateFile)
+// 	templateFile := filepath.Join(filepath.Dir(dt.req.DownloadPath), dt.req.CID)
+// 	defer removeTemplateFileIfExist(templateFile)
 
-	file, err := os.Create(templateFile)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
+// 	file, err := os.Create(templateFile)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	defer file.Close()
 
-	_, err = io.Copy(file, progressReader)
-	if err != nil {
-		return err
-	}
+// 	_, err = io.Copy(file, progressReader)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	file.Close()
-	if err = os.Rename(templateFile, dt.req.DownloadPath); err != nil {
-		return err
-	}
+// 	file.Close()
+// 	if err = os.Rename(templateFile, dt.req.DownloadPath); err != nil {
+// 		return err
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func removeTemplateFileIfExist(filePath string) {
 	if _, err := os.Stat(filePath); err == nil {
@@ -414,11 +412,10 @@ func newProgressReader(r io.Reader, callback func(doneSize int64)) *ProgressRead
 
 func (pr *ProgressReader) Read(p []byte) (n int, err error) {
 	n, err = pr.r.Read(p)
+	pr.doneSize += int64(n)
+	pr.callback(pr.doneSize)
 	if err != nil {
 		return
 	}
-
-	pr.doneSize += int64(n)
-	pr.callback(pr.doneSize)
 	return
 }
