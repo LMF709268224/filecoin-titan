@@ -75,7 +75,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/tus/tusd/v2 v2.4.0
 	github.com/u2takey/ffmpeg-go v0.5.0
-	github.com/utopiosphe/titan-storage-sdk v0.0.0-20241125111716-3066bc3d5364
+	github.com/utopiosphe/titan-storage-sdk v0.0.0-20241125130348-e4f02dfa8788
 	go.etcd.io/etcd/api/v3 v3.5.12
 	go.etcd.io/etcd/client/v3 v3.5.12
 	golang.org/x/image v0.21.0
