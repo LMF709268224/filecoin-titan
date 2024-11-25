@@ -25,7 +25,6 @@ require (
 	github.com/ipfs/go-ds-measure v0.2.0
 	github.com/ipfs/go-fetcher v1.6.1
 	github.com/ipfs/go-fs-lock v0.0.7
-	github.com/ipfs/go-ipfs-http-client v0.5.0
 	github.com/ipfs/go-ipld-format v0.6.0
 	github.com/ipfs/go-ipld-legacy v0.2.1
 	github.com/ipfs/go-libipfs v0.7.0
@@ -63,6 +62,7 @@ require (
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/google/go-github/v61 v61.0.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/ipfs/boxo v0.24.3
 	github.com/ipfs/go-block-format v0.2.0
 	github.com/ipfs/go-filestore v1.2.1
 	github.com/ipfs/go-ipfs-chunker v0.0.5
@@ -75,7 +75,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/tus/tusd/v2 v2.4.0
 	github.com/u2takey/ffmpeg-go v0.5.0
-	github.com/utopiosphe/titan-storage-sdk v0.0.0-00010101000000-000000000000
+	github.com/utopiosphe/titan-storage-sdk v0.0.0-20241125111716-3066bc3d5364
 	go.etcd.io/etcd/api/v3 v3.5.12
 	go.etcd.io/etcd/client/v3 v3.5.12
 	golang.org/x/image v0.21.0
@@ -118,7 +118,6 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
-	github.com/ipfs/boxo v0.24.3 // indirect
 	github.com/ipfs/go-bitfield v1.1.0 // indirect
 	github.com/ipfs/go-ipfs-cmds v0.14.0 // indirect
 	github.com/ipfs/go-ipfs-ds-help v1.1.1 // indirect
@@ -282,7 +281,5 @@ require (
 
 require (
 	github.com/ipfs/go-blockservice v0.5.2
-	github.com/ipfs/kubo v0.32.1 // indirect
+	github.com/ipfs/kubo v0.32.1
 )
-
-replace github.com/utopiosphe/titan-storage-sdk => /Users/zt/Desktop/titan-storage-sdk
