@@ -280,6 +280,7 @@ require (
 )
 
 require (
+	github.com/chai2010/webp v1.1.1
 	github.com/ipfs/go-blockservice v0.5.2
 	github.com/ipfs/kubo v0.32.1
 )
