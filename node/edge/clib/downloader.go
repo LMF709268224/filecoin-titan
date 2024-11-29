@@ -1,12 +1,11 @@
 package clib
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"fmt"
 	"io"
 	"io/fs"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -245,15 +244,33 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 		return fmt.Errorf("can not get node for asset %s", dt.req.CID)
 	}
 
-	r := byterange.New(1 << 20)
+	r := byterange.New(1<<20, 10)
 
-	req := &sdkclient.ShareAssetResult{AssetCID: dt.req.CID}
+	workloadMap := make(map[string][]types.Workload)
+	req := &sdkclient.RangeGetFileReq{
+		Workload: workloadMap,
+	}
+	workloadScheduler := make(map[string]string)
 	for _, downloadInfo := range downloadInfos {
+		workloadScheduler[downloadInfo.WorkloadID] = downloadInfo.SchedulerURL
 		for _, source := range downloadInfo.SourceList {
-			req.URLs = append(req.URLs, fmt.Sprintf("https://%s/ipfs/%s?filename=%s&download=true", source.Address, dt.req.CID, source.Tk))
-			req.Token = append(req.Token, &sdkclient.BodyToken{ID: source.Tk.ID, CipherText: source.Tk.CipherText, Sign: source.Tk.Sign})
+			url := fmt.Sprintf("https://%s/ipfs/%s?filename=%s&download=true", source.Address, dt.req.CID, source.Tk)
+			req.Urls = append(req.Urls, sdkclient.UrlWithBodyToken{
+				Url:        url,
+				Token:      &sdkclient.BodyToken{ID: source.Tk.ID, CipherText: source.Tk.CipherText, Sign: source.Tk.Sign},
+				NodeID:     source.NodeID,
+				WorkloadID: downloadInfo.WorkloadID,
+			})
 		}
 	}
+
+	rand.Shuffle(len(req.Urls), func(i, j int) { req.Urls[i], req.Urls[j] = req.Urls[j], req.Urls[i] })
+
+	// if len(req.Urls) > 10 {
+	// 	req.Urls = req.Urls[:20]
+	// }
+
+	// workloadReq := &types.WorkloadRecordReq{WorkloadID: downloadInfo.WorkloadID, AssetCID: dt.req.CID, Workloads: []types.Workload{workload}}
 
 	reader, progressFunc, err := r.GetFile(ctx, req)
 	if err != nil {
@@ -282,6 +299,12 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 		return err
 	}
 
+	for workloadID, wds := range workloadMap {
+		req := &types.WorkloadRecordReq{WorkloadID: workloadID, AssetCID: dt.req.CID, Workloads: wds}
+		if err := dt.submitWorkload(ctx, req, workloadScheduler[workloadID]); err != nil {
+			log.Errorf("sumbitWorkload failed: %s", err.Error())
+		}
+	}
 	// for _, downloadInfo := range downloadInfos {
 	// 	for _, source := range downloadInfo.SourceList {
 	// 		startTime := time.Now()
@@ -386,16 +409,16 @@ func (dt *downloadingTask) submitWorkload(ctx context.Context, workload *types.W
 	return schedulerAPI.SubmitWorkloadReportV2(ctx, workload)
 }
 
-func encode(esc *types.Token) (*bytes.Buffer, error) {
-	var buffer bytes.Buffer
-	enc := gob.NewEncoder(&buffer)
-	err := enc.Encode(esc)
-	if err != nil {
-		return nil, err
-	}
+// func encode(esc *types.Token) (*bytes.Buffer, error) {
+// 	var buffer bytes.Buffer
+// 	enc := gob.NewEncoder(&buffer)
+// 	err := enc.Encode(esc)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	return &buffer, nil
-}
+// 	return &buffer, nil
+// }
 
 type ProgressReader struct {
 	r        io.Reader
