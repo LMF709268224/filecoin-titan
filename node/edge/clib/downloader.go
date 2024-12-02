@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	"github.com/Filecoin-Titan/titan/api/client"
@@ -271,6 +272,14 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 	// }
 
 	// workloadReq := &types.WorkloadRecordReq{WorkloadID: downloadInfo.WorkloadID, AssetCID: dt.req.CID, Workloads: []types.Workload{workload}}
+	// path.Parse(dt.req.DownloadPath)
+
+	if runtime.GOOS == "android" {
+		tempFileDir := filepath.Dir(dt.req.DownloadPath)
+		if err := os.Setenv("TITAN_PIPE_DIR", tempFileDir); err != nil {
+			return fmt.Errorf("set pipe dir error %s", err.Error())
+		}
+	}
 
 	reader, progressFunc, err := r.GetFile(ctx, req)
 	if err != nil {

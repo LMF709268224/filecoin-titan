@@ -30,7 +30,7 @@ const (
 	NetFlowUnit = 1024 * 1024 * 1024
 
 	// NicSampleInterval is the interval to sample network interface card and process bandwidth usage.
-	NicSampleInterval = 2 * time.Second
+	NicSampleInterval = 10 * time.Second
 )
 
 // Device represents a device and its properties
@@ -215,6 +215,11 @@ func setRunningStat(ctx context.Context, t *types.DeviceRunningStat) {
 	ticker := time.NewTicker(NicSampleInterval)
 	defer ticker.Stop()
 
+	if runtime.GOOS != "linux" {
+		log.Infof("Running Stat Unsupported OS: %s", runtime.GOOS)
+		return
+	}
+
 	prevTxrxStas := &txrxStas{}
 	for {
 		select {
@@ -318,7 +323,7 @@ func setMemoryUsage(ctx context.Context, t *types.DeviceRunningStat) {
 	t.MemoryUsed = vMem.Used
 	t.MemoryUsage = vMem.UsedPercent
 
-	log.Info("Updated Memory Usage: %.2f%%\n", t.MemoryUsage)
+	log.Infof("Updated Memory Usage: %.2f\n", t.MemoryUsage)
 }
 
 // setCPUUsage calculates and updates CPU usage
@@ -345,5 +350,5 @@ func setCPUUsage(ctx context.Context, t *types.DeviceRunningStat) {
 	}
 	t.CPUTotalUsage = totalUsage / float64(len(cpuUsage))
 
-	log.Info("Updated CPU Usage: %.2f%%\n", t.CPUTotalUsage)
+	log.Infof("Updated CPU Usage: %.2f \n", t.CPUTotalUsage)
 }
