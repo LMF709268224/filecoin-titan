@@ -251,6 +251,7 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 	req := &sdkclient.RangeGetFileReq{
 		Workload: workloadMap,
 	}
+
 	workloadScheduler := make(map[string]string)
 	for _, downloadInfo := range downloadInfos {
 		workloadScheduler[downloadInfo.WorkloadID] = downloadInfo.SchedulerURL
@@ -306,6 +307,16 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 	file.Close()
 	if err = os.Rename(templateFile, dt.req.DownloadPath); err != nil {
 		return err
+	}
+
+	select {
+	case <-ctx.Done():
+		if ctx.Err() == context.Canceled {
+			if err := os.Remove(dt.req.DownloadPath); err != nil {
+				log.Errorf("cannot remove cancelled request file: %s", dt.req.DownloadPath)
+			}
+		}
+	case <-progressFunc().Done:
 	}
 
 	for workloadID, wds := range workloadMap {
