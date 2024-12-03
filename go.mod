@@ -74,7 +74,7 @@ require (
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/pkg/errors v0.9.1
 	github.com/u2takey/ffmpeg-go v0.5.0
-	github.com/utopiosphe/titan-storage-sdk v0.0.0-20241202035147-fa49426fb826
+	github.com/utopiosphe/titan-storage-sdk v0.0.0-20241203132749-e25d7fd45553
 	go.etcd.io/etcd/api/v3 v3.5.12
 	go.etcd.io/etcd/client/v3 v3.5.12
 	golang.org/x/image v0.21.0

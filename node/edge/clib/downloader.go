@@ -12,9 +12,10 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/filecoin-project/go-jsonrpc"
+
 	"github.com/Filecoin-Titan/titan/api/client"
 	"github.com/Filecoin-Titan/titan/api/types"
-	"github.com/filecoin-project/go-jsonrpc"
 	"github.com/google/uuid"
 	sdkclient "github.com/utopiosphe/titan-storage-sdk/client"
 	byterange "github.com/utopiosphe/titan-storage-sdk/range"
@@ -304,27 +305,30 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 		return err
 	}
 
-	file.Close()
-	if err = os.Rename(templateFile, dt.req.DownloadPath); err != nil {
-		return err
-	}
+	go func() {
+		for workloadID, wds := range workloadMap {
+			req := &types.WorkloadRecordReq{WorkloadID: workloadID, AssetCID: dt.req.CID, Workloads: wds}
+			if err := dt.submitWorkload(ctx, req, workloadScheduler[workloadID]); err != nil {
+				log.Errorf("sumbitWorkload failed: %s", err.Error())
+			}
+		}
+	}()
 
 	select {
 	case <-ctx.Done():
 		if ctx.Err() == context.Canceled {
-			if err := os.Remove(dt.req.DownloadPath); err != nil {
-				log.Errorf("cannot remove cancelled request file: %s", dt.req.DownloadPath)
-			}
+			log.Infof("download context canceled")
 		}
+		return ctx.Err()
 	case <-progressFunc().Done:
+		file.Close()
+		if err = os.Rename(templateFile, dt.req.DownloadPath); err != nil {
+			return err
+		}
+	default:
+		log.Infof("download failed")
 	}
 
-	for workloadID, wds := range workloadMap {
-		req := &types.WorkloadRecordReq{WorkloadID: workloadID, AssetCID: dt.req.CID, Workloads: wds}
-		if err := dt.submitWorkload(ctx, req, workloadScheduler[workloadID]); err != nil {
-			log.Errorf("sumbitWorkload failed: %s", err.Error())
-		}
-	}
 	// for _, downloadInfo := range downloadInfos {
 	// 	for _, source := range downloadInfo.SourceList {
 	// 		startTime := time.Now()
