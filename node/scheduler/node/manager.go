@@ -25,7 +25,7 @@ var (
 )
 
 const (
-	loadNodeInfoTime = 3 * 60 * time.Second // seconds
+	loadCandidateInfoTime = 3 * time.Minute // seconds
 	// keepaliveTime is the interval between keepalive requests
 	keepaliveTime = 60 * time.Second // seconds
 
@@ -91,13 +91,13 @@ func NewManager(sdb *db.SQLDB, serverID dtypes.ServerID, pk *rsa.PrivateKey, pb 
 
 	go nodeManager.startNodeKeepaliveTimer()
 	go nodeManager.startNodePenaltyTimer()
-	go nodeManager.startCheckNodeTimer()
+	go nodeManager.startCheckNodeInfoTimer()
 	go nodeManager.startUpdateNodeMetricsTimer()
 
 	return nodeManager
 }
 
-func (m *Manager) startCheckNodeTimer() {
+func (m *Manager) startCheckNodeInfoTimer() {
 	now := time.Now()
 
 	nextTime := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
@@ -122,7 +122,7 @@ func (m *Manager) startCheckNodeTimer() {
 }
 
 func (m *Manager) startUpdateNodeMetricsTimer() {
-	ticker := time.NewTicker(loadNodeInfoTime)
+	ticker := time.NewTicker(loadCandidateInfoTime)
 	defer ticker.Stop()
 
 	for {
@@ -130,10 +130,6 @@ func (m *Manager) startUpdateNodeMetricsTimer() {
 
 		_, cList := m.GetValidCandidateNodes()
 		for _, node := range cList {
-			if node.IsAbnormal() {
-				continue
-			}
-
 			info, err := node.API.GetNodeInfo(context.Background())
 			if err != nil {
 				continue

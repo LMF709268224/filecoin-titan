@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"strings"
 	"time"
 
@@ -255,19 +254,20 @@ func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions,
 		}
 
 		s.ProjectManager.CheckProjectReplicasFromNode(nodeID)
+
+		s.DataSync.AddNodeToList(nodeID)
 	}
 
 	if nodeType == types.NodeEdge {
-		go s.NatManager.DetermineEdgeNATType(context.Background(), nodeID)
+		s.NatManager.DetermineEdgeNATType(context.Background(), nodeID)
 	} else if nodeType == types.NodeCandidate {
-		err := checkDomain(cNode.ExternalURL)
-		log.Infof("%s checkDomain [%s] %v", nodeID, cNode.ExternalURL, err)
-		cNode.IsStorageNode = err == nil
+		// err := checkDomain(cNode.ExternalURL)
+		// log.Infof("%s checkDomain [%s] %v", nodeID, cNode.ExternalURL, err)
+		// cNode.IsStorageNode = err == nil
 
-		go s.NatManager.DetermineCandidateNATType(context.Background(), nodeID)
+		s.NatManager.DetermineCandidateNATType(context.Background(), nodeID)
 	}
 
-	s.DataSync.AddNodeToList(nodeID)
 	return nil
 }
 
@@ -276,16 +276,16 @@ func (s *Scheduler) saveNodeInfo(n *types.NodeInfo) error {
 	return s.db.SaveNodeInfo(n)
 }
 
-func checkDomain(domain string) error {
-	if domain == "" {
-		return xerrors.New("domain is nil")
-	}
+// func checkDomain(domain string) error {
+// 	if domain == "" {
+// 		return xerrors.New("domain is nil")
+// 	}
 
-	url := fmt.Sprintf("%s/net", domain)
-	_, err := http.Get(url)
+// 	url := fmt.Sprintf("%s/net", domain)
+// 	_, err := http.Get(url)
 
-	return err
-}
+// 	return err
+// }
 
 func (s *Scheduler) getNodeLastValidateTime(nodeID string) int64 {
 	rsp, err := s.NodeManager.LoadValidationResultInfos(nodeID, 1, 0)
@@ -615,13 +615,13 @@ func (s *Scheduler) GetWorkloadRecord(ctx context.Context, id string) (*types.Wo
 func (s *Scheduler) ReDetermineNodeNATType(ctx context.Context, nodeID string) error {
 	node := s.NodeManager.GetCandidateNode(nodeID)
 	if node != nil {
-		go s.NatManager.DetermineCandidateNATType(ctx, nodeID)
+		s.NatManager.DetermineCandidateNATType(ctx, nodeID)
 		return nil
 	}
 
 	node = s.NodeManager.GetEdgeNode(nodeID)
 	if node != nil {
-		go s.NatManager.DetermineCandidateNATType(ctx, nodeID)
+		s.NatManager.DetermineEdgeNATType(ctx, nodeID)
 		return nil
 	}
 

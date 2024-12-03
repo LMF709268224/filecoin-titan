@@ -52,7 +52,7 @@ func (ds *DataSync) startCheckNodeTimer() {
 	// duration := nextTime.Sub(now)
 	// timer := time.NewTimer(duration)
 
-	timer := time.NewTicker(2 * time.Hour)
+	timer := time.NewTicker(12 * time.Hour)
 	defer timer.Stop()
 
 	for {

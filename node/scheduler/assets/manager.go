@@ -1161,11 +1161,11 @@ func (m *Manager) chooseEdgeNodes(count int, bandwidthDown int64, filterNodes []
 			return false
 		}
 
-		pCount, err := m.nodeMgr.GetNodePullingCount(m.nodeMgr.ServerID, node.NodeID, PullingStates)
-		if err != nil || pCount > 0 {
-			log.Debugf("chooseEdgeNodes node %s pull count:%d , err:%v", node.NodeID, pCount, err)
-			return false
-		}
+		// pCount, err := m.nodeMgr.GetNodePullingCount(m.nodeMgr.ServerID, node.NodeID, PullingStates)
+		// if err != nil || pCount > 0 {
+		// 	log.Debugf("chooseEdgeNodes node %s pull count:%d , err:%v", node.NodeID, pCount, err)
+		// 	return false
+		// }
 
 		bandwidthDown -= int64(node.BandwidthDown)
 		selectMap[nodeID] = node
