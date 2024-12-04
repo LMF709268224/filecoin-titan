@@ -755,7 +755,9 @@ func (s *Scheduler) getUploadInfo(userID string, urlMode bool, traceID string) (
 
 		token, err := cNode.API.AuthNew(context.Background(), payload)
 		if err != nil {
-			return nil, &api.ErrWeb{Code: terrors.RequestNodeErr.Int(), Message: err.Error()}
+			log.Errorf("getUploadInfo node:[%s] AuthNew err:%s", cNode.NodeID, err.Error())
+			// return nil, &api.ErrWeb{Code: terrors.RequestNodeErr.Int(), Message: err.Error()}
+			continue
 		}
 
 		uploadURL := fmt.Sprintf("http://%s%s", cNode.RemoteAddr, suffix)
