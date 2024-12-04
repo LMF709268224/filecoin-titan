@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/filecoin-project/go-jsonrpc"
 
@@ -246,7 +247,11 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 		return fmt.Errorf("can not get node for asset %s", dt.req.CID)
 	}
 
-	r := byterange.New(1<<20, 10)
+	var (
+		chunkCancelTimeoutSeconds = 10
+		chunkSize                 = 1 << 20 // 1MB
+	)
+	r := byterange.New(int64(chunkSize), chunkCancelTimeoutSeconds)
 
 	workloadMap := make(map[string][]types.Workload)
 	req := &sdkclient.RangeGetFileReq{
@@ -305,10 +310,12 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 		return err
 	}
 
-	go func() {
+	defer func() {
+		// make sure workloadMap wirte-read done
+		time.Sleep(time.Duration(chunkCancelTimeoutSeconds) * time.Second)
 		for workloadID, wds := range workloadMap {
 			req := &types.WorkloadRecordReq{WorkloadID: workloadID, AssetCID: dt.req.CID, Workloads: wds}
-			if err := dt.submitWorkload(ctx, req, workloadScheduler[workloadID]); err != nil {
+			if err := dt.submitWorkload(context.Background(), req, workloadScheduler[workloadID]); err != nil {
 				log.Errorf("sumbitWorkload failed: %s", err.Error())
 			}
 		}
