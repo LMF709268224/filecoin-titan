@@ -426,7 +426,7 @@ func (s *Scheduler) ShareAssetV2(ctx context.Context, info *types.ShareAssetReq)
 	var ret []string
 
 	for _, info := range rsp.SourceList {
-		n := s.NodeManager.GetCandidateNode(info.NodeID)
+		n := s.NodeManager.GetNode(info.NodeID)
 		if n != nil {
 			url := fmt.Sprintf("http://%s/ipfs/%s?token=%s", info.Address, assetCID, tk)
 			if len(n.ExternalURL) > 0 {
