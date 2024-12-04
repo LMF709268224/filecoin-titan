@@ -178,6 +178,7 @@ require (
 	github.com/tinylib/msgp v1.1.8 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
+	github.com/tus/lockfile v1.2.0 // indirect
 	github.com/u2takey/go-utils v0.3.1 // indirect
 	github.com/whyrusleeping/base32 v0.0.0-20170828182744-c30ac30633cc // indirect
 	github.com/whyrusleeping/cbor v0.0.0-20171005072247-63513f603b11 // indirect
@@ -206,7 +207,7 @@ require (
 	golang.org/x/tools v0.27.0 // indirect
 	gonum.org/v1/gonum v0.15.1 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241007155032-5fefd90f89a9 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241007155032-5fefd90f89a9 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241015192408-796eee8c2d53 // indirect
 	google.golang.org/grpc v1.67.1 // indirect
 	google.golang.org/protobuf v1.35.2 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
@@ -244,8 +245,10 @@ require (
 )
 
 require (
+	github.com/chai2010/webp v1.1.1
 	github.com/ipfs/go-blockservice v0.5.2
 	github.com/ipfs/kubo v0.30.0
+	github.com/tus/tusd/v2 v2.6.0
 )
 
 // replace github.com/utopiosphe/titan-storage-sdk => ../titan-storage-sdk

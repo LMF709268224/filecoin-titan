@@ -348,3 +348,9 @@ type ShareAssetReq struct {
 	FilePass   string
 	ExpireTime time.Time
 }
+
+// ShareAssetRsp represents a request for sharing an asset.
+type ShareAssetRsp struct {
+	URLs      []string
+	NodeCount int
+}

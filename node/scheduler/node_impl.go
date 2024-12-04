@@ -991,15 +991,15 @@ func (s *Scheduler) getSource(cNode *node.Node, cid string, titanRsa *titanrsa.R
 	return source
 }
 
-func (s *Scheduler) getDownloadInfos(cid string, needCandidate bool) (*types.AssetSourceDownloadInfoRsp, int64, error) {
+func (s *Scheduler) getDownloadInfos(cid string, needCandidate bool) (*types.AssetSourceDownloadInfoRsp, int64, int, error) {
 	hash, err := cidutil.CIDToHash(cid)
 	if err != nil {
-		return nil, 0, xerrors.Errorf("GetAssetSourceDownloadInfo %s cid to hash err:%s", cid, err.Error())
+		return nil, 0, 0, xerrors.Errorf("GetAssetSourceDownloadInfo %s cid to hash err:%s", cid, err.Error())
 	}
 
 	aInfo, err := s.db.LoadAssetRecord(hash)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	out := &types.AssetSourceDownloadInfoRsp{}
@@ -1009,11 +1009,12 @@ func (s *Scheduler) getDownloadInfos(cid string, needCandidate bool) (*types.Ass
 
 	replicas, err := s.db.LoadReplicasByStatus(hash, []types.ReplicaStatus{types.ReplicaStatusSucceeded})
 	if err != nil {
-		return out, 0, err
+		return out, 0, 0, err
 	}
 
-	if len(replicas) == 0 {
-		return out, 0, nil
+	count := len(replicas)
+	if count == 0 {
+		return out, 0, count, nil
 	}
 
 	type nodeBandwidthUp struct {
@@ -1081,12 +1082,12 @@ func (s *Scheduler) getDownloadInfos(cid string, needCandidate bool) (*types.Ass
 	}
 
 	if len(sources) == 0 {
-		return out, 0, nil
+		return out, 0, count, nil
 	}
 
 	out.SourceList = sources
 
-	return out, aInfo.TotalSize, nil
+	return out, aInfo.TotalSize, count, nil
 }
 
 // GetAssetSourceDownloadInfo retrieves the download details for a specified asset.
@@ -1109,7 +1110,7 @@ func (s *Scheduler) GetAssetSourceDownloadInfo(ctx context.Context, cid string) 
 
 	// TODO need good BandwidthUp
 	// log.Infof("GetAssetSourceDownloadInfo clientID:%s, cid:%s , nodeID:%s", clientID, cid, nodeID)
-	out, totalSize, err := s.getDownloadInfos(cid, false)
+	out, totalSize, _, err := s.getDownloadInfos(cid, false)
 	if err != nil {
 		return nil, err
 	}

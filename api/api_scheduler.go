@@ -62,11 +62,11 @@ type AssetAPI interface {
 	// GenerateTokenForDownloadSources Generate Token For Download Source
 	GenerateTokenForDownloadSources(ctx context.Context, cid string) ([]*types.SourceDownloadInfo, error) //perm:web,admin,user
 	// ShareAssets shares the assets of the user.
-	ShareAssets(ctx context.Context, userID string, assetCID []string, expireTime time.Time) (map[string][]string, error) //perm:web,admin,user
+	// ShareAssets(ctx context.Context, userID string, assetCID []string, expireTime time.Time) (map[string][]string, error) //perm:web,admin,user
 	// ShareEncryptedAsset shares the encrypted file
-	ShareEncryptedAsset(ctx context.Context, userID, assetCID, filePass string, expireTime time.Time) ([]string, error) // perm:web,admin,user
+	// ShareEncryptedAsset(ctx context.Context, userID, assetCID, filePass string, expireTime time.Time) ([]string, error) // perm:web,admin,user
 	// ShareAssetV2 shares the assets of the user.
-	ShareAssetV2(ctx context.Context, info *types.ShareAssetReq) ([]string, error) //perm:web,admin,user
+	ShareAssetV2(ctx context.Context, info *types.ShareAssetReq) (*types.ShareAssetRsp, error) //perm:web,admin,user
 	// MinioUploadFileEvent the event of minio upload file
 	MinioUploadFileEvent(ctx context.Context, event *types.MinioUploadFileEvent) error //perm:candidate
 	// AddAWSData add aws resource information
