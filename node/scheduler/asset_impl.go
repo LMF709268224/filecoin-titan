@@ -396,11 +396,13 @@ func (s *Scheduler) GenerateTokenForDownloadSource(ctx context.Context, nodeID s
 }
 
 // ShareAssetV2  shares the file
-func (s *Scheduler) ShareAssetV2(ctx context.Context, info *types.ShareAssetReq) ([]string, error) {
+func (s *Scheduler) ShareAssetV2(ctx context.Context, info *types.ShareAssetReq) (*types.ShareAssetRsp, error) {
 	assetCID := info.AssetCID
 	expireTime := info.ExpireTime
 
-	rsp, _, err := s.getDownloadInfos(assetCID, true)
+	out := &types.ShareAssetRsp{}
+
+	rsp, _, count, err := s.getDownloadInfos(assetCID, false)
 	if err != nil {
 		log.Errorf("ShareAssetV2 %s getDownloadInfos err:%s \n", assetCID, err.Error())
 		return nil, &api.ErrWeb{Code: terrors.NotFound.Int(), Message: err.Error()}
@@ -434,88 +436,91 @@ func (s *Scheduler) ShareAssetV2(ctx context.Context, info *types.ShareAssetReq)
 		}
 	}
 
-	return ret, err
+	out.URLs = ret
+	out.NodeCount = count
+
+	return out, err
 }
 
 // ShareAssets shares the assets of the user.
-func (s *Scheduler) ShareAssets(ctx context.Context, userID string, assetCIDs []string, expireTime time.Time) (map[string][]string, error) {
-	urls := make(map[string][]string)
-	for _, assetCID := range assetCIDs {
-		rsp, _, err := s.getDownloadInfos(assetCID, true)
-		if err != nil {
-			log.Errorf("ShareAssets %s getDownloadInfos err:%s \n", assetCID, err.Error())
-			return nil, &api.ErrWeb{Code: terrors.NotFound.Int(), Message: err.Error()}
-		}
+// func (s *Scheduler) ShareAssets(ctx context.Context, userID string, assetCIDs []string, expireTime time.Time) (map[string][]string, error) {
+// 	urls := make(map[string][]string)
+// 	for _, assetCID := range assetCIDs {
+// 		rsp, _, err := s.getDownloadInfos(assetCID, true)
+// 		if err != nil {
+// 			log.Errorf("ShareAssets %s getDownloadInfos err:%s \n", assetCID, err.Error())
+// 			return nil, &api.ErrWeb{Code: terrors.NotFound.Int(), Message: err.Error()}
+// 		}
 
-		if len(rsp.SourceList) == 0 {
-			log.Errorf("ShareAssets %s rsp.SourceList == 0 \n", assetCID)
-			return nil, &api.ErrWeb{Code: terrors.NotFoundNode.Int()}
-		}
+// 		if len(rsp.SourceList) == 0 {
+// 			log.Errorf("ShareAssets %s rsp.SourceList == 0 \n", assetCID)
+// 			return nil, &api.ErrWeb{Code: terrors.NotFoundNode.Int()}
+// 		}
 
-		payload := &types.AuthUserUploadDownloadAsset{UserID: userID, AssetCID: assetCID}
-		if !expireTime.IsZero() {
-			payload.Expiration = expireTime
-		}
+// 		payload := &types.AuthUserUploadDownloadAsset{UserID: userID, AssetCID: assetCID}
+// 		if !expireTime.IsZero() {
+// 			payload.Expiration = expireTime
+// 		}
 
-		tk, err := generateAccessToken(payload, "", s)
-		if err != nil {
-			log.Errorf("ShareAssets %s generateAccessToken err:%s \n", assetCID, err.Error())
-			return nil, &api.ErrWeb{Code: terrors.GenerateAccessToken.Int()}
-		}
+// 		tk, err := generateAccessToken(payload, "", s)
+// 		if err != nil {
+// 			log.Errorf("ShareAssets %s generateAccessToken err:%s \n", assetCID, err.Error())
+// 			return nil, &api.ErrWeb{Code: terrors.GenerateAccessToken.Int()}
+// 		}
 
-		for _, info := range rsp.SourceList {
-			n := s.NodeManager.GetCandidateNode(info.NodeID)
-			if n != nil {
-				url := fmt.Sprintf("http://%s/ipfs/%s?token=%s", info.Address, assetCID, tk)
-				if len(n.ExternalURL) > 0 {
-					url = fmt.Sprintf("%s/ipfs/%s?token=%s", n.ExternalURL, assetCID, tk)
-				}
-				urls[assetCID] = append(urls[assetCID], url)
-			}
-		}
-	}
+// 		for _, info := range rsp.SourceList {
+// 			n := s.NodeManager.GetCandidateNode(info.NodeID)
+// 			if n != nil {
+// 				url := fmt.Sprintf("http://%s/ipfs/%s?token=%s", info.Address, assetCID, tk)
+// 				if len(n.ExternalURL) > 0 {
+// 					url = fmt.Sprintf("%s/ipfs/%s?token=%s", n.ExternalURL, assetCID, tk)
+// 				}
+// 				urls[assetCID] = append(urls[assetCID], url)
+// 			}
+// 		}
+// 	}
 
-	return urls, nil
-}
+// 	return urls, nil
+// }
 
 // ShareEncryptedAsset shares the encrypted file
-func (s *Scheduler) ShareEncryptedAsset(ctx context.Context, userID, assetCID, filePass string, expireTime time.Time) ([]string, error) {
-	rsp, _, err := s.getDownloadInfos(assetCID, true)
-	if err != nil {
-		log.Errorf("ShareEncryptedAsset %s getDownloadInfos err:%s \n", assetCID, err.Error())
-		return nil, &api.ErrWeb{Code: terrors.NotFound.Int(), Message: err.Error()}
-	}
-	if len(rsp.SourceList) == 0 {
-		log.Errorf("ShareEncryptedAsset %s rsp.SourceList == 0 \n", assetCID)
-		return nil, &api.ErrWeb{Code: terrors.NotFoundNode.Int()}
-	}
+// func (s *Scheduler) ShareEncryptedAsset(ctx context.Context, userID, assetCID, filePass string, expireTime time.Time) ([]string, error) {
+// 	rsp, _, err := s.getDownloadInfos(assetCID, true)
+// 	if err != nil {
+// 		log.Errorf("ShareEncryptedAsset %s getDownloadInfos err:%s \n", assetCID, err.Error())
+// 		return nil, &api.ErrWeb{Code: terrors.NotFound.Int(), Message: err.Error()}
+// 	}
+// 	if len(rsp.SourceList) == 0 {
+// 		log.Errorf("ShareEncryptedAsset %s rsp.SourceList == 0 \n", assetCID)
+// 		return nil, &api.ErrWeb{Code: terrors.NotFoundNode.Int()}
+// 	}
 
-	payload := &types.AuthUserUploadDownloadAsset{UserID: userID, AssetCID: assetCID}
-	if !expireTime.IsZero() {
-		payload.Expiration = expireTime
-	}
+// 	payload := &types.AuthUserUploadDownloadAsset{UserID: userID, AssetCID: assetCID}
+// 	if !expireTime.IsZero() {
+// 		payload.Expiration = expireTime
+// 	}
 
-	tk, err := generateAccessToken(payload, filePass, s)
-	if err != nil {
-		log.Errorf("ShareEncryptedAsset %s generateAccessToken err:%s \n", assetCID, err.Error())
-		return nil, &api.ErrWeb{Code: terrors.GenerateAccessToken.Int()}
-	}
+// 	tk, err := generateAccessToken(payload, filePass, s)
+// 	if err != nil {
+// 		log.Errorf("ShareEncryptedAsset %s generateAccessToken err:%s \n", assetCID, err.Error())
+// 		return nil, &api.ErrWeb{Code: terrors.GenerateAccessToken.Int()}
+// 	}
 
-	var ret []string
+// 	var ret []string
 
-	for _, info := range rsp.SourceList {
-		n := s.NodeManager.GetCandidateNode(info.NodeID)
-		if n != nil {
-			url := fmt.Sprintf("http://%s/ipfs/%s?token=%s", info.Address, assetCID, tk)
-			if len(n.ExternalURL) > 0 {
-				url = fmt.Sprintf("%s/ipfs/%s?token=%s", n.ExternalURL, assetCID, tk)
-			}
-			ret = append(ret, url)
-		}
-	}
+// 	for _, info := range rsp.SourceList {
+// 		n := s.NodeManager.GetCandidateNode(info.NodeID)
+// 		if n != nil {
+// 			url := fmt.Sprintf("http://%s/ipfs/%s?token=%s", info.Address, assetCID, tk)
+// 			if len(n.ExternalURL) > 0 {
+// 				url = fmt.Sprintf("%s/ipfs/%s?token=%s", n.ExternalURL, assetCID, tk)
+// 			}
+// 			ret = append(ret, url)
+// 		}
+// 	}
 
-	return ret, err
-}
+// 	return ret, err
+// }
 
 // MinioUploadFileEvent handles the Minio file upload event.
 func (s *Scheduler) MinioUploadFileEvent(ctx context.Context, event *types.MinioUploadFileEvent) error {
