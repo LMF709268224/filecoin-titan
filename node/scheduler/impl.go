@@ -169,7 +169,7 @@ func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions,
 	nodeInfo.SchedulerID = s.ServerID
 	nodeInfo.ExternalIP = externalIP
 	nodeInfo.BandwidthUp = units.KiB
-	nodeInfo.NATType = types.NatTypeUnknown.String()
+	nodeInfo.NATType = cNode.NATType
 
 	if opts.GeoInfo != nil {
 		nodeInfo.AreaID = opts.GeoInfo.Geo

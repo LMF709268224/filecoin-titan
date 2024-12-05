@@ -106,6 +106,7 @@ type API struct {
 // New creates a new node
 func New() *Node {
 	node := &Node{
+		NATType:                   types.NatTypeUnknown.String(),
 		resetCountOfIPChangesTime: time.Now(),
 	}
 
