@@ -323,6 +323,7 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
+		removeTemplateFileIfExist(templateFile)
 		if ctx.Err() == context.Canceled {
 			log.Infof("download context canceled")
 		}
@@ -333,6 +334,7 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 			return err
 		}
 	default:
+		removeTemplateFileIfExist(templateFile)
 		log.Infof("download failed")
 	}
 
