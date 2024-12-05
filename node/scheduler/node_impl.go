@@ -1085,6 +1085,10 @@ func (s *Scheduler) getDownloadInfos(cid string, needCandidate bool) (*types.Ass
 		return out, 0, count, nil
 	}
 
+	rand.Shuffle(len(sources), func(i, j int) {
+		sources[i], sources[j] = sources[j], sources[i]
+	})
+
 	out.SourceList = sources
 
 	return out, aInfo.TotalSize, count, nil
