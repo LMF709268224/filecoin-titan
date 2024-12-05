@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
-	"time"
 
 	"github.com/filecoin-project/go-jsonrpc"
 
@@ -248,26 +247,20 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 	}
 
 	var (
-		chunkCancelTimeoutSeconds = 10
-		chunkSize                 = 1 << 20 // 1MB
+		chunkCancelTimeoutSeconds = 5
+		chunkSize                 = 1 << 19 // 1MB
 	)
 	r := byterange.New(int64(chunkSize), chunkCancelTimeoutSeconds)
 
-	workloadMap := make(map[string][]types.Workload)
-	req := &sdkclient.RangeGetFileReq{
-		Workload: workloadMap,
-	}
+	req := &sdkclient.RangeGetFileReq{}
 
-	workloadScheduler := make(map[string]string)
 	for _, downloadInfo := range downloadInfos {
-		workloadScheduler[downloadInfo.WorkloadID] = downloadInfo.SchedulerURL
 		for _, source := range downloadInfo.SourceList {
 			url := fmt.Sprintf("https://%s/ipfs/%s?filename=%s&download=true", source.Address, dt.req.CID, source.Tk)
-			req.Urls = append(req.Urls, sdkclient.UrlWithBodyToken{
-				Url:        url,
-				Token:      &sdkclient.BodyToken{ID: source.Tk.ID, CipherText: source.Tk.CipherText, Sign: source.Tk.Sign},
-				NodeID:     source.NodeID,
-				WorkloadID: downloadInfo.WorkloadID,
+			req.Urls = append(req.Urls, sdkclient.UrlOrWithBodyToken{
+				Url:    url,
+				Token:  &sdkclient.BodyToken{ID: source.Tk.ID, CipherText: source.Tk.CipherText, Sign: source.Tk.Sign},
+				NodeID: source.NodeID,
 			})
 		}
 	}
@@ -310,16 +303,16 @@ func (dt *downloadingTask) doDownload(ctx context.Context) error {
 		return err
 	}
 
-	defer func() {
-		// make sure workloadMap wirte-read done
-		time.Sleep(time.Duration(chunkCancelTimeoutSeconds) * time.Second)
-		for workloadID, wds := range workloadMap {
-			req := &types.WorkloadRecordReq{WorkloadID: workloadID, AssetCID: dt.req.CID, Workloads: wds}
-			if err := dt.submitWorkload(context.Background(), req, workloadScheduler[workloadID]); err != nil {
-				log.Errorf("sumbitWorkload failed: %s", err.Error())
-			}
-		}
-	}()
+	// defer func() {
+	// 	// make sure workloadMap wirte-read done
+	// 	time.Sleep(time.Duration(chunkCancelTimeoutSeconds) * time.Second)
+	// 	for workloadID, wds := range workloadMap {
+	// 		req := &types.WorkloadRecordReq{WorkloadID: workloadID, AssetCID: dt.req.CID, Workloads: wds}
+	// 		if err := dt.submitWorkload(context.Background(), req, workloadScheduler[workloadID]); err != nil {
+	// 			log.Errorf("sumbitWorkload failed: %s", err.Error())
+	// 		}
+	// 	}
+	// }()
 
 	select {
 	case <-ctx.Done():
