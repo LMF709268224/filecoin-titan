@@ -256,16 +256,16 @@ func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions,
 		s.ProjectManager.CheckProjectReplicasFromNode(nodeID)
 
 		s.DataSync.AddNodeToList(nodeID)
-	}
 
-	if nodeType == types.NodeEdge {
-		s.NatManager.DetermineEdgeNATType(context.Background(), nodeID)
-	} else if nodeType == types.NodeCandidate {
-		// err := checkDomain(cNode.ExternalURL)
-		// log.Infof("%s checkDomain [%s] %v", nodeID, cNode.ExternalURL, err)
-		// cNode.IsStorageNode = err == nil
+		if nodeType == types.NodeEdge {
+			s.NatManager.DetermineEdgeNATType(context.Background(), nodeID)
+		} else if nodeType == types.NodeCandidate {
+			// err := checkDomain(cNode.ExternalURL)
+			// log.Infof("%s checkDomain [%s] %v", nodeID, cNode.ExternalURL, err)
+			// cNode.IsStorageNode = err == nil
 
-		s.NatManager.DetermineCandidateNATType(context.Background(), nodeID)
+			s.NatManager.DetermineCandidateNATType(context.Background(), nodeID)
+		}
 	}
 
 	return nil
