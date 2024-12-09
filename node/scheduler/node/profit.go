@@ -16,7 +16,7 @@ const (
 
 	phoneWeighting = 5.0
 
-	l1RBase     = 200000.0 / 288.0 // every 5 minutes
+	l1RBase     = 200000.0 / 1440.0 // every 1 minutes
 	penaltyRate = 0.0001
 
 	exitRate = 0.6
@@ -157,12 +157,12 @@ func (m *Manager) GetEdgeBaseProfitDetails(node *Node, minute int) (float64, *ty
 
 // GetCandidateBaseProfitDetails Basic Rewards
 func (m *Manager) GetCandidateBaseProfitDetails(node *Node, minute int) *types.ProfitDetails {
-	// Every 5 minutes
+	// Every 1 minutes
 	arR := rateOfAR(node.OnlineRate)
 	arO := rateOfOnline(node.OnlineDuration)
 	mcx := l1RBase * node.OnlineRate * arR * arO
 
-	count := roundDivision(minute, 5)
+	count := roundDivision(minute, 1)
 	mcx = mcx * float64(count)
 
 	if mcx < 0.000001 {

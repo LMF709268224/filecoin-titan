@@ -20,7 +20,7 @@ func (m *Manager) startNodeKeepaliveTimer() {
 		<-ticker.C
 
 		m.nodesKeepalive(minute, true) // count == 5)
-		// minute = 1
+		minute = 1
 		// if count == 5 {
 		// 	count = 0
 		// }
