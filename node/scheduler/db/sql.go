@@ -163,4 +163,8 @@ func doExec(d *SQLDB, serverID dtypes.ServerID) {
 	// if err != nil {
 	// 	log.Errorf("InitTables doExec err:%s", err.Error())
 	// }
+	_, err := d.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD nat_type             VARCHAR(32)     DEFAULT 'UnknowNAT'", nodeInfoTable))
+	if err != nil {
+		log.Errorf("InitTables doExec err:%s", err.Error())
+	}
 }

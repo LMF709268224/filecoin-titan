@@ -14,17 +14,17 @@ func (m *Manager) startNodeKeepaliveTimer() {
 	defer ticker.Stop()
 
 	minute := 10 // penalty free time
-	// count := 5
+	count := 5
 
 	for {
 		<-ticker.C
 
-		m.nodesKeepalive(minute, true) // count == 5)
+		m.nodesKeepalive(minute, count == 5)
 		minute = 1
-		// if count == 5 {
-		// 	count = 0
-		// }
-		// count++
+		if count == 5 {
+			count = 0
+		}
+		count++
 	}
 }
 
@@ -127,6 +127,7 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 	if !isSave {
 		return
 	}
+	log.Infoln("nodesKeepalive save info start")
 
 	nodeOnlineCount[string(m.ServerID)] = m.serverTodayOnlineTimeWindow
 	m.serverTodayOnlineTimeWindow = 0
@@ -150,6 +151,8 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 	// if err != nil {
 	// 	log.Errorf("UpdateServerOnlineCount err:%s", err.Error())
 	// }
+
+	log.Infoln("nodesKeepalive save info done")
 }
 
 // SetNodeOffline removes the node's IP and geo information from the manager.

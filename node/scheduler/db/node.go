@@ -176,7 +176,7 @@ func (n *SQLDB) UpdateNodeDynamicInfo(infos []*types.NodeDynamicInfo) error {
 	}
 	defer tx.Rollback()
 
-	stmt, err := tx.PrepareNamed(`UPDATE ` + nodeInfoTable + ` SET last_seen=:last_seen, online_duration=:online_duration, disk_usage=:disk_usage, bandwidth_up=:bandwidth_up, bandwidth_down=:bandwidth_down, titan_disk_usage=:titan_disk_usage, available_disk_space=:available_disk_space, download_traffic=:download_traffic, upload_traffic=:upload_traffic WHERE node_id=:node_id`)
+	stmt, err := tx.PrepareNamed(`UPDATE ` + nodeInfoTable + ` SET nat_type=:nat_type, last_seen=:last_seen, online_duration=:online_duration, disk_usage=:disk_usage, bandwidth_up=:bandwidth_up, bandwidth_down=:bandwidth_down, titan_disk_usage=:titan_disk_usage, available_disk_space=:available_disk_space, download_traffic=:download_traffic, upload_traffic=:upload_traffic WHERE node_id=:node_id`)
 	if err != nil {
 		return err
 	}
