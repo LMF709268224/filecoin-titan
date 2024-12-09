@@ -14,17 +14,17 @@ func (m *Manager) startNodeKeepaliveTimer() {
 	defer ticker.Stop()
 
 	minute := 10 // penalty free time
-	count := 5
+	// count := 5
 
 	for {
 		<-ticker.C
 
-		m.nodesKeepalive(minute, count == 5)
-		minute = 1
-		if count == 5 {
-			count = 0
-		}
-		count++
+		m.nodesKeepalive(minute, true) // count == 5)
+		// minute = 1
+		// if count == 5 {
+		// 	count = 0
+		// }
+		// count++
 	}
 }
 
@@ -88,6 +88,7 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 			node.TodayOnlineTimeWindow = 0
 		}
 	}
+
 	l3List := m.GetValidL3Node()
 	for _, node := range l3List {
 		if m.checkNodeStatus(node, t) {
@@ -109,6 +110,7 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 			node.TodayOnlineTimeWindow = 0
 		}
 	}
+
 	l5List := m.GetValidL5Node()
 	for _, node := range l5List {
 		if m.checkNodeStatus(node, t) {

@@ -26,6 +26,10 @@ type NodeDynamicInfo struct {
 	BandwidthDown      int64     `json:"bandwidth_down" db:"bandwidth_down"`
 	DownloadTraffic    int64     `db:"download_traffic"`
 	UploadTraffic      int64     `db:"upload_traffic"`
+	NATType            string    `db:"nat_type"`
+
+	BandwidthUpScore   int64
+	BandwidthDownScore int64
 
 	TodayOnlineTimeWindow int // today online time window
 }
@@ -65,14 +69,14 @@ type NodeStatisticsInfo struct {
 
 // NodeInfo contains information about a node.
 type NodeInfo struct {
-	IsTestNode      bool
-	Type            NodeType
-	ExternalIP      string
-	InternalIP      string
-	CPUUsage        float64
-	MemoryUsage     float64
-	Status          NodeStatus
-	NATType         string
+	IsTestNode  bool
+	Type        NodeType
+	ExternalIP  string
+	InternalIP  string
+	CPUUsage    float64
+	MemoryUsage float64
+	Status      NodeStatus
+	// NATType         string
 	ClientType      NodeClientType
 	BackProjectTime int64
 	RemoteAddr      string
@@ -708,4 +712,28 @@ type KeepaliveRsp struct {
 	SessionID string
 	ErrCode   int
 	ErrMsg    string
+}
+
+type ServiceType int
+
+const (
+	ServiceTypeUpload ServiceType = iota
+	ServiceTypeDownload
+)
+
+type ServiceStatus int
+
+const (
+	ServiceTypeSucceed ServiceStatus = iota
+	ServiceTypeFailed
+)
+
+type ServiceEvent struct {
+	NodeID    string        `db:"node_id"`
+	Type      ServiceType   `db:"type"`
+	Size      int64         `db:"size"`
+	Status    ServiceStatus `db:"status"`
+	Peak      int64         `db:"peak"`
+	EndTime   time.Time     `db:"end_time"`
+	StartTime time.Time     `db:"start_time"`
 }

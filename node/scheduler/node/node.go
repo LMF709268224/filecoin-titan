@@ -55,7 +55,6 @@ type Node struct {
 	ExternalIP      string
 	CPUUsage        float64
 	MemoryUsage     float64
-	NATType         string
 	ClientType      types.NodeClientType
 	BackProjectTime int64
 	RemoteAddr      string
@@ -106,7 +105,6 @@ type API struct {
 // New creates a new node
 func New() *Node {
 	node := &Node{
-		NATType:                   types.NatTypeUnknown.String(),
 		resetCountOfIPChangesTime: time.Now(),
 	}
 

@@ -169,7 +169,7 @@ func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions,
 	nodeInfo.SchedulerID = s.ServerID
 	nodeInfo.ExternalIP = externalIP
 	nodeInfo.BandwidthUp = units.KiB
-	nodeInfo.NATType = cNode.NATType
+	nodeInfo.NATType = types.NatTypeUnknown.String()
 
 	if opts.GeoInfo != nil {
 		nodeInfo.AreaID = opts.GeoInfo.Geo
@@ -201,6 +201,7 @@ func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions,
 		nodeInfo.WSServerID = dbInfo.WSServerID
 		nodeInfo.Profit = dbInfo.Profit
 		nodeInfo.FirstTime = dbInfo.FirstTime
+		nodeInfo.NATType = dbInfo.NATType
 
 		if dbInfo.DeactivateTime > 0 && dbInfo.DeactivateTime < time.Now().Unix() {
 			return xerrors.Errorf("nodeConnect err The node %s has been deactivate and cannot be logged in", nodeID)

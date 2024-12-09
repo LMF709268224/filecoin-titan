@@ -1200,7 +1200,7 @@ func (s *Scheduler) NodeKeepalive(ctx context.Context) (*types.KeepaliveRsp, err
 			return nil, xerrors.Errorf("The NAT type [%s] of the node [%s] does not conform to the rules", node.NATType, nodeID)
 		}
 
-		if !node.IsStorageNode && !node.IsTestNode {
+		if node.NATType != types.NatTypeUnknown.String() && !node.IsStorageNode && !node.IsTestNode {
 			return nil, xerrors.Errorf("%s checkDomain %s ", nodeID, node.ExternalURL)
 		}
 	}
@@ -1258,7 +1258,7 @@ func (s *Scheduler) NodeKeepaliveV2(ctx context.Context) (uuid.UUID, error) {
 					return uuid, xerrors.Errorf("The NAT type [%s] of the node [%s] does not conform to the rules", node.NATType, nodeID)
 				}
 
-				if !node.IsStorageNode && !node.IsTestNode {
+				if node.NATType != types.NatTypeUnknown.String() && !node.IsStorageNode && !node.IsTestNode {
 					return uuid, xerrors.Errorf("%s checkDomain %s ", nodeID, node.ExternalURL)
 				}
 			}
