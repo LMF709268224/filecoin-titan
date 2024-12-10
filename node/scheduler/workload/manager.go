@@ -98,10 +98,11 @@ func (m *Manager) saveRetrieveEventFromWorkload(dw types.Workload, hash, downloa
 	failedCount := 0
 
 	if dw.Status == types.WorkloadReqStatusSucceeded {
-		speed = int64((float64(dw.DownloadSize) / float64(dw.CostTime)) * 1000)
-		if speed > 0 {
+		sd := int64((float64(dw.DownloadSize) / float64(dw.CostTime)) * 1000)
+		if sd > 0 {
 			m.nodeMgr.UpdateNodeBandwidths(downloadNode, speed, 0)
 			m.nodeMgr.UpdateNodeBandwidths(dw.SourceID, 0, speed)
+			speed = sd
 		}
 		status = types.EventStatusSucceed
 		succeededCount = 1

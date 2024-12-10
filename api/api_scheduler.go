@@ -216,6 +216,8 @@ type NodeAPI interface {
 	CreateTunnel(ctx context.Context, req *types.CreateTunnelReq) error // perm:candidate
 	// UserAssetDownloadResult After a user downloads a resource from a candidate node, the candidate node reports the download result
 	UserAssetDownloadResultV2(ctx context.Context, info *types.RetrieveEvent) error //perm:candidate
+	// LoadNodeBandwidthScores
+	LoadNodeBandwidthScores(ctx context.Context, nodeID string, start, end time.Time, limit int, offset int) (*types.ListBandwidthScoreRsp, error) //perm:user,web,admin
 }
 
 // ProjectAPI is an interface for project
@@ -289,11 +291,12 @@ type Scheduler interface {
 
 	GetReplicaEvents(ctx context.Context, start, end time.Time, limit, offset int) (*types.ListAssetReplicaEventRsp, error) //perm:web,admin
 
+	AddNodeServiceEvent(ctx context.Context, event *types.ServiceEvent) error //perm:web,admin
+
 	// Deprecated api
 	// AssignTunserverURL
 	AssignTunserverURL(ctx context.Context) (*types.TunserverRsp, error)                                        //perm:edge
 	GetNodeUploadInfo(ctx context.Context, userID string, pass string, urlMode bool) (*types.UploadInfo, error) //perm:user,web,admin
 	UserAssetDownloadResult(ctx context.Context, userID, cid string, totalTraffic, peakBandwidth int64) error   //perm:candidate
-
-	GetDeploymentProviderIP(ctx context.Context, id types.DeploymentID) (string, error) //perm:edge,candidate,web,locator,admin
+	GetDeploymentProviderIP(ctx context.Context, id types.DeploymentID) (string, error)                         //perm:edge,candidate,web,locator,admin
 }

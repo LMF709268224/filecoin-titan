@@ -857,14 +857,14 @@ func (n *SQLDB) CleanData() {
 		log.Warnf("CleanData replicaEventTable err:%s", err.Error())
 	}
 
-	cleanTime := time.Now().Add(-5).Unix()
-	query = fmt.Sprintf(`DELETE FROM %s WHERE end_time<? `, retrieveEventTable)
-	_, err = n.db.Exec(query, cleanTime)
-	if err != nil {
-		log.Warnf("CleanData retrieveEventTable err:%s", err.Error())
-	}
+	// cleanTime := time.Now().Add(-5).Unix()
+	// query = fmt.Sprintf(`DELETE FROM %s WHERE end_time<? `, retrieveEventTable)
+	// _, err = n.db.Exec(query, cleanTime)
+	// if err != nil {
+	// 	log.Warnf("CleanData retrieveEventTable err:%s", err.Error())
+	// }
 
-	query = fmt.Sprintf(`DELETE FROM %s WHERE client_end_time<DATE_SUB(NOW(), INTERVAL 20 DAY) `, workloadRecordTable)
+	query = fmt.Sprintf(`DELETE FROM %s WHERE client_end_time<DATE_SUB(NOW(), INTERVAL 7 DAY) `, workloadRecordTable)
 	_, err = n.db.Exec(query)
 	if err != nil {
 		log.Warnf("CleanData workloadRecordTable err:%s", err.Error())
@@ -905,6 +905,12 @@ func (n *SQLDB) CleanData() {
 	if err != nil {
 		log.Warnf("CleanData nodeRetrieveTable err:%s", err.Error())
 	}
+
+	// query = fmt.Sprintf(`DELETE FROM %s WHERE created_time<DATE_SUB(NOW(), INTERVAL 30 DAY) `, bandwidthScoreEventTable)
+	// _, err = n.db.Exec(query)
+	// if err != nil {
+	// 	log.Warnf("CleanData bandwidthScoreEventTable err:%s", err.Error())
+	// }
 }
 
 // SaveCandidateCodeInfo stores information related to candidate codes used in node verification or testing.

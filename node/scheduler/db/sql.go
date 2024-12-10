@@ -64,6 +64,8 @@ const (
 	nodeStatisticsTable = "node_statistics"
 	nodeRetrieveTable   = "node_retrieve"
 
+	serviceEventTable = "service_event"
+
 	// Default limits for loading table entries.
 	loadNodeInfosDefaultLimit           = 1000
 	loadValidationResultsDefaultLimit   = 100
@@ -118,7 +120,7 @@ func InitTables(d *SQLDB, serverID dtypes.ServerID) error {
 	tx.MustExec(fmt.Sprintf(cBucketTable, bucketTable))
 	tx.MustExec(fmt.Sprintf(cWorkloadTable, workloadRecordTable))
 	tx.MustExec(fmt.Sprintf(cReplicaEventTable, replicaEventTable))
-	tx.MustExec(fmt.Sprintf(cRetrieveEventTable, retrieveEventTable))
+	// tx.MustExec(fmt.Sprintf(cRetrieveEventTable, retrieveEventTable))
 	tx.MustExec(fmt.Sprintf(cReplenishBackupTable, replenishBackupTable))
 	tx.MustExec(fmt.Sprintf(cAWSDataTable, awsDataTable))
 	tx.MustExec(fmt.Sprintf(cProfitDetailsTable, profitDetailsTable))
@@ -137,6 +139,7 @@ func InitTables(d *SQLDB, serverID dtypes.ServerID) error {
 	tx.MustExec(fmt.Sprintf(cNodeStatisticsTable, nodeStatisticsTable))
 	tx.MustExec(fmt.Sprintf(cNodeRetrieveTable, nodeRetrieveTable))
 	tx.MustExec(fmt.Sprintf(cAssetDataTable, assetDataTable))
+	tx.MustExec(fmt.Sprintf(cServiceEventTable, serviceEventTable))
 
 	return tx.Commit()
 }
@@ -163,7 +166,22 @@ func doExec(d *SQLDB, serverID dtypes.ServerID) {
 	// if err != nil {
 	// 	log.Errorf("InitTables doExec err:%s", err.Error())
 	// }
-	_, err := d.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD nat_type             VARCHAR(32)     DEFAULT 'UnknowNAT'", nodeInfoTable))
+	// _, err := d.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD nat_type             VARCHAR(32)     DEFAULT 'UnknowNAT'", nodeInfoTable))
+	// if err != nil {
+	// 	log.Errorf("InitTables doExec err:%s", err.Error())
+	// }
+
+	// ALTER TABLE node_info ADD nat_type             VARCHAR(32)     DEFAULT 'UnknowNAT';
+
+	_, err := d.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD trace_id      VARCHAR(128) DEFAULT ''", serviceEventTable))
+	if err != nil {
+		log.Errorf("InitTables doExec err:%s", err.Error())
+	}
+	_, err = d.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD speed         BIGINT       DEFAULT 0", serviceEventTable))
+	if err != nil {
+		log.Errorf("InitTables doExec err:%s", err.Error())
+	}
+	_, err = d.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD score         INT          DEFAULT 0", serviceEventTable))
 	if err != nil {
 		log.Errorf("InitTables doExec err:%s", err.Error())
 	}

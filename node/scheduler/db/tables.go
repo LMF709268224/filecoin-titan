@@ -64,6 +64,7 @@ var cNodeInfoTable = `
 		free_up_disk_time    DATETIME        DEFAULT '2024-04-20 12:10:15',
 		ws_server_id         VARCHAR(128)    DEFAULT '',
 		force_offline        BOOLEAN         DEFAULT false,
+	    nat_type             VARCHAR(32)     DEFAULT 'UnknowNAT',
 	    PRIMARY KEY (node_id),
 		KEY idx_last_seen (last_seen)
 	) ENGINE=InnoDB COMMENT='node info';`
@@ -97,7 +98,8 @@ var cNodeRetrieveTable = `
 		KEY idx_trace_id  (trace_id),
 		KEY idx_node_id  (node_id),
 		KEY idx_hash_id  (hash),
-		KEY idx_client_id (client_id)
+		KEY idx_client_id (client_id),
+		KEY idx_created_time (created_time)
 	) ENGINE=InnoDB COMMENT='node retrieve record';`
 
 var cValidationResultsTable = `
@@ -231,20 +233,20 @@ var cReplicaEventTable = `
 		KEY idx_created_time (created_time)
 	) ENGINE=InnoDB COMMENT='asset replica event';`
 
-var cRetrieveEventTable = `
-    CREATE TABLE if not exists %s (
-		token_id        VARCHAR(128)   NOT NULL UNIQUE,
-		node_id         VARCHAR(128)   NOT NULL,
-		client_id       VARCHAR(128)   NOT NULL,
-		cid             VARCHAR(128)   NOT NULL,
-		size            INT            DEFAULT 0,
-		created_time    INT            DEFAULT 0,
-		end_time        INT            DEFAULT 0,
-	    profit          DECIMAL(14, 6) DEFAULT 0,
-		PRIMARY KEY (token_id),
-		KEY idx_node_id (node_id),
-		KEY idx_created_time (created_time)
-	) ENGINE=InnoDB COMMENT='asset retrieve event';`
+// var cRetrieveEventTable = `
+//     CREATE TABLE if not exists %s (
+// 		token_id        VARCHAR(128)   NOT NULL UNIQUE,
+// 		node_id         VARCHAR(128)   NOT NULL,
+// 		client_id       VARCHAR(128)   NOT NULL,
+// 		cid             VARCHAR(128)   NOT NULL,
+// 		size            INT            DEFAULT 0,
+// 		created_time    INT            DEFAULT 0,
+// 		end_time        INT            DEFAULT 0,
+// 	    profit          DECIMAL(14, 6) DEFAULT 0,
+// 		PRIMARY KEY (token_id),
+// 		KEY idx_node_id (node_id),
+// 		KEY idx_created_time (created_time)
+// 	) ENGINE=InnoDB COMMENT='asset retrieve event';`
 
 var cReplenishBackupTable = `
     CREATE TABLE if not exists %s (
@@ -393,6 +395,46 @@ var cUserAssetGroupTable = `
 	    KEY idx_user_id (user_id),
 	    KEY idx_parent (parent)
     ) ENGINE=InnoDB COMMENT='user asset group';`
+
+var cBandwidthScoreEventTable = `
+    CREATE TABLE if not exists %s (
+	    node_id                     VARCHAR(128) NOT NULL,
+		bandwidth_up                BIGINT       DEFAULT 0,
+		bandwidth_down              BIGINT       DEFAULT 0,
+		bandwidth_up_node           BIGINT       DEFAULT 0,
+		bandwidth_down_node         BIGINT       DEFAULT 0,
+		bandwidth_up_server         BIGINT       DEFAULT 0,
+		bandwidth_down_server       BIGINT       DEFAULT 0,
+		bandwidth_up_score          INT          DEFAULT 0,
+		bandwidth_down_score        INT          DEFAULT 0,
+		bandwidth_up_succeed        INT          DEFAULT 0,
+		bandwidth_down_succeed      INT          DEFAULT 0,
+		bandwidth_up_total          INT          DEFAULT 0,
+		bandwidth_down_total        INT          DEFAULT 0,
+		bandwidth_up_final_score    INT          DEFAULT 0,
+		bandwidth_down_final_score  INT          DEFAULT 0,
+	    created_time                DATETIME     DEFAULT CURRENT_TIMESTAMP,
+	    KEY idx_node_id (node_id),
+	    KEY idx_created_time (created_time)
+    ) ENGINE=InnoDB COMMENT='node bandwidth score event';`
+
+var cServiceEventTable = `
+    CREATE TABLE if not exists %s (
+	    trace_id      VARCHAR(128) DEFAULT '',
+	    node_id       VARCHAR(128) NOT NULL,
+		type          TINYINT      DEFAULT 0,
+		size          BIGINT       DEFAULT 0,
+		status        TINYINT      DEFAULT 0,
+		peak          BIGINT       DEFAULT 0,
+		speed         BIGINT       DEFAULT 0,
+		score         INT          DEFAULT 0,
+		end_time      DATETIME     DEFAULT CURRENT_TIMESTAMP,
+		start_time    DATETIME     DEFAULT CURRENT_TIMESTAMP,
+	    KEY idx_node_id (node_id),
+	    KEY idx_type (type),
+	    KEY idx_status (status),
+	    KEY idx_end_time (end_time)
+    ) ENGINE=InnoDB COMMENT='node service event';`
 
 // var cDeploymentTable = `
 // CREATE TABLE IF NOT EXISTS %s (

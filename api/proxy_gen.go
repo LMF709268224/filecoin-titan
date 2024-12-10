@@ -427,6 +427,8 @@ type NodeAPIStruct struct {
 
 		L5Connect func(p0 context.Context, p1 *types.ConnectOptions) (error) `perm:"l5"`
 
+		LoadNodeBandwidthScores func(p0 context.Context, p1 string, p2 time.Time, p3 time.Time, p4 int, p5 int) (*types.ListBandwidthScoreRsp, error) `perm:"user,web,admin"`
+
 		MigrateNodeIn func(p0 context.Context, p1 *types.NodeMigrateInfo) (error) `perm:"web,admin"`
 
 		MigrateNodeOut func(p0 context.Context, p1 string) (*types.NodeMigrateInfo, error) `perm:"web,admin"`
@@ -518,6 +520,8 @@ type SchedulerStruct struct {
 	ProjectAPIStruct
 
 	Internal struct {
+
+		AddNodeServiceEvent func(p0 context.Context, p1 *types.ServiceEvent) (error) `perm:"web,admin"`
 
 		AssignTunserverURL func(p0 context.Context) (*types.TunserverRsp, error) `perm:"edge"`
 
@@ -2042,6 +2046,17 @@ func (s *NodeAPIStub) L5Connect(p0 context.Context, p1 *types.ConnectOptions) (e
 	return ErrNotSupported
 }
 
+func (s *NodeAPIStruct) LoadNodeBandwidthScores(p0 context.Context, p1 string, p2 time.Time, p3 time.Time, p4 int, p5 int) (*types.ListBandwidthScoreRsp, error) {
+	if s.Internal.LoadNodeBandwidthScores == nil {
+		return nil, ErrNotSupported
+	}
+	return s.Internal.LoadNodeBandwidthScores(p0, p1, p2, p3, p4, p5)
+}
+
+func (s *NodeAPIStub) LoadNodeBandwidthScores(p0 context.Context, p1 string, p2 time.Time, p3 time.Time, p4 int, p5 int) (*types.ListBandwidthScoreRsp, error) {
+	return nil, ErrNotSupported
+}
+
 func (s *NodeAPIStruct) MigrateNodeIn(p0 context.Context, p1 *types.NodeMigrateInfo) (error) {
 	if s.Internal.MigrateNodeIn == nil {
 		return ErrNotSupported
@@ -2388,6 +2403,17 @@ func (s *ProjectAPIStub) UpdateProjectStatus(p0 context.Context, p1 []*types.Pro
 
 
 
+
+func (s *SchedulerStruct) AddNodeServiceEvent(p0 context.Context, p1 *types.ServiceEvent) (error) {
+	if s.Internal.AddNodeServiceEvent == nil {
+		return ErrNotSupported
+	}
+	return s.Internal.AddNodeServiceEvent(p0, p1)
+}
+
+func (s *SchedulerStub) AddNodeServiceEvent(p0 context.Context, p1 *types.ServiceEvent) (error) {
+	return ErrNotSupported
+}
 
 func (s *SchedulerStruct) AssignTunserverURL(p0 context.Context) (*types.TunserverRsp, error) {
 	if s.Internal.AssignTunserverURL == nil {

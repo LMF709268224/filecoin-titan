@@ -26,10 +26,31 @@ type RetrieveEvent struct {
 	PeakBandwidth int64
 }
 
-// ListRetrieveEventRsp list retrieve event
-type ListRetrieveEventRsp struct {
-	Total int              `json:"total"`
-	List  []*RetrieveEvent `json:"list"`
+// BandwidthScore bandwidth event
+type BandwidthScore struct {
+	NodeID              string `db:"node_id"`
+	BandwidthUp         int64  `db:"bandwidth_up"`
+	BandwidthDown       int64  `db:"bandwidth_down"`
+	BandwidthUpNode     int64  `db:"bandwidth_up_node"`
+	BandwidthDownNode   int64  `db:"bandwidth_down_node"`
+	BandwidthUpServer   int64  `db:"bandwidth_up_server"`
+	BandwidthDownServer int64  `db:"bandwidth_down_server"`
+	BandwidthUpScore    int64  `db:"bandwidth_up_score"`
+	BandwidthDownScore  int64  `db:"bandwidth_down_score"`
+
+	BandwidthUpSucceed      int64     `db:"bandwidth_up_succeed"`
+	BandwidthDownSucceed    int64     `db:"bandwidth_down_succeed"`
+	BandwidthUpTotal        int64     `db:"bandwidth_up_total"`
+	BandwidthDownTotal      int64     `db:"bandwidth_down_total"`
+	BandwidthUpFinalScore   int64     `db:"bandwidth_up_final_score"`
+	BandwidthDownFinalScore int64     `db:"bandwidth_down_final_score"`
+	CreatedTime             time.Time `db:"created_time"`
+}
+
+// ListBandwidthScoreRsp list bandwidth event
+type ListBandwidthScoreRsp struct {
+	Total int               `json:"total"`
+	List  []*BandwidthScore `json:"list"`
 }
 
 // AssetReplicaEventInfo replica event info

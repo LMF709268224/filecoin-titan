@@ -1861,3 +1861,20 @@ func (s *Scheduler) CreateTunnel(ctx context.Context, req *types.CreateTunnelReq
 
 	return eNode.CreateTunnel(ctx, req)
 }
+
+func (s *Scheduler) LoadNodeBandwidthScores(ctx context.Context, nodeID string, start, end time.Time, limit int, offset int) (*types.ListBandwidthScoreRsp, error) {
+	// return s.db.LoadBandwidthScoresOfNode(nodeID, limit, offset, start, end)
+	return nil, nil
+}
+
+func (s *Scheduler) AddNodeServiceEvent(ctx context.Context, event *types.ServiceEvent) error {
+	err := s.db.NodeExists(event.NodeID)
+	if err != nil {
+		return err
+	}
+
+	// TODO
+	// event.Score = ??
+
+	return s.db.SaveServiceEvent(event)
+}

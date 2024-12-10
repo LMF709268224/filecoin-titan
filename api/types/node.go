@@ -729,6 +729,7 @@ const (
 )
 
 type ServiceEvent struct {
+	TraceID   string        `db:"trace_id"`
 	NodeID    string        `db:"node_id"`
 	Type      ServiceType   `db:"type"`
 	Size      int64         `db:"size"`
@@ -736,4 +737,7 @@ type ServiceEvent struct {
 	Peak      int64         `db:"peak"`
 	EndTime   time.Time     `db:"end_time"`
 	StartTime time.Time     `db:"start_time"`
+	Speed     int64         `db:"speed"`
+
+	Score int64 `db:"score"`
 }

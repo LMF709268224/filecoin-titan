@@ -36,6 +36,10 @@ const (
 	oneDay = 24 * time.Hour
 
 	penaltyFreeTime = 10 * time.Minute
+
+	calcScoreTime = 5 * time.Minute
+
+	qualityCheckTime = 15 * time.Minute
 )
 
 // Manager is the node manager responsible for managing the online nodes
@@ -93,6 +97,8 @@ func NewManager(sdb *db.SQLDB, serverID dtypes.ServerID, pk *rsa.PrivateKey, pb 
 	go nodeManager.startNodePenaltyTimer()
 	go nodeManager.startCheckNodeInfoTimer()
 	go nodeManager.startUpdateNodeMetricsTimer()
+	// go nodeManager.startCalcScoreTimer()
+	// go nodeManager.qualityCheckTimer()
 
 	return nodeManager
 }

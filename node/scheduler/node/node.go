@@ -105,6 +105,7 @@ type API struct {
 // New creates a new node
 func New() *Node {
 	node := &Node{
+		IsStorageNode:             true,
 		resetCountOfIPChangesTime: time.Now(),
 	}
 
