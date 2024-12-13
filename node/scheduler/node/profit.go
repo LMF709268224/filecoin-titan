@@ -364,7 +364,7 @@ func RateOfL2Mx(onlineDuration int) float64 {
 	count := onlineDay - 7
 
 	rate := 1.0 + (float64(count) * 0.03)
-	return math.Max(6, rate)
+	return math.Min(6, rate)
 }
 
 func bToGB(b float64) float64 {
