@@ -14,14 +14,14 @@ func (m *Manager) startNodeKeepaliveTimer() {
 	defer ticker.Stop()
 
 	minute := 10 // penalty free time
-	count := 5
+	count := 2
 
 	for {
 		<-ticker.C
 
-		m.nodesKeepalive(minute, count == 5)
+		m.nodesKeepalive(minute, count == 2)
 		minute = 1
-		if count == 5 {
+		if count == 2 {
 			count = 0
 		}
 		count++
@@ -146,11 +146,6 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 	if err != nil {
 		log.Errorf("updateNodeData UpdateNodeOnlineCount err:%s", err.Error())
 	}
-	// // update server count
-	// err = m.UpdateServerOnlineCount(string(m.ServerID), m.serverTodayOnlineTimeWindow, saveDate)
-	// if err != nil {
-	// 	log.Errorf("UpdateServerOnlineCount err:%s", err.Error())
-	// }
 
 	log.Infoln("nodesKeepalive save info done")
 }

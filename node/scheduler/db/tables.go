@@ -396,27 +396,45 @@ var cUserAssetGroupTable = `
 	    KEY idx_parent (parent)
     ) ENGINE=InnoDB COMMENT='user asset group';`
 
-var cBandwidthScoreEventTable = `
+// var cBandwidthScoreEventTable = `
+//     CREATE TABLE if not exists %s (
+// 	    node_id                     VARCHAR(128) NOT NULL,
+// 		bandwidth_up                BIGINT       DEFAULT 0,
+// 		bandwidth_down              BIGINT       DEFAULT 0,
+// 		bandwidth_up_node           BIGINT       DEFAULT 0,
+// 		bandwidth_down_node         BIGINT       DEFAULT 0,
+// 		bandwidth_up_server         BIGINT       DEFAULT 0,
+// 		bandwidth_down_server       BIGINT       DEFAULT 0,
+// 		bandwidth_up_score          INT          DEFAULT 0,
+// 		bandwidth_down_score        INT          DEFAULT 0,
+// 		bandwidth_up_succeed        INT          DEFAULT 0,
+// 		bandwidth_down_succeed      INT          DEFAULT 0,
+// 		bandwidth_up_total          INT          DEFAULT 0,
+// 		bandwidth_down_total        INT          DEFAULT 0,
+// 		bandwidth_up_final_score    INT          DEFAULT 0,
+// 		bandwidth_down_final_score  INT          DEFAULT 0,
+// 	    created_time                DATETIME     DEFAULT CURRENT_TIMESTAMP,
+// 	    KEY idx_node_id (node_id),
+// 	    KEY idx_created_time (created_time)
+//     ) ENGINE=InnoDB COMMENT='node bandwidth score event';`
+
+var cBandwidthEventTable = `
     CREATE TABLE if not exists %s (
-	    node_id                     VARCHAR(128) NOT NULL,
-		bandwidth_up                BIGINT       DEFAULT 0,
-		bandwidth_down              BIGINT       DEFAULT 0,
-		bandwidth_up_node           BIGINT       DEFAULT 0,
-		bandwidth_down_node         BIGINT       DEFAULT 0,
-		bandwidth_up_server         BIGINT       DEFAULT 0,
-		bandwidth_down_server       BIGINT       DEFAULT 0,
-		bandwidth_up_score          INT          DEFAULT 0,
-		bandwidth_down_score        INT          DEFAULT 0,
-		bandwidth_up_succeed        INT          DEFAULT 0,
-		bandwidth_down_succeed      INT          DEFAULT 0,
-		bandwidth_up_total          INT          DEFAULT 0,
-		bandwidth_down_total        INT          DEFAULT 0,
-		bandwidth_up_final_score    INT          DEFAULT 0,
-		bandwidth_down_final_score  INT          DEFAULT 0,
-	    created_time                DATETIME     DEFAULT CURRENT_TIMESTAMP,
+	    node_id             VARCHAR(128) NOT NULL,
+		b_up_peak           BIGINT       DEFAULT 0,
+		b_down_peak         BIGINT       DEFAULT 0,
+		b_up_free           BIGINT       DEFAULT 0,
+		b_down_free         BIGINT       DEFAULT 0,
+		b_up_load           BIGINT       DEFAULT 0,
+		b_down_load         BIGINT       DEFAULT 0,
+		size                BIGINT       DEFAULT 0,
+		task_success        INT          DEFAULT 0,
+		task_total          INT          DEFAULT 0,
+		score               INT          DEFAULT 0,
+	    created_time        DATETIME     DEFAULT CURRENT_TIMESTAMP,
 	    KEY idx_node_id (node_id),
 	    KEY idx_created_time (created_time)
-    ) ENGINE=InnoDB COMMENT='node bandwidth score event';`
+    ) ENGINE=InnoDB COMMENT='node bandwidth event';`
 
 var cServiceEventTable = `
     CREATE TABLE if not exists %s (

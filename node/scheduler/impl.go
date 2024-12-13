@@ -227,6 +227,9 @@ func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions,
 		if nodeType == types.NodeEdge {
 			incr, _ := s.NodeManager.GetEdgeBaseProfitDetails(cNode, 0)
 			cNode.IncomeIncr = incr
+		} else {
+			// cNode.TaskTotal, _ = s.db.LoadServiceEventCount(nodeID)
+			// cNode.TaskSuccess, _ = s.db.LoadServiceEventCountByStatus(nodeID, types.ServiceTypeSucceed)
 		}
 
 		if cNode.IsResourceNode() {
