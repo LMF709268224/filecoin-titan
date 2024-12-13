@@ -324,7 +324,7 @@ func (n *SQLDB) LoadReplicaEventsByHash(hash string, status types.ReplicaEvent, 
 // 	return err
 // }
 
-// SaveServiceEvent logs a replica event with detailed event information into the database.
+// SaveServiceEvent logs a service event with detailed event information into the database.
 func (n *SQLDB) SaveServiceEvent(info *types.ServiceEvent) error {
 	qry := fmt.Sprintf(`INSERT INTO %s (trace_id, node_id, info, size, status, peak, end_time, start_time, speed, score) 
 		        VALUES (:trace_id, :node_id, :info, :size, :status, :peak, :end_time, :start_time, :speed, :score)`, serviceEventTable)
@@ -360,9 +360,72 @@ func (n *SQLDB) SaveServiceEvent(info *types.ServiceEvent) error {
 	// return tx.Commit()
 }
 
+func (n *SQLDB) LoadServiceEventByNode(nodeID string, start, end time.Time) ([]*types.ServiceEvent, error) {
+	var infos []*types.ServiceEvent
+	query := fmt.Sprintf("SELECT * FROM %s WHERE node_id=? AND start_time BETWEEN ? AND ?", serviceEventTable)
+
+	err := n.db.Select(&infos, query, nodeID, start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	return infos, nil
+}
+
+func (n *SQLDB) LoadServiceEventCount(nodeID string, start, end time.Time) (int64, error) {
+	var count int64
+	query := fmt.Sprintf("SELECT count(*) FROM %s WHERE node_id=? AND start_time BETWEEN ? AND ?", serviceEventTable)
+
+	err := n.db.Get(&count, query, nodeID, start, end)
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
+func (n *SQLDB) LoadServiceEventCountByStatus(nodeID string, status types.ServiceStatus, start, end time.Time) (int64, error) {
+	var count int64
+	query := fmt.Sprintf("SELECT count(*) FROM %s WHERE node_id=? AND status=? AND start_time BETWEEN ? AND ?", serviceEventTable)
+
+	err := n.db.Get(&count, query, nodeID, status, start, end)
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
 func (n *SQLDB) LoadServiceEvents(startTime, endTime time.Time) ([]*types.ServiceEvent, error) {
 	var infos []*types.ServiceEvent
 	query := fmt.Sprintf("SELECT * FROM %s WHERE start_time BETWEEN ? AND ?", serviceEventTable)
+
+	err := n.db.Select(&infos, query, startTime, endTime)
+	if err != nil {
+		return nil, err
+	}
+
+	return infos, nil
+}
+
+// SaveBandwidthEvent logs a bandwidth event with detailed event information into the database.
+func (n *SQLDB) SaveBandwidthEvent(infos []*types.BandwidthEvent) error {
+	qry := fmt.Sprintf(`INSERT INTO %s (node_id, b_up_peak, b_down_peak, b_up_free, b_down_free, b_up_load, b_down_load, size, task_success, task_total, score, created_time) 
+		        VALUES (:node_id, :b_up_peak, :b_down_peak, :b_up_free, :b_down_free, :b_up_load, :b_down_load, :size, :task_success, :task_total, :score, :created_time)`, bandwidthEventTable)
+	_, err := n.db.NamedExec(qry, infos)
+
+	return err
+}
+
+func (n *SQLDB) CleanBandwidthEvent(startTime, endTime time.Time) error {
+	query := fmt.Sprintf(`DELETE FROM %s WHERE start_time BETWEEN ? AND ? `, bandwidthEventTable)
+	_, err := n.db.Exec(query, startTime, endTime)
+	return err
+}
+
+func (n *SQLDB) LoadBandwidthEvents(startTime, endTime time.Time) ([]*types.BandwidthEvent, error) {
+	var infos []*types.BandwidthEvent
+	query := fmt.Sprintf("SELECT * FROM %s WHERE start_time BETWEEN ? AND ?", bandwidthEventTable)
 
 	err := n.db.Select(&infos, query, startTime, endTime)
 	if err != nil {

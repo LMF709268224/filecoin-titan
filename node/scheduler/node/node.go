@@ -7,6 +7,7 @@ import (
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/Filecoin-Titan/titan/api/client"
 	"github.com/Filecoin-Titan/titan/api/types"
 	titanrsa "github.com/Filecoin-Titan/titan/node/rsa"
+	"github.com/docker/go-units"
 	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
 	"golang.org/x/xerrors"
@@ -79,8 +81,10 @@ type Node struct {
 
 	bandwidthTracker *BandwidthTracker
 
-	BandwidthFreeUp   int64
-	BandwidthFreeDown int64
+	BandwidthFreeUp    int64
+	BandwidthFreeDown  int64
+	BandwidthUpScore   int64
+	BandwidthDownScore int64
 }
 
 // API represents the node API
@@ -441,4 +445,39 @@ func (n *Node) SetBandwidths(free, peak types.FlowUnit) {
 
 	n.BandwidthFreeDown = free.D
 	n.BandwidthFreeUp = free.U
+
+	// free
+	n.BandwidthDownScore = int64(math.Min(1, float64(n.BandwidthFreeDown)/float64(50*units.MiB)) * 90)
+	n.BandwidthUpScore = int64(math.Min(1, float64(n.BandwidthFreeUp)/float64(20*units.MiB)) * 90)
+}
+
+// func (n *Node) AddServiceEvent(event *types.ServiceEvent) {
+// 	count := int64(0)
+// 	if event.Status == types.ServiceTypeSucceed {
+// 		count = 1
+// 	}
+
+// 	n.TaskSuccess += count
+// 	n.TaskTotal++
+// }
+
+func (n *Node) CalcQualityScore(sCount, tCount int64) int64 {
+	// fds := math.Min(1, float64(n.BandwidthDown)/float64(500*units.MiB)) * 90
+	// fus := math.Min(1, float64(n.BandwidthUp)/float64(200*units.MiB)) * 90
+
+	fds := float64(n.BandwidthFreeDown)
+	fus := float64(n.BandwidthFreeUp)
+	// fs := calculateMean([]float64{fds, fus})
+	// success rate
+	srs := 10.0
+	if tCount > 0 {
+		srs = (math.Min(1, float64(sCount)/float64(tCount))) * 10
+	}
+
+	upScore := fds + srs
+	downScore := fus + srs
+
+	fs := calculateMean([]float64{upScore, downScore})
+
+	return int64(fs)
 }

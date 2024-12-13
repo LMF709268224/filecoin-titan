@@ -64,7 +64,8 @@ const (
 	nodeStatisticsTable = "node_statistics"
 	nodeRetrieveTable   = "node_retrieve"
 
-	serviceEventTable = "service_event"
+	serviceEventTable   = "service_event"
+	bandwidthEventTable = "bandwidth_event"
 
 	// Default limits for loading table entries.
 	loadNodeInfosDefaultLimit           = 1000
@@ -140,6 +141,7 @@ func InitTables(d *SQLDB, serverID dtypes.ServerID) error {
 	tx.MustExec(fmt.Sprintf(cNodeRetrieveTable, nodeRetrieveTable))
 	tx.MustExec(fmt.Sprintf(cAssetDataTable, assetDataTable))
 	tx.MustExec(fmt.Sprintf(cServiceEventTable, serviceEventTable))
+	tx.MustExec(fmt.Sprintf(cBandwidthEventTable, bandwidthEventTable))
 
 	return tx.Commit()
 }

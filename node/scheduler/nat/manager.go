@@ -3,6 +3,7 @@ package nat
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"sync"
 	"time"
@@ -204,7 +205,9 @@ func (m *Manager) retryCandidateDetectNatType(rInfo *retryNode) {
 	cNodes := make([]*node.Node, 0)
 
 	_, caNodes := m.nodeManager.GetValidCandidateNodes()
-	for _, node := range caNodes {
+	rand.Shuffle(len(caNodes), func(i, j int) { caNodes[i], caNodes[j] = caNodes[j], caNodes[i] })
+	for i := 0; i < len(caNodes); i++ {
+		node := caNodes[i]
 		if node.NodeID == nodeID {
 			continue
 		}

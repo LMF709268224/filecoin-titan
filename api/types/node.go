@@ -779,3 +779,18 @@ type ServiceStats struct {
 	UploadSpeeds   []int64
 	Scores         []int64
 }
+
+type BandwidthEvent struct {
+	NodeID            string    `db:"node_id"`
+	BandwidthUpPeak   int64     `db:"b_up_peak"`
+	BandwidthDownPeak int64     `db:"b_down_peak"`
+	BandwidthUpFree   int64     `db:"b_up_free"`
+	BandwidthDownFree int64     `db:"b_down_free"`
+	BandwidthUpLoad   int64     `db:"b_up_load"`
+	BandwidthDownLoad int64     `db:"b_down_load"`
+	TaskSuccess       int64     `db:"task_success"`
+	TaskTotal         int64     `db:"task_total"`
+	Size              int64     `db:"size"`
+	Score             int64     `db:"score"`
+	CreateTime        time.Time `db:"created_time"`
+}

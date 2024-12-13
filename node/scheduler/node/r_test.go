@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 )
@@ -12,13 +13,22 @@ func TestXxx(t *testing.T) {
 	// day score c_9b8df163-fc73-4364-949e-2c88da4ee249 : [60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 58 50 49 49 49 49 48 48 48 48 48 48 48 47 47 47 47 47 47 47 47 47 47 47 77 51 51 51 51 51 51 51 51 51 51 51 51 51 51 51 51 51]
 	// week score c_9b8df163-fc73-4364-949e-2c88da4ee249 : [60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 60 58 50 49 49 49 49 48 48 48 48 48 48 48 47 47 47 47 47 47 47 47 47 47 47 77 51 51 51 51 51 51 51 51 51 51 51 51 51 51 51 51 51]
 
-	curBandwidthUpScore := int64(51)
-	historyHourBandwidthUpScore := []int64{51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51}
-	historyDayBandwidthUpScore := []int64{60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 58, 50, 49, 49, 49, 49, 48, 48, 48, 48, 48, 48, 48, 47, 47, 47, 47, 47, 47, 47, 47, 47, 47, 47, 77, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51}
-	// historyWeekBandwidthUpScore := []int64{}
+	// curBandwidthUpScore := float64(51)
+	// historyHourBandwidthUpScore := []float64{51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51}
+	// historyDayBandwidthUpScore := []float64{60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 58, 50, 49, 49, 49, 49, 48, 48, 48, 48, 48, 48, 48, 47, 47, 47, 47, 47, 47, 47, 47, 47, 47, 47, 77, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51, 51}
+	// // historyWeekBandwidthUpScore := []int64{}
 
-	bandwidthUpScore := calcScore(curBandwidthUpScore, historyHourBandwidthUpScore, historyDayBandwidthUpScore, historyDayBandwidthUpScore)
-	t.Logf("info: %d", bandwidthUpScore)
+	// bandwidthUpScore := calcScore(curBandwidthUpScore, historyHourBandwidthUpScore, historyDayBandwidthUpScore, historyDayBandwidthUpScore)
+
+	max := math.Max(10, 20)
+	min := math.Min(10, 20)
+	t.Logf("max: %.2f", max)
+	t.Logf("min: %.2f", min)
+
+	max = math.Max(10, 5)
+	min = math.Min(10, 5)
+	t.Logf("max: %.2f", max)
+	t.Logf("min: %.2f", min)
 }
 
 const (

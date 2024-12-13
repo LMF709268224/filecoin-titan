@@ -27,7 +27,7 @@ var (
 const (
 	loadCandidateInfoTime = 3 * time.Minute // seconds
 	// keepaliveTime is the interval between keepalive requests
-	keepaliveTime = 60 * time.Second // seconds
+	keepaliveTime = time.Minute
 
 	// saveInfoInterval is the interval at which node information is saved during keepalive requests
 	saveInfoInterval = 5 * time.Minute // keepalive saves information
@@ -40,6 +40,8 @@ const (
 	calcScoreTime = 5 * time.Minute
 
 	qualityCheckTime = 15 * time.Minute
+
+	bandwidthEventTime = time.Hour
 )
 
 // Manager is the node manager responsible for managing the online nodes
@@ -99,6 +101,7 @@ func NewManager(sdb *db.SQLDB, serverID dtypes.ServerID, pk *rsa.PrivateKey, pb 
 	go nodeManager.startUpdateNodeMetricsTimer()
 	// go nodeManager.startCalcScoreTimer()
 	// go nodeManager.qualityCheckTimer()
+	go nodeManager.startBandwidthEventTimer()
 
 	return nodeManager
 }

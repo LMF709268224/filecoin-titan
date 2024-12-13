@@ -164,7 +164,7 @@ func (m *Manager) CreateAssetUploadTask(hash string, req *types.CreateAssetReq) 
 
 	// TODO New rules Sort by remaining bandwidth
 	sort.Slice(cNodes, func(i, j int) bool {
-		return cNodes[i].BandwidthFreeDown > cNodes[j].BandwidthFreeDown
+		return cNodes[i].BandwidthDownScore > cNodes[j].BandwidthDownScore
 	})
 
 	seedIDs := make([]string, 0)
