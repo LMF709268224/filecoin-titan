@@ -23,11 +23,11 @@ func calcSpeedScore(bandwidth int64) int64 {
 	var maxScore int64
 	switch {
 	case bandwidth > 500*units.MiB:
-		maxScore = 60
+		maxScore = 90
 	case bandwidth > 200*units.MiB:
-		maxScore = 50
+		maxScore = 70
 	case bandwidth > 100*units.MiB:
-		maxScore = 40
+		maxScore = 50
 	case bandwidth > 50*units.MiB:
 		maxScore = 30
 	case bandwidth > 10*units.MiB:
@@ -39,26 +39,26 @@ func calcSpeedScore(bandwidth int64) int64 {
 	return maxScore
 }
 
-func calcCurScore(curBandwidth int64, succeedCount, totalCount int64, historyBandwidths []int64) int64 {
-	mode := findMode(historyBandwidths)
-	bandwidthSpeedScore := calcSpeedScore(curBandwidth)
-	speedScore := (float64(curBandwidth) / float64(mode)) * 100 * (float64(bandwidthSpeedScore) / 100)
+// func calcCurScore(curBandwidth int64, succeedCount, totalCount int64, historyBandwidths []float64) int64 {
+// 	mode := findMode(historyBandwidths)
+// 	bandwidthSpeedScore := calcSpeedScore(curBandwidth)
+// 	speedScore := (float64(curBandwidth) / float64(mode)) * 100 * (float64(bandwidthSpeedScore) / 100)
 
-	serviceScore := 0.0
-	if totalCount > 0 {
-		serviceScore = (float64(succeedCount) / float64(totalCount) * 100) * 0.2
-	}
+// 	serviceScore := 0.0
+// 	if totalCount > 0 {
+// 		serviceScore = (float64(succeedCount) / float64(totalCount) * 100) * 0.2
+// 	}
 
-	mean := calculateMean(historyBandwidths)
-	stdDev := calculateStdDev(historyBandwidths, mean)
-	jitterRate := (stdDev / mean) * 100
-	stabilityScore := (100 - jitterRate) * 0.2
+// 	mean := calculateMean(historyBandwidths)
+// 	stdDev := calculateStdDev(historyBandwidths, mean)
+// 	jitterRate := (stdDev / mean) * 100
+// 	stabilityScore := (100 - jitterRate) * 0.2
 
-	totalScore := int64(speedScore + serviceScore + stabilityScore)
-	return totalScore
-}
+// 	totalScore := int64(speedScore + serviceScore + stabilityScore)
+// 	return totalScore
+// }
 
-func calcScore(curScore int64, historyScoresHour, historyScoresDay, historyScoresWeek []int64) int64 {
+func calcScore(curScore float64, historyScoresHour, historyScoresDay, historyScoresWeek []float64) int64 {
 	scoreCur := float64(curScore) * 0.4
 
 	historyScoresHour = append(historyScoresHour, curScore)
@@ -110,26 +110,26 @@ func findMode(values []int64) int64 {
 }
 
 // calculateMean 计算平均值
-func calculateMean(values []int64) float64 {
+func calculateMean(values []float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}
 	var sum float64
 	for _, v := range values {
-		sum += float64(v)
+		sum += v
 	}
 	return sum / float64(len(values))
 }
 
 // calculateStdDev 计算标准差
-func calculateStdDev(values []int64, mean float64) float64 {
+func calculateStdDev(values []float64, mean float64) float64 {
 	if len(values) < 2 {
 		return 0
 	}
 
 	var sumSquares float64
 	for _, v := range values {
-		diff := float64(v) - mean
+		diff := v - mean
 		sumSquares += diff * diff
 	}
 	return math.Sqrt(sumSquares / float64(len(values)-1))

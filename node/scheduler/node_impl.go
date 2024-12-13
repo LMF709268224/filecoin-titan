@@ -1941,6 +1941,11 @@ func (s *Scheduler) AddNodeServiceEvent(ctx context.Context, event *types.Servic
 		return err
 	}
 
+	// node := s.NodeManager.GetNode(event.NodeID)
+	// if node != nil {
+	// 	node.AddServiceEvent(event)
+	// }
+
 	// TODO
 	event.Score = 10
 

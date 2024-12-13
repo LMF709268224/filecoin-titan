@@ -130,6 +130,7 @@ func InitTables(d *SQLDB, serverID dtypes.ServerID) error {
 	tx.MustExec(fmt.Sprintf(cNodeRetrieveTable, nodeRetrieveTable))
 	tx.MustExec(fmt.Sprintf(cAssetDataTable, assetDataTable))
 	tx.MustExec(fmt.Sprintf(cServiceEventTable, serviceEventTable))
+	tx.MustExec(fmt.Sprintf(cBandwidthEventTable, bandwidthEventTable))
 
 	return tx.Commit()
 }
