@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/Filecoin-Titan/titan/api/types"
 )
@@ -362,7 +363,8 @@ func RateOfL2Mx(onlineDuration int) float64 {
 	onlineDay := onlineHour / 24
 	count := onlineDay - 7
 
-	return 1.0 + (float64(count) * 0.03)
+	rate := 1.0 + (float64(count) * 0.03)
+	return math.Min(6, rate)
 }
 
 func bToGB(b float64) float64 {
