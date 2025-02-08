@@ -28,43 +28,33 @@ func NewSQLDB(db *sqlx.DB) (*SQLDB, error) {
 const (
 	// remove table
 	retrieveEventTable = "retrieve_event"
+	validatorsTable    = "validators"
 
 	// Database table names.
-	nodeRegisterTable  = "node_register_info"
-	nodeInfoTable      = "node_info"
-	onlineCountTable   = "online_count"
-	candidateCodeTable = "candidate_code"
-
-	assetRecordTable   = "asset_record"
-	replicaInfoTable   = "replica_info"
-	assetsViewTable    = "asset_view"
-	bucketTable        = "bucket"
-	assetDownloadTable = "asset_download"
-
-	projectEventTable     = "project_event"
-	validationResultTable = "validation_result"
-	replicaEventTable     = "replica_event"
-
-	edgeUpdateTable      = "edge_update_info"
-	validatorsTable      = "validators"
-	workloadRecordTable  = "workload_record"
-	replenishBackupTable = "replenish_backup"
-	awsDataTable         = "aws_data"
+	nodeRegisterTable    = "node_register_info"
+	nodeInfoTable        = "node_info"
+	onlineCountTable     = "online_count"
+	candidateCodeTable   = "candidate_code"
+	assetRecordTable     = "asset_record"
+	replicaInfoTable     = "replica_info"
+	assetsViewTable      = "asset_view"
+	bucketTable          = "bucket"
 	assetDataTable       = "asset_data"
 	profitDetailsTable   = "profit_details"
 	projectInfoTable     = "project_info"
 	projectReplicasTable = "project_replicas"
 
-	// deploymentTable = "deployments"
-	// providersTable  = "providers"
-	// propertiesTable = "properties"
-	// servicesTable   = "services"
-	// domainsTable    = "domains"
-
-	nodeStatisticsTable = "node_statistics"
-	nodeRetrieveTable   = "node_retrieve"
-
-	serviceEventTable = "service_event"
+	assetDownloadTable    = "asset_download"
+	projectEventTable     = "project_event"
+	validationResultTable = "validation_result"
+	replicaEventTable     = "replica_event"
+	edgeUpdateTable       = "edge_update_info"
+	workloadRecordTable   = "workload_record"
+	replenishBackupTable  = "replenish_backup"
+	awsDataTable          = "aws_data"
+	nodeStatisticsTable   = "node_statistics"
+	nodeRetrieveTable     = "node_retrieve"
+	serviceEventTable     = "service_event"
 
 	// Default limits for loading table entries.
 	loadNodeInfosDefaultLimit           = 1000
