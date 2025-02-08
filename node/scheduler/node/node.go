@@ -193,6 +193,9 @@ func (n *Node) InitInfo(nodeInfo *types.NodeInfo) {
 
 	n.bandwidthTracker.PutBandwidthDown(nodeInfo.BandwidthDown)
 	n.bandwidthTracker.PutBandwidthUp(nodeInfo.BandwidthUp)
+
+	n.BandwidthDownScore = 30
+	n.BandwidthUpScore = 30
 }
 
 // SetCountOfIPChanges node change ip count
