@@ -232,17 +232,31 @@ func (m *Manager) retrieveCandidateBackupOfAssets() {
 		return
 	}
 
+	// delete hashes
+
 	for _, hash := range hashes {
 		stateInfo, err := m.LoadAssetStateInfo(hash, m.nodeMgr.ServerID)
 		if err != nil {
+			err = m.DeleteReplenishBackup(hash)
+			if err != nil {
+				log.Errorf("retrieveCandidateBackupOfAssets DeleteReplenishBackup %s err:%s", hash, err.Error())
+			}
 			continue
 		}
 
 		if stateInfo.State == Remove.String() || stateInfo.State == Stop.String() {
+			err = m.DeleteReplenishBackup(hash)
+			if err != nil {
+				log.Errorf("retrieveCandidateBackupOfAssets DeleteReplenishBackup %s err:%s", hash, err.Error())
+			}
 			continue
 		}
 
 		if m.isAssetTaskExist(hash) {
+			err = m.DeleteReplenishBackup(hash)
+			if err != nil {
+				log.Errorf("retrieveCandidateBackupOfAssets DeleteReplenishBackup %s err:%s", hash, err.Error())
+			}
 			continue
 		}
 
@@ -530,10 +544,21 @@ func (m *Manager) RestartPullAssets(hashes []types.AssetHash) error {
 			continue
 		}
 
-		err := m.assetStateMachines.Send(AssetHash(hash), PullAssetRestart{})
-		if err != nil {
-			log.Errorf("RestartPullAssets send err:%s", err.Error())
+		// From CandidatesSelect
+		rInfo := AssetForceState{
+			State:   CandidatesSelect,
+			Details: "candidate deactivate",
 		}
+
+		err := m.assetStateMachines.Send(AssetHash(hash), rInfo)
+		if err != nil {
+			log.Errorf("retrieveCandidateBackupOfAssets %s send err:%s", hash, err.Error())
+		}
+
+		// err := m.assetStateMachines.Send(AssetHash(hash), PullAssetRestart{})
+		// if err != nil {
+		// 	log.Errorf("RestartPullAssets send err:%s", err.Error())
+		// }
 	}
 
 	return nil

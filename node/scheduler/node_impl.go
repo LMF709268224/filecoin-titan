@@ -328,6 +328,8 @@ func (s *Scheduler) DeactivateNode(ctx context.Context, nodeID string, hours int
 	pe, _ := s.NodeManager.CalculateDowntimePenalty(info.Profit)
 	penaltyPoint = info.Profit - pe
 
+	log.Infof("DeactivateNode:[%s] Profit:[%.2f] - [%.2f] = [%.2f]", nodeID, info.Profit, penaltyPoint, pe)
+
 	deactivateTime = time.Now().Add(time.Duration(minute) * time.Minute).Unix()
 	err = s.db.SaveDeactivateNode(nodeID, deactivateTime, penaltyPoint)
 	if err != nil {
@@ -339,7 +341,6 @@ func (s *Scheduler) DeactivateNode(ctx context.Context, nodeID string, hours int
 		node.DeactivateTime = deactivateTime
 		node.Profit -= penaltyPoint
 		s.NodeManager.RepayNodeWeight(node)
-
 		// remove from validation
 	}
 
