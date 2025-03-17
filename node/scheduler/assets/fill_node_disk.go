@@ -58,7 +58,7 @@ func (m *Manager) autoRestartAssetReplicas(isStorage bool) bool {
 		}
 	}
 
-	count := 10
+	count := 5
 
 	if isStorage {
 		tList := make([]*types.AssetRecord, 0)

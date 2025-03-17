@@ -1169,6 +1169,12 @@ func (n *SQLDB) CleanNodeInfo(nodeID string) error {
 		return err
 	}
 
+	query = fmt.Sprintf(`DELETE FROM %s WHERE node_id=?`, nodeStatisticsTable)
+	_, err = tx.Exec(query, nodeID)
+	if err != nil {
+		return err
+	}
+
 	query = fmt.Sprintf(`DELETE FROM %s WHERE node_id=?`, candidateCodeTable)
 	_, err = tx.Exec(query, nodeID)
 	if err != nil {
@@ -1176,6 +1182,12 @@ func (n *SQLDB) CleanNodeInfo(nodeID string) error {
 	}
 
 	query = fmt.Sprintf(`DELETE FROM %s WHERE node_id=?`, onlineCountTable)
+	_, err = tx.Exec(query, nodeID)
+	if err != nil {
+		return err
+	}
+
+	query = fmt.Sprintf(`DELETE FROM %s WHERE node_id=?`, profitDetailsTable)
 	_, err = tx.Exec(query, nodeID)
 	if err != nil {
 		return err

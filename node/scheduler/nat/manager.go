@@ -22,7 +22,7 @@ const (
 	detectInterval     = 30
 	maxRetry           = 100
 
-	checkNodeNat = 6 * time.Hour
+	checkNodeNat = 12 * time.Hour
 )
 
 // Manager nat Manager
