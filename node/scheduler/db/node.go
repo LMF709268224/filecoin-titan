@@ -777,10 +777,20 @@ func (n *SQLDB) LoadNodeProfits(nodeID string, limit, offset int, ts []int) (*ty
 }
 
 // SaveDeactivateNode records the time a node was deactivated and adjusts the node's profit and penalty.
-func (n *SQLDB) SaveDeactivateNode(nodeID string, time int64, penaltyPoint float64) error {
-	query := fmt.Sprintf(`UPDATE %s SET deactivate_time=?, profit=profit-?,penalty_profit=penalty_profit+? WHERE node_id=?`, nodeInfoTable)
-	_, err := n.db.Exec(query, time, penaltyPoint, penaltyPoint, nodeID)
-	return err
+func (n *SQLDB) SaveDeactivateNode(nodeID string, time int64, penaltyPoint float64, oldTime int64) error {
+	query := fmt.Sprintf(`UPDATE %s SET deactivate_time=?, profit=profit-?,penalty_profit=penalty_profit+? WHERE node_id=? and deactivate_time=?`, nodeInfoTable)
+	result, err := n.db.Exec(query, time, penaltyPoint, penaltyPoint, nodeID, oldTime)
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return xerrors.New("optimistic lock failed: version mismatch or node not found")
+	}
+
+	return nil
 }
 
 // SaveForceOffline updates the force offline status of a node.
