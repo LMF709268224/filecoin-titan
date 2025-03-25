@@ -328,10 +328,11 @@ func (s *Scheduler) DeactivateNode(ctx context.Context, nodeID string, hours int
 	pe, _ := s.NodeManager.CalculateDowntimePenalty(info.Profit)
 	penaltyPoint = info.Profit - pe
 
-	log.Infof("DeactivateNode:[%s] Profit:[%.2f] - [%.2f] = [%.2f]", nodeID, info.Profit, penaltyPoint, pe)
-
 	deactivateTime = time.Now().Add(time.Duration(minute) * time.Minute).Unix()
-	err = s.db.SaveDeactivateNode(nodeID, deactivateTime, penaltyPoint)
+
+	log.Warnf("DeactivateNode:[%s] Profit:[%.2f] - [%.2f] = [%.2f]", nodeID, info.Profit, penaltyPoint, pe)
+
+	err = s.db.SaveDeactivateNode(nodeID, deactivateTime, penaltyPoint, 0)
 	if err != nil {
 		return xerrors.Errorf("SaveDeactivateNode %s err : %s", nodeID, err.Error())
 	}
@@ -489,7 +490,7 @@ func (s *Scheduler) UndoNodeDeactivation(ctx context.Context, nodeID string) err
 		return xerrors.New("Node has been deactivation")
 	}
 
-	err = s.db.SaveDeactivateNode(nodeID, 0, 0)
+	err = s.db.SaveDeactivateNode(nodeID, 0, 0, deactivateTime)
 	if err != nil {
 		return xerrors.Errorf("DeleteDeactivateNode %s err : %s", nodeID, err.Error())
 	}
