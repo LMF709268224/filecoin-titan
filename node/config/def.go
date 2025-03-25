@@ -202,6 +202,7 @@ func DefaultSchedulerCfg() *SchedulerCfg {
 		IOSSymbol:                "+ios-",
 		WindowsSymbol:            "+windows-",
 		MacosSymbol:              "+mac-",
+		StorageCandidates:        []string{},
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"net"
 	"sort"
 	"time"
 
@@ -358,6 +359,16 @@ func (s *Scheduler) CreateAsset(ctx context.Context, req *types.CreateAssetReq) 
 		return nil, &api.ErrWeb{Code: terrors.InvalidAsset.Int(), Message: "Uploading empty files is not allowed"}
 	}
 
+	// TODO
+	if req.NodeID == "" {
+		cNodes := s.selectGeoPreferredNode(ctx)
+		if len(cNodes) > 0 {
+			r := rand.New(rand.NewSource(time.Now().UnixNano()))
+			randIndex := r.Intn(len(cNodes))
+			req.NodeID = cNodes[randIndex].NodeID
+		}
+	}
+
 	return s.AssetManager.CreateAssetUploadTask(hash, req)
 }
 
@@ -696,7 +707,7 @@ func (s *Scheduler) GetNodeUploadInfoV2(ctx context.Context, info *types.GetUplo
 		userID = uID
 	}
 
-	return s.getUploadInfo(userID, info.URLMode, info.TraceID)
+	return s.getUploadInfo(ctx, userID, info.URLMode, info.TraceID)
 }
 
 // GetNodeUploadInfo retrieves upload information for a specific user.
@@ -706,26 +717,84 @@ func (s *Scheduler) GetNodeUploadInfo(ctx context.Context, userID string, passNo
 		userID = uID
 	}
 
-	return s.getUploadInfo(userID, urlMode, "")
+	return s.getUploadInfo(ctx, userID, urlMode, "")
 }
 
-func (s *Scheduler) getUploadInfo(userID string, urlMode bool, traceID string) (*types.UploadInfo, error) {
-	_, nodes := s.NodeManager.GetResourceCandidateNodes()
+func (s *Scheduler) isStorageNode(nodeID string) bool {
+	storageIDs := s.SchedulerCfg.StorageCandidates
 
-	cNodes := make([]*node.Node, 0)
-	for _, node := range nodes {
-		if node.IsStorageNode && !s.ValidationMgr.IsValidator(node.NodeID) {
-			cNodes = append(cNodes, node)
+	for _, id := range storageIDs {
+		if id == nodeID {
+			return true
 		}
 	}
 
-	if len(cNodes) == 0 {
-		return nil, &api.ErrWeb{Code: terrors.NodeOffline.Int(), Message: fmt.Sprintf("storage's nodes not found")}
+	return false
+}
+
+func (s *Scheduler) selectGeoPreferredNode(ctx context.Context) []*node.Node {
+	storageIDs := s.SchedulerCfg.StorageCandidates
+	storageNodes := make([]*node.Node, 0, len(storageIDs))
+	nMap := make(map[string]*node.Node, len(storageIDs))
+
+	for _, id := range storageIDs {
+		if n := s.NodeManager.GetCandidateNode(id); n != nil {
+			nMap[n.NodeID] = n
+			storageNodes = append(storageNodes, n)
+		}
 	}
 
-	sort.Slice(cNodes, func(i, j int) bool {
-		return cNodes[i].BandwidthDown > cNodes[j].BandwidthDown
-	})
+	if len(storageNodes) == 0 {
+		return []*node.Node{}
+	}
+
+	remoteIP, _, err := net.SplitHostPort(handler.GetRemoteAddr(ctx))
+	if err != nil {
+		return storageNodes
+	}
+
+	log.Infof("selectGeoPreferredNode user ip: %s \n", remoteIP)
+
+	geoInfo, err := s.GetGeoInfo(remoteIP)
+	if err != nil {
+		return storageNodes
+	}
+
+	log.Infof("selectGeoPreferredNode user Geo: %s \n", geoInfo.Geo)
+
+	geoNodes := s.NodeManager.GeoMgr.FindNodesFromGeo(
+		geoInfo.Continent, geoInfo.Country, geoInfo.Province, geoInfo.City, types.NodeCandidate)
+	matchedNodes := make([]*node.Node, 0, len(geoNodes))
+	for _, geoNode := range geoNodes {
+		if n, exists := nMap[geoNode.NodeID]; exists {
+			matchedNodes = append(matchedNodes, n)
+		}
+	}
+
+	if len(matchedNodes) > 0 {
+		return matchedNodes
+	}
+	return storageNodes
+}
+
+func (s *Scheduler) getUploadInfo(ctx context.Context, userID string, urlMode bool, traceID string) (*types.UploadInfo, error) {
+	cNodes := s.selectGeoPreferredNode(ctx)
+	if len(cNodes) == 0 {
+		_, nodes := s.NodeManager.GetResourceCandidateNodes()
+		for _, node := range nodes {
+			if node.IsStorageNode && !s.ValidationMgr.IsValidator(node.NodeID) {
+				cNodes = append(cNodes, node)
+			}
+		}
+
+		if len(cNodes) == 0 {
+			return nil, &api.ErrWeb{Code: terrors.NodeOffline.Int(), Message: fmt.Sprintf("storage's nodes not found")}
+		}
+
+		sort.Slice(cNodes, func(i, j int) bool {
+			return cNodes[i].BandwidthDown > cNodes[j].BandwidthDown
+		})
+	}
 
 	// mixup nodes
 	// rand.Shuffle(len(cNodes), func(i, j int) { cNodes[i], cNodes[j] = cNodes[j], cNodes[i] })

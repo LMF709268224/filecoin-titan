@@ -1046,6 +1046,7 @@ func (s *Scheduler) getDownloadInfos(cid string, needCandidate bool) (*types.Ass
 
 	titanRsa := titanrsa.New(crypto.SHA256, crypto.SHA256.New())
 	sources := make([]*types.SourceDownloadInfo, 0)
+	firstSources := make([]*types.SourceDownloadInfo, 0)
 
 	for i := 0; i < len(list); i++ {
 		rInfo := list[i]
@@ -1055,7 +1056,12 @@ func (s *Scheduler) getDownloadInfos(cid string, needCandidate bool) (*types.Ass
 		if cNode != nil {
 			source := s.getSource(cNode, cid, titanRsa)
 			if source != nil {
-				sources = append(sources, source)
+				// TODO
+				if s.isStorageNode(source.NodeID) {
+					firstSources = append(firstSources, source)
+				} else {
+					sources = append(sources, source)
+				}
 			}
 
 			continue
@@ -1066,7 +1072,7 @@ func (s *Scheduler) getDownloadInfos(cid string, needCandidate bool) (*types.Ass
 			continue
 		}
 
-		if len(sources) > 10 {
+		if len(firstSources)+len(sources) > 10 {
 			continue
 		}
 
@@ -1083,7 +1089,7 @@ func (s *Scheduler) getDownloadInfos(cid string, needCandidate bool) (*types.Ass
 		}
 	}
 
-	if len(sources) == 0 {
+	if len(firstSources)+len(sources) == 0 {
 		return out, 0, count, nil
 	}
 
@@ -1091,7 +1097,7 @@ func (s *Scheduler) getDownloadInfos(cid string, needCandidate bool) (*types.Ass
 		sources[i], sources[j] = sources[j], sources[i]
 	})
 
-	out.SourceList = sources
+	out.SourceList = append(firstSources, sources...)
 
 	return out, aInfo.TotalSize, count, nil
 }
