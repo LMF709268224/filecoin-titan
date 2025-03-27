@@ -55,6 +55,7 @@ const (
 	nodeStatisticsTable   = "node_statistics"
 	nodeRetrieveTable     = "node_retrieve"
 	serviceEventTable     = "service_event"
+	bandwidthEventTable   = "bandwidth_event"
 
 	// Default limits for loading table entries.
 	loadNodeInfosDefaultLimit           = 1000
