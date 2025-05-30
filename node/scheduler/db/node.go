@@ -886,11 +886,7 @@ func (n *SQLDB) CleanData() {
 		log.Warnf("CleanData validationResultTable err:%s", err.Error())
 	}
 
-	query = fmt.Sprintf(`DELETE FROM %s WHERE created_time<DATE_SUB(NOW(), INTERVAL 15 DAY) `, profitDetailsTable)
-	_, err = n.db.Exec(query)
-	if err != nil {
-		log.Warnf("CleanData profitDetailsTable err:%s", err.Error())
-	}
+	n.cleanProfitDetailsData()
 
 	query = fmt.Sprintf(`DELETE FROM %s WHERE created_time<DATE_SUB(NOW(), INTERVAL 8 DAY) `, onlineCountTable)
 	_, err = n.db.Exec(query)
@@ -904,29 +900,113 @@ func (n *SQLDB) CleanData() {
 		log.Warnf("CleanData assetDownloadTable err:%s", err.Error())
 	}
 
-	query = fmt.Sprintf(`DELETE FROM %s WHERE created_time<DATE_SUB(NOW(), INTERVAL 30 DAY) `, projectEventTable)
-	_, err = n.db.Exec(query)
-	if err != nil {
-		log.Warnf("CleanData projectEventTable err:%s", err.Error())
-	}
+	n.cleanTableData(projectEventTable)
 
-	query = fmt.Sprintf(`DELETE FROM %s WHERE created_time<DATE_SUB(NOW(), INTERVAL 30 DAY) `, nodeRetrieveTable)
-	_, err = n.db.Exec(query)
-	if err != nil {
-		log.Warnf("CleanData nodeRetrieveTable err:%s", err.Error())
-	}
+	n.cleanTableData(nodeRetrieveTable)
 
-	query = fmt.Sprintf(`DELETE FROM %s WHERE start_time<DATE_SUB(NOW(), INTERVAL 30 DAY) `, serviceEventTable)
-	_, err = n.db.Exec(query)
-	if err != nil {
-		log.Warnf("CleanData serviceEventTable err:%s", err.Error())
-	}
+	n.cleanServiceEventTableData()
+}
 
-	// query = fmt.Sprintf(`DELETE FROM %s WHERE created_time<DATE_SUB(NOW(), INTERVAL 30 DAY) `, bandwidthScoreEventTable)
-	// _, err = n.db.Exec(query)
-	// if err != nil {
-	// 	log.Warnf("CleanData bandwidthScoreEventTable err:%s", err.Error())
-	// }
+func (n *SQLDB) cleanTableData(table string) {
+	const batchSize = 10000 // 每批删除量
+	sleepSeconds := 1       // 批次间隔时间（秒）
+	totalDeleted := 0
+
+	for {
+		// 分批删除SQL（LIMIT控制单次删除量）
+		query := fmt.Sprintf(`
+            DELETE FROM %s 
+            WHERE created_time < DATE_SUB(NOW(), INTERVAL 30 DAY) 
+            LIMIT %d`,
+			table, batchSize)
+
+		result, err := n.db.Exec(query)
+		if err != nil {
+			log.Warnf("CleanData table err: %s", err.Error())
+			break
+		}
+
+		// 获取实际删除行数
+		rowsAffected, _ := result.RowsAffected()
+		totalDeleted += int(rowsAffected)
+
+		// 当删除量不足批次大小时退出循环
+		if rowsAffected < int64(batchSize) {
+			log.Infof("CleanData completed. Total deleted: %d", totalDeleted)
+			break
+		}
+
+		// 批次间隔（减轻数据库压力）
+		time.Sleep(time.Duration(sleepSeconds) * time.Second)
+	}
+}
+
+func (n *SQLDB) cleanServiceEventTableData() {
+	const batchSize = 10000 // 每批删除量
+	sleepSeconds := 1       // 批次间隔时间（秒）
+	totalDeleted := 0
+
+	for {
+		// 分批删除SQL（LIMIT控制单次删除量）
+		query := fmt.Sprintf(`
+            DELETE FROM %s 
+            WHERE start_time < DATE_SUB(NOW(), INTERVAL 30 DAY) 
+            LIMIT %d`,
+			serviceEventTable, batchSize)
+
+		result, err := n.db.Exec(query)
+		if err != nil {
+			log.Warnf("CleanData serviceEventTable err: %s", err.Error())
+			break
+		}
+
+		// 获取实际删除行数
+		rowsAffected, _ := result.RowsAffected()
+		totalDeleted += int(rowsAffected)
+
+		// 当删除量不足批次大小时退出循环
+		if rowsAffected < int64(batchSize) {
+			log.Infof("CleanData completed. Total deleted: %d", totalDeleted)
+			break
+		}
+
+		// 批次间隔（减轻数据库压力）
+		time.Sleep(time.Duration(sleepSeconds) * time.Second)
+	}
+}
+
+func (n *SQLDB) cleanProfitDetailsData() {
+	const batchSize = 10000 // 每批删除量
+	sleepSeconds := 1       // 批次间隔时间（秒）
+	totalDeleted := 0
+
+	for {
+		// 分批删除SQL（LIMIT控制单次删除量）
+		query := fmt.Sprintf(`
+            DELETE FROM %s 
+            WHERE created_time < DATE_SUB(NOW(), INTERVAL 10 DAY) 
+            LIMIT %d`,
+			profitDetailsTable, batchSize)
+
+		result, err := n.db.Exec(query)
+		if err != nil {
+			log.Warnf("CleanData profitDetailsTable err: %s", err.Error())
+			break
+		}
+
+		// 获取实际删除行数
+		rowsAffected, _ := result.RowsAffected()
+		totalDeleted += int(rowsAffected)
+
+		// 当删除量不足批次大小时退出循环
+		if rowsAffected < int64(batchSize) {
+			log.Infof("CleanData completed. Total deleted: %d", totalDeleted)
+			break
+		}
+
+		// 批次间隔（减轻数据库压力）
+		time.Sleep(time.Duration(sleepSeconds) * time.Second)
+	}
 }
 
 // SaveCandidateCodeInfo stores information related to candidate codes used in node verification or testing.
