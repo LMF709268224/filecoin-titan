@@ -908,8 +908,6 @@ func (n *SQLDB) CleanData() {
 }
 
 func (n *SQLDB) cleanTableData(table string) {
-	const batchSize = 10000 // 每批删除量
-	sleepSeconds := 1       // 批次间隔时间（秒）
 	totalDeleted := 0
 
 	for {
@@ -942,8 +940,6 @@ func (n *SQLDB) cleanTableData(table string) {
 }
 
 func (n *SQLDB) cleanServiceEventTableData() {
-	const batchSize = 10000 // 每批删除量
-	sleepSeconds := 1       // 批次间隔时间（秒）
 	totalDeleted := 0
 
 	for {
@@ -975,9 +971,12 @@ func (n *SQLDB) cleanServiceEventTableData() {
 	}
 }
 
+const (
+	batchSize    = 1000 // 每批删除量
+	sleepSeconds = 5    // 批次间隔时间（秒）
+)
+
 func (n *SQLDB) cleanProfitDetailsData() {
-	const batchSize = 10000 // 每批删除量
-	sleepSeconds := 1       // 批次间隔时间（秒）
 	totalDeleted := 0
 
 	for {
