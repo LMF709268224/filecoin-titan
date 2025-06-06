@@ -911,7 +911,6 @@ func (n *SQLDB) cleanTableData(table string) {
 	totalDeleted := 0
 
 	for {
-		// 分批删除SQL（LIMIT控制单次删除量）
 		query := fmt.Sprintf(`
             DELETE FROM %s 
             WHERE created_time < DATE_SUB(NOW(), INTERVAL 30 DAY) 
@@ -924,17 +923,14 @@ func (n *SQLDB) cleanTableData(table string) {
 			break
 		}
 
-		// 获取实际删除行数
 		rowsAffected, _ := result.RowsAffected()
 		totalDeleted += int(rowsAffected)
 
-		// 当删除量不足批次大小时退出循环
 		if rowsAffected < int64(batchSize) {
-			log.Infof("CleanData completed. Total deleted: %d", totalDeleted)
+			log.Infof("CleanData %s completed. Total deleted: %d", table, totalDeleted)
 			break
 		}
 
-		// 批次间隔（减轻数据库压力）
 		time.Sleep(time.Duration(sleepSeconds) * time.Second)
 	}
 }
@@ -943,7 +939,6 @@ func (n *SQLDB) cleanServiceEventTableData() {
 	totalDeleted := 0
 
 	for {
-		// 分批删除SQL（LIMIT控制单次删除量）
 		query := fmt.Sprintf(`
             DELETE FROM %s 
             WHERE start_time < DATE_SUB(NOW(), INTERVAL 30 DAY) 
@@ -956,34 +951,30 @@ func (n *SQLDB) cleanServiceEventTableData() {
 			break
 		}
 
-		// 获取实际删除行数
 		rowsAffected, _ := result.RowsAffected()
 		totalDeleted += int(rowsAffected)
 
-		// 当删除量不足批次大小时退出循环
 		if rowsAffected < int64(batchSize) {
-			log.Infof("CleanData completed. Total deleted: %d", totalDeleted)
+			log.Infof("CleanData serviceEventTable completed. Total deleted: %d", totalDeleted)
 			break
 		}
 
-		// 批次间隔（减轻数据库压力）
 		time.Sleep(time.Duration(sleepSeconds) * time.Second)
 	}
 }
 
 const (
-	batchSize    = 1000 // 每批删除量
-	sleepSeconds = 5    // 批次间隔时间（秒）
+	batchSize    = 1000
+	sleepSeconds = 5
 )
 
 func (n *SQLDB) cleanProfitDetailsData() {
 	totalDeleted := 0
 
 	for {
-		// 分批删除SQL（LIMIT控制单次删除量）
 		query := fmt.Sprintf(`
             DELETE FROM %s 
-            WHERE created_time < DATE_SUB(NOW(), INTERVAL 10 DAY) 
+            WHERE created_time < DATE_SUB(NOW(), INTERVAL 150 DAY) 
             LIMIT %d`,
 			profitDetailsTable, batchSize)
 
@@ -993,17 +984,14 @@ func (n *SQLDB) cleanProfitDetailsData() {
 			break
 		}
 
-		// 获取实际删除行数
 		rowsAffected, _ := result.RowsAffected()
 		totalDeleted += int(rowsAffected)
 
-		// 当删除量不足批次大小时退出循环
 		if rowsAffected < int64(batchSize) {
-			log.Infof("CleanData completed. Total deleted: %d", totalDeleted)
+			log.Infof("CleanData profitDetailsTable completed. Total deleted: %d", totalDeleted)
 			break
 		}
 
-		// 批次间隔（减轻数据库压力）
 		time.Sleep(time.Duration(sleepSeconds) * time.Second)
 	}
 }

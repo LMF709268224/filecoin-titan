@@ -784,14 +784,12 @@ func (s *Scheduler) loadNodeTodayOnlineTimeWindow(nodeID string, todayDate time.
 func (s *Scheduler) GetNodeList(ctx context.Context, offset int, limit int) (*types.ListNodesRsp, error) {
 	info := &types.ListNodesRsp{Data: make([]types.NodeInfo, 0)}
 
-	log.Info("GetNodeList----------- ")
 	rows, total, err := s.NodeManager.LoadActiveNodeInfos(limit, offset)
 	if err != nil {
 		return nil, xerrors.Errorf("LoadNodeInfos err:%s", err.Error())
 	}
 	defer rows.Close()
 
-	log.Info("GetNodeList-----------done ")
 	today := time.Now()
 	todayDate := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
 
