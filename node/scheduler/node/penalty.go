@@ -26,9 +26,9 @@ func (m *Manager) startNodePenaltyTimer() {
 }
 
 func (m *Manager) penaltyNode() {
-	list, err := m.LoadNodeInfosOfType(int(types.NodeCandidate))
+	list, err := m.LoadCandidateInfos()
 	if err != nil {
-		log.Errorf("LoadNodeInfosOfType err:%s", err.Error())
+		log.Errorf("LoadCandidateInfos err:%s", err.Error())
 		return
 	}
 

@@ -26,6 +26,7 @@ var cReplicaInfoTable = `
 		PRIMARY KEY (hash,node_id),
 		KEY idx_node_id (node_id),
 		KEY idx_status (status),
+		KEY idx_start_time (start_time),
 		KEY idx_hash (hash)
 	) ENGINE=InnoDB COMMENT='asset replica info';`
 
@@ -365,8 +366,10 @@ var cAssetDownloadTable = `
  		total_traffic   BIGINT        DEFAULT 0,
 		peak_bandwidth 	BIGINT        DEFAULT 0,
 		user_id         VARCHAR(128)  DEFAULT '',
- 		KEY idx_hash_id (hash),
- 		KEY idx_node_id (node_id)
+ 		INDEX idx_hash_id (hash),
+ 		INDEX idx_node_id (node_id),
+		INDEX idx_created_time (created_time),
+		INDEX idx_download_agg (created_time, user_id, hash, total_traffic, peak_bandwidth)
 	) ENGINE=InnoDB COMMENT='node and server online count';`
 
 var cUserAssetGroupTable = `

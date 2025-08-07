@@ -20,7 +20,7 @@ var log = logging.Logger("scheduler/nat")
 
 const (
 	miniCandidateCount = 2
-	detectInterval     = 30
+	detectInterval     = 100
 	maxRetry           = 100
 
 	checkNodeNat = 12 * time.Hour

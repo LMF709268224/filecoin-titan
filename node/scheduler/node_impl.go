@@ -28,6 +28,7 @@ import (
 	"github.com/docker/go-units"
 	"github.com/gbrlsnchs/jwt/v3"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"golang.org/x/xerrors"
 )
 
@@ -37,6 +38,21 @@ const (
 	// Interval for initiating free space release
 	freeUpDayInterval = 1
 )
+
+var nodeCountLimit int
+
+func (s *Scheduler) SetNodeCountLimit(ctx context.Context, limit int) error {
+	nodeCountLimit = limit
+	return nil
+}
+
+func (s *Scheduler) getNodeCountLimit() int {
+	if nodeCountLimit <= 0 {
+		nodeCountLimit = s.SchedulerCfg.NodeCountLimit
+	}
+
+	return nodeCountLimit
+}
 
 // GetOnlineNodeCount returns the count of online nodes for a given node type
 func (s *Scheduler) GetOnlineNodeCount(ctx context.Context, nodeType types.NodeType) (int, error) {
@@ -133,6 +149,10 @@ func (s *Scheduler) RegisterCandidateNode(ctx context.Context, nodeID, publicKey
 
 // RegisterNode register node
 func (s *Scheduler) RegisterNode(ctx context.Context, nodeID, publicKey string, nodeType types.NodeType) (*types.ActivationDetail, error) {
+	if nodeType == types.NodeEdge && s.NodeManager.GetOnlineNodeCount(types.NodeEdge) > s.getNodeCountLimit() {
+		return nil, errors.Errorf("The number of nodes exceeds the limit")
+	}
+
 	remoteAddr := handler.GetRemoteAddr(ctx)
 	ip, _, err := net.SplitHostPort(remoteAddr)
 	if err != nil {
@@ -610,6 +630,10 @@ func (s *Scheduler) CandidateConnect(ctx context.Context, opts *types.ConnectOpt
 
 // EdgeConnect edge node login to the scheduler
 func (s *Scheduler) EdgeConnect(ctx context.Context, opts *types.ConnectOptions) error {
+	if s.NodeManager.GetOnlineNodeCount(types.NodeEdge) > s.getNodeCountLimit() {
+		return xerrors.Errorf("The number of nodes exceeds the limit")
+	}
+
 	return s.nodeConnect(ctx, opts, types.NodeEdge)
 }
 
@@ -810,6 +834,8 @@ func (s *Scheduler) GetNodeInfo(ctx context.Context, nodeID string) (*types.Node
 		nodeInfo.TodayOnlineTimeWindow = s.loadNodeTodayOnlineTimeWindow(nodeID, todayDate)
 
 		log.Debugf("%s node select codes:%v , url:%s", nodeID, n.SelectWeights(), n.ExternalURL)
+	} else {
+		nodeInfo.Mx = node.RateOfL2Mx(nodeInfo.OnlineDuration)
 	}
 
 	return nodeInfo, nil
@@ -866,6 +892,8 @@ func (s *Scheduler) GetNodeList(ctx context.Context, offset int, limit int) (*ty
 			nodeInfo.RemoteAddr = n.RemoteAddr
 			nodeInfo.Mx = node.RateOfL2Mx(n.OnlineDuration)
 			nodeInfo.TodayOnlineTimeWindow = s.loadNodeTodayOnlineTimeWindow(nodeInfo.NodeID, todayDate)
+		} else {
+			nodeInfo.Mx = node.RateOfL2Mx(nodeInfo.OnlineDuration)
 		}
 
 		nodeInfos = append(nodeInfos, *nodeInfo)
