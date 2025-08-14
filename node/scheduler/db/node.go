@@ -385,10 +385,10 @@ func (n *SQLDB) LoadActiveNodeInfos(limit, offset int) (*sqlx.Rows, int64, error
 // LoadCandidateInfos fetches node information
 func (n *SQLDB) LoadCandidateInfos() ([]*types.NodeInfo, error) {
 	// query := fmt.Sprintf(`SELECT a.*,b.node_type as type FROM %s a LEFT JOIN %s b ON a.node_id = b.node_id where b.node_type=?;`, nodeInfoTable, nodeRegisterTable)
-	query := fmt.Sprintf(`SELECT * FROM %s where node_id like %s`, nodeInfoTable, "c_%")
+	query := fmt.Sprintf(`SELECT * FROM %s where node_id like ?`, nodeInfoTable)
 
 	var out []*types.NodeInfo
-	if err := n.db.Select(&out, query); err != nil {
+	if err := n.db.Select(&out, query, "c%"); err != nil {
 		return nil, err
 	}
 
