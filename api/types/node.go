@@ -28,6 +28,7 @@ type NodeDynamicInfo struct {
 	DownloadTraffic    int64     `db:"download_traffic"`
 	UploadTraffic      int64     `db:"upload_traffic"`
 	NATType            string    `db:"nat_type"`
+	FreeDeductionTime  int       `db:"free_deduction_time"` // unit:Minute
 
 	BandwidthUpScore   int64
 	BandwidthDownScore int64

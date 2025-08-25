@@ -66,6 +66,7 @@ var cNodeInfoTable = `
 		ws_server_id         VARCHAR(128)    DEFAULT '',
 		force_offline        BOOLEAN         DEFAULT false,
 	    nat_type             VARCHAR(32)     DEFAULT 'UnknowNAT',
+	    free_deduction_time  INT             DEFAULT 0,
 	    PRIMARY KEY (node_id),
 		KEY idx_last_seen (last_seen)
 	) ENGINE=InnoDB COMMENT='node info';`
