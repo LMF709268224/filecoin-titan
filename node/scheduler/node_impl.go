@@ -37,7 +37,25 @@ const (
 
 	// Interval for initiating free space release
 	freeUpDayInterval = 1
+
+	// 0
+	deactivateReductionRate = 0.6
 )
+
+func isInFirstWeekOfMonth() bool {
+	now := time.Now().UTC()
+
+	day := now.Day()
+	return day >= 1 && day <= 7
+}
+
+func getDeactivateReductionRate() float64 {
+	if isInFirstWeekOfMonth() {
+		return 0
+	}
+
+	return deactivateReductionRate
+}
 
 var nodeCountLimit int
 
@@ -332,7 +350,7 @@ func (s *Scheduler) DeactivateNode(ctx context.Context, nodeID string, hours int
 	// if node is candidate , need to backup asset
 	s.AssetManager.CandidateDeactivate(nodeID)
 
-	pe, _ := s.NodeManager.CalculateDowntimePenalty(info.Profit, 0.6)
+	pe, _ := s.NodeManager.CalculateDowntimePenalty(info.Profit, getDeactivateReductionRate())
 	penaltyPoint = info.Profit - pe
 
 	deactivateTime = time.Now().Add(time.Duration(minute) * time.Minute).Unix()
@@ -521,7 +539,7 @@ func (s *Scheduler) CalculateDowntimePenalty(ctx context.Context, nodeID string)
 		return types.ExitProfitRsp{}, err
 	}
 
-	pe, exitRate := s.NodeManager.CalculateDowntimePenalty(info.Profit, 0.6)
+	pe, exitRate := s.NodeManager.CalculateDowntimePenalty(info.Profit, getDeactivateReductionRate())
 	return types.ExitProfitRsp{
 		CurrentPoint:   info.Profit,
 		RemainingPoint: pe,
