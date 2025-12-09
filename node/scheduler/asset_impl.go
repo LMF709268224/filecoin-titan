@@ -414,7 +414,7 @@ func (s *Scheduler) ShareAssetV2(ctx context.Context, info *types.ShareAssetReq)
 
 	out := &types.ShareAssetRsp{}
 
-	rsp, _, count, err := s.getDownloadInfos(assetCID, false)
+	rsp, _, count, err := s.getDownloadInfos(assetCID, true)
 	if err != nil {
 		log.Errorf("ShareAssetV2 %s getDownloadInfos err:%s \n", assetCID, err.Error())
 		return nil, &api.ErrWeb{Code: terrors.NotFound.Int(), Message: err.Error()}
