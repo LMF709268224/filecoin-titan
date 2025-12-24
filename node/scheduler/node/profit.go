@@ -260,7 +260,7 @@ func calculateMip(n string) float64 {
 		return 0.8
 	}
 
-	return 0.8
+	return 1.0
 }
 
 func calculateMn(ipNum int) float64 {
