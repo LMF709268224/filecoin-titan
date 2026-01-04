@@ -28,7 +28,6 @@ import (
 	"github.com/docker/go-units"
 	"github.com/gbrlsnchs/jwt/v3"
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"golang.org/x/xerrors"
 )
 
@@ -168,7 +167,13 @@ func (s *Scheduler) RegisterCandidateNode(ctx context.Context, nodeID, publicKey
 // RegisterNode register node
 func (s *Scheduler) RegisterNode(ctx context.Context, nodeID, publicKey string, nodeType types.NodeType) (*types.ActivationDetail, error) {
 	if nodeType == types.NodeEdge && s.NodeManager.GetOnlineNodeCount(types.NodeEdge) > s.getNodeCountLimit() {
-		return nil, errors.Errorf("The number of nodes exceeds the limit")
+		select {
+		case <-time.After(30 * time.Second):
+		case <-ctx.Done():
+		}
+
+		remoteAddr := handler.GetRemoteAddr(ctx)
+		return nil, xerrors.Errorf("RegisterNode the number of nodes exceeds the limit [%s]", remoteAddr)
 	}
 
 	remoteAddr := handler.GetRemoteAddr(ctx)
@@ -649,7 +654,13 @@ func (s *Scheduler) CandidateConnect(ctx context.Context, opts *types.ConnectOpt
 // EdgeConnect edge node login to the scheduler
 func (s *Scheduler) EdgeConnect(ctx context.Context, opts *types.ConnectOptions) error {
 	if s.NodeManager.GetOnlineNodeCount(types.NodeEdge) > s.getNodeCountLimit() {
-		return xerrors.Errorf("The number of nodes exceeds the limit")
+		select {
+		case <-time.After(60 * time.Second):
+		case <-ctx.Done():
+		}
+
+		remoteAddr := handler.GetRemoteAddr(ctx)
+		return xerrors.Errorf("EdgeConnect the number of nodes exceeds the limit [%s]", remoteAddr)
 	}
 
 	return s.nodeConnect(ctx, opts, types.NodeEdge)
@@ -657,11 +668,27 @@ func (s *Scheduler) EdgeConnect(ctx context.Context, opts *types.ConnectOptions)
 
 // L3Connect l3 node login to the scheduler
 func (s *Scheduler) L3Connect(ctx context.Context, opts *types.ConnectOptions) error {
+	if s.NodeManager.GetOnlineNodeCount(types.NodeEdge) > s.getNodeCountLimit() {
+		select {
+		case <-time.After(15 * time.Second):
+		case <-ctx.Done():
+		}
+		return xerrors.New("L3Connect the number of nodes exceeds the limit")
+	}
+
 	return s.lnNodeConnected(ctx, opts, types.NodeL3)
 }
 
 // L5Connect l5 node login to the scheduler
 func (s *Scheduler) L5Connect(ctx context.Context, opts *types.ConnectOptions) error {
+	if s.NodeManager.GetOnlineNodeCount(types.NodeEdge) > s.getNodeCountLimit() {
+		select {
+		case <-time.After(15 * time.Second):
+		case <-ctx.Done():
+		}
+		return xerrors.New("L5Connect the number of nodes exceeds the limit")
+	}
+
 	return s.lnNodeConnected(ctx, opts, types.NodeL5)
 }
 
@@ -780,6 +807,14 @@ func (s *Scheduler) NodeLogin(ctx context.Context, nodeID, sign string) (string,
 	nType, err := s.NodeManager.LoadNodeType(nodeID)
 	if err != nil {
 		return "", xerrors.Errorf("%s load node type failed: %w", nodeID, err)
+	}
+
+	if (nType == types.NodeEdge || nType == types.NodeL3 || nType == types.NodeL5) && s.NodeManager.GetOnlineNodeCount(types.NodeEdge) > s.getNodeCountLimit() {
+		select {
+		case <-time.After(30 * time.Second):
+		case <-ctx.Done():
+		}
+		return "", xerrors.Errorf("NodeLogin the number of nodes exceeds the limit")
 	}
 
 	publicKey, err := titanrsa.Pem2PublicKey([]byte(pem))

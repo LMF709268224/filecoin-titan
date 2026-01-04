@@ -170,9 +170,9 @@ func NewGetSchedulerConfigFunc(r repo.LockedRepo) func() (config.SchedulerCfg, e
 	}
 }
 
-// NewPubSub returns a new pubsub instance with a buffer of 50
+// NewPubSub returns a new pubsub instance with a buffer of 1024
 func NewPubSub() *pubsub.PubSub {
-	return pubsub.New(50)
+	return pubsub.New(1024)
 }
 
 // RegisterToEtcd registers the server to etcd

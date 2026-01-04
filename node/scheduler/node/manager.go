@@ -27,10 +27,10 @@ var (
 const (
 	loadCandidateInfoTime = 3 * time.Minute // seconds
 	// keepaliveTime is the interval between keepalive requests
-	keepaliveTime = time.Minute
+	keepaliveTime = 10 * time.Minute
 
 	// saveInfoInterval is the interval at which node information is saved during keepalive requests
-	saveInfoInterval = 5 * time.Minute // keepalive saves information
+	saveInfoInterval = 10 * time.Minute // keepalive saves information
 	penaltyInterval  = 60 * time.Second
 
 	oneDay = 24 * time.Hour
@@ -138,17 +138,23 @@ func (m *Manager) startUpdateNodeMetricsTimer() {
 		<-ticker.C
 
 		_, cList := m.GetValidCandidateNodes()
-		for _, node := range cList {
-			info, err := node.API.GetNodeInfo(context.Background())
-			if err != nil {
-				continue
-			}
+		var wg sync.WaitGroup
+		for _, n := range cList {
+			wg.Add(1)
+			go func(node *Node) {
+				defer wg.Done()
+				info, err := node.API.GetNodeInfo(context.Background())
+				if err != nil {
+					return
+				}
 
-			node.CPUUsage = info.CPUUsage
-			node.MemoryUsage = info.MemoryUsage
-			node.DiskSpace = info.DiskSpace
-			node.DiskUsage = info.DiskUsage
+				node.CPUUsage = info.CPUUsage
+				node.MemoryUsage = info.MemoryUsage
+				node.DiskSpace = info.DiskSpace
+				node.DiskUsage = info.DiskUsage
+			}(n)
 		}
+		wg.Wait()
 	}
 }
 
