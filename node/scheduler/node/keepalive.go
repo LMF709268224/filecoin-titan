@@ -63,7 +63,7 @@ func (m *Manager) startNodeKeepaliveTimer() {
 	<-time.After(10 * time.Minute)
 	m.nodesKeepalive(10, true)
 
-	minute := 5
+	minute := 2
 
 	ticker := time.NewTicker(time.Duration(minute) * time.Minute)
 	defer ticker.Stop()
@@ -71,7 +71,7 @@ func (m *Manager) startNodeKeepaliveTimer() {
 	saveCounter := 0
 	for range ticker.C {
 		saveCounter++
-		if saveCounter == 2 {
+		if saveCounter >= 5 { // 5 * 2 minutes = 10 minutes (matches saveInfoInterval)
 			m.nodesKeepalive(minute, true)
 			saveCounter = 0
 		} else {
@@ -188,7 +188,7 @@ func (m *Manager) SetNodeOffline(node *Node) {
 func (m *Manager) checkNodeStatus(node *Node, t time.Time) bool {
 	lastTime := node.LastRequestTime()
 
-	if !lastTime.After(t) {
+	if t.After(lastTime.Add(keepaliveTime)) {
 		m.SetNodeOffline(node)
 
 		return false
