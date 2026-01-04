@@ -359,10 +359,10 @@ func startHTTP3Server(transport *quic.Transport, handler http.Handler, scheduler
 			HandshakeIdleTimeout: 15 * time.Second,
 			MaxIdleTimeout:       30 * time.Second,
 
-			MaxIncomingStreams:         1000,
-			MaxIncomingUniStreams:      1000,
-			MaxStreamReceiveWindow:     16 * 1024 * 1024, // 16MB
-			MaxConnectionReceiveWindow: 32 * 1024 * 1024, // 32MB
+			MaxIncomingStreams:         50,
+			MaxIncomingUniStreams:      50,
+			MaxStreamReceiveWindow:     128 * 1024, // 128KB
+			MaxConnectionReceiveWindow: 256 * 1024, // 256KB
 			KeepAlivePeriod:            10 * time.Second,
 		},
 	}
