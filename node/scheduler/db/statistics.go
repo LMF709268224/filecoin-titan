@@ -158,6 +158,40 @@ func (n *SQLDB) LoadNodeStatisticsInfo(nodeID string) (types.NodeStatisticsInfo,
 	return sInfo, err
 }
 
+// LoadNodeStatisticsInfos retrieves statistics information for multiple node IDs.
+func (n *SQLDB) LoadNodeStatisticsInfos(nodeIDs []string) (map[string]types.NodeStatisticsInfo, error) {
+	if len(nodeIDs) == 0 {
+		return nil, nil
+	}
+
+	query := fmt.Sprintf(`SELECT node_id, asset_count,asset_succeeded_count,asset_failed_count,retrieve_count,retrieve_succeeded_count,retrieve_failed_count,
+	    project_count,project_succeeded_count,project_failed_count 
+	    FROM %s WHERE node_id IN (?)`, nodeStatisticsTable)
+
+	query, args, err := sqlx.In(query, nodeIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	query = n.db.Rebind(query)
+	var infos []struct {
+		NodeID string `db:"node_id"`
+		types.NodeStatisticsInfo
+	}
+
+	err = n.db.Select(&infos, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string]types.NodeStatisticsInfo)
+	for _, info := range infos {
+		res[info.NodeID] = info.NodeStatisticsInfo
+	}
+
+	return res, nil
+}
+
 // LoadReplicaEventCountByStatus retrieves a count of replica for a specific hash filtered by status.
 func (n *SQLDB) LoadReplicaEventCountByStatus(hash string, statuses []types.ReplicaEvent) (int, error) {
 	sQuery := fmt.Sprintf(`SELECT count(*) FROM %s WHERE hash=? AND event in (?)`, replicaEventTable)

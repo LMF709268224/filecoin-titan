@@ -914,42 +914,51 @@ func (s *Scheduler) GetNodeList(ctx context.Context, offset int, limit int) (*ty
 	todayDate := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
 
 	nodeInfos := make([]types.NodeInfo, 0)
+	var nodeIDs []string
 	for rows.Next() {
-		nodeInfo := &types.NodeInfo{}
-		err = rows.StructScan(nodeInfo)
+		nodeInfo := types.NodeInfo{}
+		err = rows.StructScan(&nodeInfo)
 		if err != nil {
 			log.Errorf("NodeInfo StructScan err: %s", err.Error())
 			continue
 		}
+		nodeInfos = append(nodeInfos, nodeInfo)
+		nodeIDs = append(nodeIDs, nodeInfo.NodeID)
+	}
 
-		sInfo, err := s.NodeManager.LoadNodeStatisticsInfo(nodeInfo.NodeID)
-		if err == nil {
-			nodeInfo.NodeStatisticsInfo = sInfo
+	if len(nodeIDs) > 0 {
+		// Batch fetch extra info
+		statsMap, _ := s.db.LoadNodeStatisticsInfos(nodeIDs)
+		replicaCountMap, _ := s.db.LoadSucceedReplicaCounts(nodeIDs)
+		onlineCountMap, _ := s.db.GetNodesOnlineCount(nodeIDs, todayDate)
+
+		for i := range nodeInfos {
+			ni := &nodeInfos[i]
+			if stats, ok := statsMap[ni.NodeID]; ok {
+				ni.NodeStatisticsInfo = stats
+			}
+			ni.ReplicaCount = replicaCountMap[ni.NodeID]
+
+			n := s.NodeManager.GetNode(ni.NodeID)
+			if n != nil {
+				ni.Status = types.NodeServicing
+				ni.NATType = n.NATType
+				ni.Type = n.Type
+				ni.CPUUsage = n.CPUUsage
+				ni.MemoryUsage = n.MemoryUsage
+				ni.DiskUsage = n.DiskUsage
+				ni.DiskSpace = n.DiskSpace
+				ni.ExternalIP = n.ExternalIP
+				ni.IncomeIncr = n.IncomeIncr
+				ni.IsTestNode = n.IsTestNode
+				ni.AreaID = n.AreaID
+				ni.RemoteAddr = n.RemoteAddr
+				ni.Mx = node.RateOfL2Mx(n.OnlineDuration)
+				ni.TodayOnlineTimeWindow = onlineCountMap[ni.NodeID]
+			} else {
+				ni.Mx = node.RateOfL2Mx(ni.OnlineDuration)
+			}
 		}
-
-		nodeInfo.ReplicaCount, err = s.NodeManager.LoadSucceedReplicaCountNodeID(nodeInfo.NodeID)
-
-		n := s.NodeManager.GetNode(nodeInfo.NodeID)
-		if n != nil {
-			nodeInfo.Status = types.NodeServicing
-			nodeInfo.NATType = n.NATType
-			nodeInfo.Type = n.Type
-			nodeInfo.CPUUsage = n.CPUUsage
-			nodeInfo.MemoryUsage = n.MemoryUsage
-			nodeInfo.DiskUsage = n.DiskUsage
-			nodeInfo.DiskSpace = n.DiskSpace
-			nodeInfo.ExternalIP = n.ExternalIP
-			nodeInfo.IncomeIncr = n.IncomeIncr
-			nodeInfo.IsTestNode = n.IsTestNode
-			nodeInfo.AreaID = n.AreaID
-			nodeInfo.RemoteAddr = n.RemoteAddr
-			nodeInfo.Mx = node.RateOfL2Mx(n.OnlineDuration)
-			nodeInfo.TodayOnlineTimeWindow = s.loadNodeTodayOnlineTimeWindow(nodeInfo.NodeID, todayDate)
-		} else {
-			nodeInfo.Mx = node.RateOfL2Mx(nodeInfo.OnlineDuration)
-		}
-
-		nodeInfos = append(nodeInfos, *nodeInfo)
 	}
 
 	info.Data = nodeInfos

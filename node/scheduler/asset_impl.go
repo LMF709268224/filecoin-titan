@@ -203,17 +203,17 @@ func (s *Scheduler) StopAssetRecord(ctx context.Context, cids []string) error {
 		return xerrors.Errorf("Cid Is Nil")
 	}
 
-	hashs := make([]string, 0)
+	hashes := make([]string, 0)
 	for _, cid := range cids {
 		hash, err := cidutil.CIDToHash(cid)
 		if err != nil {
 			continue
 		}
 
-		hashs = append(hashs, hash)
+		hashes = append(hashes, hash)
 	}
 
-	return s.AssetManager.StopAsset(hashs)
+	return s.AssetManager.StopAsset(hashes)
 }
 
 // RemoveAssetReplica removes an asset replica from the system by its CID and nodeID.

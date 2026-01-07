@@ -76,7 +76,7 @@ func (m *GeoMgr) AddEdgeNode(continent, country, province, city string, nodeInfo
 		m.edgeGeoMap[continent][country] = make(map[string]map[string][]*types.NodeInfo)
 	}
 	if m.edgeGeoMap[continent][country][province] == nil {
-		m.edgeGeoMap[continent][country][province] = make(map[string][]*types.NodeInfo, 0)
+		m.edgeGeoMap[continent][country][province] = make(map[string][]*types.NodeInfo)
 	}
 	m.edgeGeoMap[continent][country][province][city] = append(m.edgeGeoMap[continent][country][province][city], nodeInfo)
 }
@@ -85,6 +85,10 @@ func (m *GeoMgr) AddEdgeNode(continent, country, province, city string, nodeInfo
 func (m *GeoMgr) RemoveEdgeNode(continent, country, province, city, nodeID string) {
 	m.edgeLock.Lock()
 	defer m.edgeLock.Unlock()
+
+	if m.edgeGeoMap[continent] == nil || m.edgeGeoMap[continent][country] == nil || m.edgeGeoMap[continent][country][province] == nil {
+		return
+	}
 
 	nodes := m.edgeGeoMap[continent][country][province][city]
 	for i, nodeInfo := range nodes {
@@ -106,31 +110,39 @@ func (m *GeoMgr) FindEdgeNodes(continent, country, province, city string) []*typ
 	city = strings.ToLower(city)
 
 	if continent != "" && country != "" && province != "" && city != "" {
-		return m.edgeGeoMap[continent][country][province][city]
+		if m.edgeGeoMap[continent] != nil && m.edgeGeoMap[continent][country] != nil && m.edgeGeoMap[continent][country][province] != nil {
+			return m.edgeGeoMap[continent][country][province][city]
+		}
 	} else if continent != "" && country != "" && province != "" {
-		var result []*types.NodeInfo
-		for _, cities := range m.edgeGeoMap[continent][country][province] {
-			result = append(result, cities...)
-		}
-		return result
-	} else if continent != "" && country != "" {
-		var result []*types.NodeInfo
-		for _, provinces := range m.edgeGeoMap[continent][country] {
-			for _, cities := range provinces {
-				result = append(result, cities...)
+		if m.edgeGeoMap[continent] != nil && m.edgeGeoMap[continent][country] != nil {
+			var result []*types.NodeInfo
+			for _, nodes := range m.edgeGeoMap[continent][country][province] {
+				result = append(result, nodes...)
 			}
+			return result
 		}
-		return result
-	} else if continent != "" {
-		var result []*types.NodeInfo
-		for _, countries := range m.edgeGeoMap[continent] {
-			for _, provinces := range countries {
-				for _, cities := range provinces {
-					result = append(result, cities...)
+	} else if continent != "" && country != "" {
+		if m.edgeGeoMap[continent] != nil {
+			var result []*types.NodeInfo
+			for _, provinces := range m.edgeGeoMap[continent][country] {
+				for _, nodes := range provinces {
+					result = append(result, nodes...)
 				}
 			}
+			return result
 		}
-		return result
+	} else if continent != "" {
+		if countries, ok := m.edgeGeoMap[continent]; ok {
+			var result []*types.NodeInfo
+			for _, provinces := range countries {
+				for _, cities := range provinces {
+					for _, nodes := range cities {
+						result = append(result, nodes...)
+					}
+				}
+			}
+			return result
+		}
 	}
 
 	return nil
@@ -147,33 +159,45 @@ func (m *GeoMgr) GetEdgeGeoKey(continent, country, province string) map[string]i
 
 	result := make(map[string]int)
 	if continent != "" && country != "" && province != "" {
-		for city, list := range m.edgeGeoMap[continent][country][province] {
-			result[city] = len(list)
+		if countries, ok := m.edgeGeoMap[continent]; ok {
+			if provinces, ok := countries[country]; ok {
+				if cities, ok := provinces[province]; ok {
+					for city, list := range cities {
+						result[city] = len(list)
+					}
+				}
+			}
 		}
 		return result
 	} else if continent != "" && country != "" {
-		for province, cities := range m.edgeGeoMap[continent][country] {
-			for _, list := range cities {
-				result[province] += len(list)
+		if countries, ok := m.edgeGeoMap[continent]; ok {
+			if provinces, ok := countries[country]; ok {
+				for prov, cities := range provinces {
+					for _, list := range cities {
+						result[prov] += len(list)
+					}
+				}
 			}
 		}
 		return result
 	} else if continent != "" {
-		for country, provinces := range m.edgeGeoMap[continent] {
-			for _, cities := range provinces {
-				for _, list := range cities {
-					result[country] += len(list)
+		if countries, ok := m.edgeGeoMap[continent]; ok {
+			for count, provinces := range countries {
+				for _, cities := range provinces {
+					for _, list := range cities {
+						result[count] += len(list)
+					}
 				}
 			}
 		}
 		return result
 	}
 
-	for continent := range m.edgeGeoMap {
-		for _, provinces := range m.edgeGeoMap[continent] {
+	for cont, countries := range m.edgeGeoMap {
+		for _, provinces := range countries {
 			for _, cities := range provinces {
 				for _, list := range cities {
-					result[continent] += len(list)
+					result[cont] += len(list)
 				}
 			}
 		}
@@ -194,7 +218,7 @@ func (m *GeoMgr) AddCandidateNode(continent, country, province, city string, nod
 		m.candidateGeoMap[continent][country] = make(map[string]map[string][]*types.NodeInfo)
 	}
 	if m.candidateGeoMap[continent][country][province] == nil {
-		m.candidateGeoMap[continent][country][province] = make(map[string][]*types.NodeInfo, 0)
+		m.candidateGeoMap[continent][country][province] = make(map[string][]*types.NodeInfo)
 	}
 	m.candidateGeoMap[continent][country][province][city] = append(m.candidateGeoMap[continent][country][province][city], nodeInfo)
 }
@@ -203,6 +227,10 @@ func (m *GeoMgr) AddCandidateNode(continent, country, province, city string, nod
 func (m *GeoMgr) RemoveCandidateNode(continent, country, province, city, nodeID string) {
 	m.candidateLock.Lock()
 	defer m.candidateLock.Unlock()
+
+	if m.candidateGeoMap[continent] == nil || m.candidateGeoMap[continent][country] == nil || m.candidateGeoMap[continent][country][province] == nil {
+		return
+	}
 
 	nodes := m.candidateGeoMap[continent][country][province][city]
 	for i, nodeInfo := range nodes {
@@ -224,47 +252,47 @@ func (m *GeoMgr) FindCandidateNodes(continent, country, province, city string) [
 	city = strings.ToLower(city)
 
 	if continent != "" && country != "" && province != "" && city != "" {
-		result := m.candidateGeoMap[continent][country][province][city]
-		if len(result) > 0 {
-			return result
-		}
-	}
-
-	if continent != "" && country != "" && province != "" {
-		var result []*types.NodeInfo
-		for _, cities := range m.candidateGeoMap[continent][country][province] {
-			result = append(result, cities...)
-		}
-
-		if len(result) > 0 {
-			return result
-		}
-	}
-
-	if continent != "" && country != "" {
-		var result []*types.NodeInfo
-		for _, provinces := range m.candidateGeoMap[continent][country] {
-			for _, cities := range provinces {
-				result = append(result, cities...)
-			}
-		}
-
-		if len(result) > 0 {
-			return result
-		}
-	}
-
-	if continent != "" {
-		var result []*types.NodeInfo
-		for _, countries := range m.candidateGeoMap[continent] {
-			for _, provinces := range countries {
-				for _, cities := range provinces {
-					result = append(result, cities...)
+		if countries, ok := m.candidateGeoMap[continent]; ok {
+			if provinces, ok := countries[country]; ok {
+				if cities, ok := provinces[province]; ok {
+					return cities[city]
 				}
 			}
 		}
-
-		if len(result) > 0 {
+	} else if continent != "" && country != "" && province != "" {
+		if countries, ok := m.candidateGeoMap[continent]; ok {
+			if provinces, ok := countries[country]; ok {
+				if cities, ok := provinces[province]; ok {
+					var result []*types.NodeInfo
+					for _, nodes := range cities {
+						result = append(result, nodes...)
+					}
+					return result
+				}
+			}
+		}
+	} else if continent != "" && country != "" {
+		if countries, ok := m.candidateGeoMap[continent]; ok {
+			if provinces, ok := countries[country]; ok {
+				var result []*types.NodeInfo
+				for _, cities := range provinces {
+					for _, nodes := range cities {
+						result = append(result, nodes...)
+					}
+				}
+				return result
+			}
+		}
+	} else if continent != "" {
+		if countries, ok := m.candidateGeoMap[continent]; ok {
+			var result []*types.NodeInfo
+			for _, provinces := range countries {
+				for _, cities := range provinces {
+					for _, nodes := range cities {
+						result = append(result, nodes...)
+					}
+				}
+			}
 			return result
 		}
 	}
