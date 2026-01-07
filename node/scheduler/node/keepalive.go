@@ -8,7 +8,7 @@ import (
 )
 
 type BatchUpdate struct {
-	Nodes      []*types.NodeDynamicInfo
+	Nodes      []types.NodeDynamicInfo
 	Details    []*types.ProfitDetails
 	OnlineData map[string]int
 	SaveDate   time.Time
@@ -80,24 +80,31 @@ func (m *Manager) startNodeKeepaliveTimer() {
 	}
 }
 
-func (m *Manager) processNodes(processor NodeProcessor, t time.Time, minute int, isSave bool) ([]*types.NodeDynamicInfo, []*types.ProfitDetails, map[string]int) {
-	var nodes []*types.NodeDynamicInfo
+func (m *Manager) processNodes(processor NodeProcessor, t time.Time, minute int, isSave bool) ([]types.NodeDynamicInfo, []*types.ProfitDetails, map[string]int) {
+	var nodes []types.NodeDynamicInfo
 	var detailsList []*types.ProfitDetails
 	nodeOnlineCount := make(map[string]int)
 
-	for _, node := range processor.GetNodes() {
-		if m.checkNodeStatus(node, t) {
-			node.OnlineDuration += minute
-			node.TodayOnlineTimeWindow += (minute * 60) / 5
+	allNodes := processor.GetNodes()
+
+	for _, node := range allNodes {
+		isOnline := m.checkNodeStatus(node, t)
+		if isOnline {
+			node.AddOnlineDuration(minute)
+			node.AddTodayOnlineTimeWindow((minute * 60) / 5)
 		}
 
 		if isSave {
-			if dInfo, _ := processor.ProcessSave(node, minute); dInfo != nil {
-				detailsList = append(detailsList, dInfo)
+			// Only save and reset increment for online nodes
+			if isOnline {
+				if dInfo, _ := processor.ProcessSave(node, minute); dInfo != nil {
+					detailsList = append(detailsList, dInfo)
+				}
+				nodes = append(nodes, node.GetDynamicInfoWithIncrement())
+				node.ResetOnlineDurationIncrement()
+				nodeOnlineCount[node.NodeID] = node.TodayOnlineTimeWindow
+				node.ResetTodayOnlineTimeWindow()
 			}
-			nodes = append(nodes, &node.NodeDynamicInfo)
-			nodeOnlineCount[node.NodeID] = node.TodayOnlineTimeWindow
-			node.TodayOnlineTimeWindow = 0
 		}
 	}
 
@@ -108,7 +115,9 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 	now := time.Now()
 	t := now.Add(-keepaliveTime)
 	timeWindow := (minute * 60) / 5
+	m.mu.Lock()
 	m.serverTodayOnlineTimeWindow += timeWindow
+	m.mu.Unlock()
 
 	processors := []NodeProcessor{
 		&EdgeProcessor{m},
@@ -120,7 +129,7 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 	batch := BatchUpdate{
 		SaveDate:   time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()),
 		OnlineData: make(map[string]int),
-		Nodes:      make([]*types.NodeDynamicInfo, 0),
+		Nodes:      make([]types.NodeDynamicInfo, 0),
 		Details:    make([]*types.ProfitDetails, 0),
 	}
 
@@ -146,8 +155,15 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 	wg.Wait()
 
 	if isSave {
+		m.mu.Lock()
 		batch.OnlineData[string(m.ServerID)] = m.serverTodayOnlineTimeWindow
 		m.serverTodayOnlineTimeWindow = 0
+		m.mu.Unlock()
+
+		if len(batch.Nodes) > 0 {
+			log.Infof("Updating online duration for %d nodes. Sample: nodeID=%s, increment=%d",
+				len(batch.Nodes), batch.Nodes[0].NodeID, batch.Nodes[0].OnlineDuration)
+		}
 
 		err := m.UpdateNodeDynamicInfo(batch.Nodes)
 		if err != nil {
@@ -171,13 +187,14 @@ func (m *Manager) SetNodeOffline(node *Node) {
 	m.IPMgr.RemoveNodeIP(node.NodeID, node.ExternalIP)
 	m.GeoMgr.RemoveNodeGeo(node.NodeID, node.Type, node.AreaID)
 
-	if node.Type == types.NodeCandidate {
+	switch node.Type {
+	case types.NodeCandidate:
 		m.deleteCandidateNode(node)
-	} else if node.Type == types.NodeEdge {
+	case types.NodeEdge:
 		m.deleteEdgeNode(node)
-	} else if node.Type == types.NodeL5 {
+	case types.NodeL5:
 		m.deleteL5Node(node)
-	} else if node.Type == types.NodeL3 {
+	case types.NodeL3:
 		m.deleteL3Node(node)
 	}
 

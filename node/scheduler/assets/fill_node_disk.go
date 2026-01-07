@@ -247,7 +247,7 @@ func (m *Manager) requestNodePullAsset(bucket, cid string, candidateCount int64,
 			break
 		}
 
-		if !node.DiskEnough(size) {
+		if !node.HasEnoughDiskSpace(size) {
 			continue
 		}
 

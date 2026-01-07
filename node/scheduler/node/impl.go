@@ -224,7 +224,7 @@ func (m *Manager) GetL3Node(nodeID string) *Node {
 
 // GetOnlineNodeCount returns online node count of the given type
 func (m *Manager) GetOnlineNodeCount(nodeType types.NodeType) int {
-	i := 0
+	i := int64(0)
 	if nodeType == types.NodeUnknown || nodeType == types.NodeCandidate {
 		i += m.Candidates
 	}
@@ -233,7 +233,15 @@ func (m *Manager) GetOnlineNodeCount(nodeType types.NodeType) int {
 		i += m.Edges
 	}
 
-	return i
+	if nodeType == types.NodeUnknown || nodeType == types.NodeL3 {
+		i += m.L3Count
+	}
+
+	if nodeType == types.NodeUnknown || nodeType == types.NodeL5 {
+		i += m.L5Count
+	}
+
+	return int(i)
 }
 
 // NodeOnline registers a node as online

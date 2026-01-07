@@ -5,21 +5,24 @@ import "sync"
 // IPMgr node ip info manager
 type IPMgr struct {
 	ipLimit int
-	nodeIPs sync.Map
+	nodeIPs map[string][]string
+	mu      sync.Mutex
 }
 
 func newIPMgr(limit int) *IPMgr {
 	return &IPMgr{
 		ipLimit: limit,
+		nodeIPs: make(map[string][]string),
 	}
 }
 
 // StoreNodeIP store node
 func (m *IPMgr) StoreNodeIP(nodeID, ip string) bool {
-	listI, exist := m.nodeIPs.Load(ip)
-	if exist {
-		list := listI.([]string)
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
+	list, ok := m.nodeIPs[ip]
+	if ok {
 		for _, nID := range list {
 			if nID == nodeID {
 				return true
@@ -27,41 +30,50 @@ func (m *IPMgr) StoreNodeIP(nodeID, ip string) bool {
 		}
 
 		if len(list) < m.ipLimit {
-			list = append(list, nodeID)
-			m.nodeIPs.Store(ip, list)
+			m.nodeIPs[ip] = append(list, nodeID)
 			return true
 		}
 
 		return false
 	}
 
-	m.nodeIPs.Store(ip, []string{nodeID})
+	m.nodeIPs[ip] = []string{nodeID}
 	return true
 }
 
 // RemoveNodeIP remove node
 func (m *IPMgr) RemoveNodeIP(nodeID, ip string) {
-	listI, exist := m.nodeIPs.Load(ip)
-	if exist {
-		list := listI.([]string)
-		nList := []string{}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
+	list, ok := m.nodeIPs[ip]
+	if ok {
+		nList := make([]string, 0, len(list))
 		for _, nID := range list {
 			if nID != nodeID {
 				nList = append(nList, nID)
 			}
 		}
 
-		m.nodeIPs.Store(ip, nList)
+		if len(nList) == 0 {
+			delete(m.nodeIPs, ip)
+		} else {
+			m.nodeIPs[ip] = nList
+		}
 	}
 }
 
 // GetNodeOfIP get node
 func (m *IPMgr) GetNodeOfIP(ip string) []string {
-	listI, exist := m.nodeIPs.Load(ip)
-	if exist {
-		list := listI.([]string)
-		return list
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	list, ok := m.nodeIPs[ip]
+	if ok {
+		// Return a copy to avoid race on the slice
+		cp := make([]string, len(list))
+		copy(cp, list)
+		return cp
 	}
 
 	return []string{}
@@ -69,7 +81,9 @@ func (m *IPMgr) GetNodeOfIP(ip string) []string {
 
 // CheckIPExist check node
 func (m *IPMgr) CheckIPExist(ip string) bool {
-	_, exist := m.nodeIPs.Load(ip)
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	return exist
+	_, ok := m.nodeIPs[ip]
+	return ok
 }

@@ -135,84 +135,83 @@ func (n *SQLDB) SaveNodeInfo(info *types.NodeInfo) error {
 				VALUES (:node_id, :mac_location, :cpu_cores, :memory, :node_name, :cpu_info, :available_disk_space, :titan_disk_usage, :gpu_info, :version, :last_seen,
 				:disk_type, :io_system, :system_version, :disk_space, :bandwidth_up, :bandwidth_down, :netflow_up, :netflow_down, :scheduler_sid) 
 				ON DUPLICATE KEY UPDATE node_id=:node_id, scheduler_sid=:scheduler_sid, system_version=:system_version, cpu_cores=:cpu_cores, titan_disk_usage=:titan_disk_usage, gpu_info=:gpu_info,
-				memory=:memory, node_name=:node_name, disk_space=:disk_space, cpu_info=:cpu_info, available_disk_space=:available_disk_space, available_disk_space=:available_disk_space, last_seen=:last_seen,
+				memory=:memory, node_name=:node_name, disk_space=:disk_space, cpu_info=:cpu_info, available_disk_space=:available_disk_space, last_seen=:last_seen,
 				netflow_up=:netflow_up, netflow_down=:netflow_down ,version=:version`, nodeInfoTable)
 
 	_, err := n.db.NamedExec(query, info)
 	return err
 }
 
-// UpdateNodeOnlineCount updates the online count of nodes for a given date.
+// UpdateNodeOnlineCount updates the online count of nodes for a given date in batch.
 func (n *SQLDB) UpdateNodeOnlineCount(nodeOnlineCount map[string]int, date time.Time) error {
-	tx, err := n.db.Beginx()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	stmt2, err := tx.Prepare(`INSERT INTO ` + onlineCountTable + ` (node_id, created_time, online_count)
-	VALUES (?, ?, ?)
-	ON DUPLICATE KEY UPDATE online_count=online_count+?`)
-	if err != nil {
-		return err
+	if len(nodeOnlineCount) == 0 {
+		return nil
 	}
 
-	defer stmt2.Close()
+	query := `INSERT INTO ` + onlineCountTable + ` (node_id, created_time, online_count) VALUES `
+	values := make([]interface{}, 0, len(nodeOnlineCount)*3)
 
+	i := 0
 	for nodeID, count := range nodeOnlineCount {
-		_, err = stmt2.Exec(nodeID, date, count, count)
-		if err != nil {
-			log.Errorf("UpdateOnlineCount %s err:%s", nodeID, err.Error())
+		if i > 0 {
+			query += ","
 		}
+		query += "(?, ?, ?)"
+		values = append(values, nodeID, date, count)
+		i++
 	}
-	return tx.Commit()
+
+	query += ` ON DUPLICATE KEY UPDATE online_count=online_count+VALUES(online_count)`
+
+	_, err := n.db.Exec(query, values...)
+	return err
 }
 
-// UpdateNodeDynamicInfo updates various dynamic information fields for multiple nodes.
-func (n *SQLDB) UpdateNodeDynamicInfo(infos []*types.NodeDynamicInfo) error {
-	tx, err := n.db.Beginx()
+// UpdateNodeDynamicInfo updates various dynamic information fields for multiple nodes using efficient batching.
+func (n *SQLDB) UpdateNodeDynamicInfo(infos []types.NodeDynamicInfo) error {
+	if len(infos) == 0 {
+		return nil
+	}
+	// Use UPDATE instead of INSERT...ON DUPLICATE KEY UPDATE to avoid scheduler_sid requirement
+	stmt, err := n.db.Preparex(`UPDATE ` + nodeInfoTable + ` SET 
+		nat_type=?, 
+		last_seen=?, 
+		online_duration=online_duration+?, 
+		disk_usage=?, 
+		bandwidth_up=?, 
+		bandwidth_down=?, 
+		titan_disk_usage=?, 
+		available_disk_space=?, 
+		download_traffic=?, 
+		upload_traffic=? 
+		WHERE node_id=?`)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-
-	stmt, err := tx.PrepareNamed(`UPDATE ` + nodeInfoTable + ` SET nat_type=:nat_type, last_seen=:last_seen, online_duration=:online_duration, disk_usage=:disk_usage, bandwidth_up=:bandwidth_up, bandwidth_down=:bandwidth_down, titan_disk_usage=:titan_disk_usage, available_disk_space=:available_disk_space, download_traffic=:download_traffic, upload_traffic=:upload_traffic WHERE node_id=:node_id`)
-	if err != nil {
-		return err
-	}
-	// stmt2, err := tx.Prepare(`INSERT INTO ` + onlineCountTable + ` (node_id, created_time, online_count)
-	// VALUES (?, ?, ?)
-	// ON DUPLICATE KEY UPDATE online_count=online_count+?`)
-	// if err != nil {
-	// 	return err
-	// }
-
-	defer func() {
-		stmt.Close()
-		// stmt2.Close()
-	}()
-
-	batchSize := 500
-	for i := 0; i < len(infos); i += batchSize {
-		end := i + batchSize
-		if end > len(infos) {
-			end = len(infos)
+	defer stmt.Close()
+	totalUpdated := 0
+	for _, info := range infos {
+		result, err := stmt.Exec(
+			info.NATType,
+			info.LastSeen,
+			info.OnlineDuration,
+			info.DiskUsage,
+			info.BandwidthUp,
+			info.BandwidthDown,
+			info.TitanDiskUsage,
+			info.AvailableDiskSpace,
+			info.DownloadTraffic,
+			info.UploadTraffic,
+			info.NodeID,
+		)
+		if err != nil {
+			continue
 		}
-		batch := infos[i:end]
-
-		for _, info := range batch {
-			if _, err := stmt.Exec(info); err != nil {
-				log.Errorf("UpdateNodeDynamicInfo %s, %.4f,%d,%d,%.4f,%.4f err:%s", info.NodeID, info.DiskUsage, info.BandwidthUp, info.BandwidthDown, info.TitanDiskUsage, info.AvailableDiskSpace, err.Error())
-			}
-
-			// _, err := stmt2.Exec(info.NodeID, date, info.TodayOnlineTimeWindow, info.TodayOnlineTimeWindow)
-			// if err != nil {
-			// 	log.Errorf("UpdateOnlineCount %s err:%s", info.NodeID, err.Error())
-			// }
-		}
+		rowsAffected, _ := result.RowsAffected()
+		totalUpdated += int(rowsAffected)
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 // SaveNodeRegisterInfos stores registration details for multiple nodes.
@@ -418,6 +417,33 @@ func (n *SQLDB) LoadNodeInfo(nodeID string) (*types.NodeInfo, error) {
 	out.NodeStatisticsInfo = sInfo
 
 	return &out, nil
+}
+
+// LoadNodeInfos retrieves detailed information for multiple nodes.
+func (n *SQLDB) LoadNodeInfos(nodeIDs []string) (map[string]*types.NodeInfo, error) {
+	if len(nodeIDs) == 0 {
+		return nil, nil
+	}
+
+	query := fmt.Sprintf(`SELECT * FROM %s WHERE node_id IN (?)`, nodeInfoTable)
+	query, args, err := sqlx.In(query, nodeIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	query = n.db.Rebind(query)
+	var infos []*types.NodeInfo
+	err = n.db.Select(&infos, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string]*types.NodeInfo)
+	for _, info := range infos {
+		res[info.NodeID] = info
+	}
+
+	return res, nil
 }
 
 // LoadNodeLastSeenTime fetches the last seen timestamp for a specific node.
@@ -654,19 +680,35 @@ func (n *SQLDB) processNodeProfitBatch(batch []*types.ProfitDetails) error {
 		}
 	}()
 
-	for _, profitInfo := range batch {
-		// add profit details
-		sqlString := fmt.Sprintf(`INSERT INTO %s (node_id, profit, profit_type, size, note, cid, rate) VALUES (:node_id, :profit, :profit_type, :size, :note, :cid, :rate)`, profitDetailsTable)
-		_, err = tx.NamedExec(sqlString, profitInfo)
-		if err != nil {
-			log.Errorf("nodeProfitBatch Exec INSERT %s err:%s", profitInfo.NodeID, err.Error())
-			continue
+	// 1. Bulk insert profit details
+	sqlString := fmt.Sprintf(`INSERT INTO %s (node_id, profit, profit_type, size, note, cid, rate) VALUES `, profitDetailsTable)
+	values := make([]interface{}, 0, len(batch)*7)
+	for i, info := range batch {
+		if i > 0 {
+			sqlString += ","
 		}
+		sqlString += "(?, ?, ?, ?, ?, ?, ?)"
+		values = append(values, info.NodeID, info.Profit, info.PType, info.Size, info.Note, info.CID, info.Rate)
+	}
+	_, err = tx.Exec(sqlString, values...)
+	if err != nil {
+		return err
+	}
 
-		iQuery := fmt.Sprintf(`UPDATE %s SET profit=profit+?,penalty_profit=penalty_profit+? WHERE node_id=?`, nodeInfoTable)
-		_, err = tx.Exec(iQuery, profitInfo.Profit, profitInfo.Penalty, profitInfo.NodeID)
+	// 2. Update node_info profits
+	// Since each node has different profit increment, we still do individual updates,
+	// but they are shared in the same transaction which is reasonably fast.
+	iQuery := fmt.Sprintf(`UPDATE %s SET profit=profit+?,penalty_profit=penalty_profit+? WHERE node_id=?`, nodeInfoTable)
+	stmt, err := tx.Prepare(iQuery)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, info := range batch {
+		_, err = stmt.Exec(info.Profit, info.Penalty, info.NodeID)
 		if err != nil {
-			log.Errorf("nodeProfitBatch Exec UPDATE %s err:%s", profitInfo.NodeID, err.Error())
+			log.Errorf("nodeProfitBatch Exec UPDATE %s err:%s", info.NodeID, err.Error())
 		}
 	}
 
@@ -1067,6 +1109,103 @@ func (n *SQLDB) GetOnlineCount(node string, date time.Time) (int, error) {
 	}
 
 	return count, nil
+}
+
+// GetNodesOnlineCount retrieves the online count for multiple nodes on a given date.
+func (n *SQLDB) GetNodesOnlineCount(nodeIDs []string, date time.Time) (map[string]int, error) {
+	if len(nodeIDs) == 0 {
+		return nil, nil
+	}
+
+	query := fmt.Sprintf("SELECT node_id, online_count FROM %s WHERE created_time=? AND node_id IN (?)", onlineCountTable)
+	query, args, err := sqlx.In(query, date, nodeIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	query = n.db.Rebind(query)
+	var rows []struct {
+		NodeID string `db:"node_id"`
+		Count  int    `db:"online_count"`
+	}
+
+	err = n.db.Select(&rows, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string]int)
+	for _, row := range rows {
+		res[row.NodeID] = row.Count
+	}
+
+	return res, nil
+}
+
+// GetOnlineCountsByNode retrieves the online count for a specific node across multiple dates.
+func (n *SQLDB) GetOnlineCountsByNode(nodeID string, dates []time.Time) (map[time.Time]int, error) {
+	if len(dates) == 0 {
+		return nil, nil
+	}
+
+	query := fmt.Sprintf("SELECT created_time, online_count FROM %s WHERE node_id=? AND created_time IN (?)", onlineCountTable)
+	query, args, err := sqlx.In(query, nodeID, dates)
+	if err != nil {
+		return nil, err
+	}
+
+	query = n.db.Rebind(query)
+	var rows []struct {
+		CreatedTime time.Time `db:"created_time"`
+		Count       int       `db:"online_count"`
+	}
+
+	err = n.db.Select(&rows, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[time.Time]int)
+	for _, row := range rows {
+		res[row.CreatedTime] = row.Count
+	}
+
+	return res, nil
+}
+
+// GetNodesOnlineCounts retrieves online counts for multiple nodes across multiple dates.
+func (n *SQLDB) GetNodesOnlineCounts(nodeIDs []string, dates []time.Time) (map[string]map[time.Time]int, error) {
+	if len(nodeIDs) == 0 || len(dates) == 0 {
+		return nil, nil
+	}
+
+	query := fmt.Sprintf("SELECT node_id, created_time, online_count FROM %s WHERE node_id IN (?) AND created_time IN (?)", onlineCountTable)
+	query, args, err := sqlx.In(query, nodeIDs, dates)
+	if err != nil {
+		return nil, err
+	}
+
+	query = n.db.Rebind(query)
+	var rows []struct {
+		NodeID      string    `db:"node_id"`
+		CreatedTime time.Time `db:"created_time"`
+		Count       int       `db:"online_count"`
+	}
+
+	err = n.db.Select(&rows, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string]map[time.Time]int)
+	for _, row := range rows {
+		if _, ok := res[row.NodeID]; !ok {
+			res[row.NodeID] = make(map[time.Time]int)
+		}
+		res[row.NodeID][row.CreatedTime] = row.Count
+	}
+
+	return res, nil
 }
 
 // UpdateNodePenalty updates the penalty duration and last seen time for nodes based on their online status.

@@ -67,6 +67,37 @@ func (n *SQLDB) LoadNodesOfPullingReplica(hash string) ([]string, error) {
 	return nodes, nil
 }
 
+// LoadReplicasNodesByHashes retrieves a map of hash to node IDs for replicas that are pulling or waiting.
+func (n *SQLDB) LoadReplicasNodesByHashes(hashes []string) (map[string][]string, error) {
+	if len(hashes) == 0 {
+		return nil, nil
+	}
+
+	query := fmt.Sprintf("SELECT hash, node_id FROM %s WHERE hash IN (?) AND (status=? OR status=?)", replicaInfoTable)
+	query, args, err := sqlx.In(query, hashes, types.ReplicaStatusPulling, types.ReplicaStatusWaiting)
+	if err != nil {
+		return nil, err
+	}
+
+	query = n.db.Rebind(query)
+	var rows []struct {
+		Hash   string `db:"hash"`
+		NodeID string `db:"node_id"`
+	}
+
+	err = n.db.Select(&rows, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string][]string)
+	for _, row := range rows {
+		res[row.Hash] = append(res[row.Hash], row.NodeID)
+	}
+
+	return res, nil
+}
+
 // UpdateReplicasStatusToFailed updates the status of unfinished asset replicas to 'failed'.
 func (n *SQLDB) UpdateReplicasStatusToFailed(hash string) error {
 	query := fmt.Sprintf(`UPDATE %s SET end_time=NOW(), status=? WHERE hash=? AND (status=? or status=?)`, replicaInfoTable)
@@ -203,6 +234,32 @@ func (n *SQLDB) LoadReplicasByStatus(hash string, statuses []types.ReplicaStatus
 	return out, nil
 }
 
+// LoadReplicasByHashesAndStatuses retrieves replica information based on the provided hashes and statuses.
+func (n *SQLDB) LoadReplicasByHashesAndStatuses(hashes []string, statuses []types.ReplicaStatus) (map[string][]*types.ReplicaInfo, error) {
+	if len(hashes) == 0 || len(statuses) == 0 {
+		return nil, nil
+	}
+
+	sQuery := fmt.Sprintf(`SELECT * FROM %s WHERE hash in (?) AND status in (?)`, replicaInfoTable)
+	query, args, err := sqlx.In(sQuery, hashes, statuses)
+	if err != nil {
+		return nil, err
+	}
+
+	var infos []*types.ReplicaInfo
+	query = n.db.Rebind(query)
+	if err := n.db.Select(&infos, query, args...); err != nil {
+		return nil, err
+	}
+
+	res := make(map[string][]*types.ReplicaInfo)
+	for _, info := range infos {
+		res[info.Hash] = append(res[info.Hash], info)
+	}
+
+	return res, nil
+}
+
 // LoadReplicasByHashes retrieves replica information based on the provided hashes and node ID.
 func (n *SQLDB) LoadReplicasByHashes(hashes []string, nodeID string) ([]*types.ReplicaInfo, error) {
 	sQuery := fmt.Sprintf(`SELECT * FROM %s WHERE node_id=? AND hash in (?)`, replicaInfoTable)
@@ -286,6 +343,37 @@ func (n *SQLDB) LoadSucceedReplicaCountNodeID(nodeID string) (int64, error) {
 	}
 
 	return count, nil
+}
+
+// LoadSucceedReplicaCounts retrieves the counts of successful replicas for multiple node IDs.
+func (n *SQLDB) LoadSucceedReplicaCounts(nodeIDs []string) (map[string]int64, error) {
+	if len(nodeIDs) == 0 {
+		return nil, nil
+	}
+
+	query := fmt.Sprintf("SELECT node_id, COUNT(*) as count FROM %s WHERE node_id IN (?) AND status=? GROUP BY node_id", replicaInfoTable)
+	query, args, err := sqlx.In(query, nodeIDs, types.ReplicaStatusSucceeded)
+	if err != nil {
+		return nil, err
+	}
+
+	query = n.db.Rebind(query)
+	var rows []struct {
+		NodeID string `db:"node_id"`
+		Count  int64  `db:"count"`
+	}
+
+	err = n.db.Select(&rows, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string]int64)
+	for _, row := range rows {
+		res[row.NodeID] = row.Count
+	}
+
+	return res, nil
 }
 
 // LoadPullingReplicaCountNodeID retrieves the count of pulling replicas for a given node ID.
@@ -614,6 +702,33 @@ func (n *SQLDB) LoadAssetStateInfo(hash string, serverID dtypes.ServerID) (*type
 		return nil, err
 	}
 	return &info, nil
+}
+
+// LoadAssetStateInfos fetches the state information for multiple assets.
+func (n *SQLDB) LoadAssetStateInfos(hashes []string, serverID dtypes.ServerID) (map[string]*types.AssetStateInfo, error) {
+	if len(hashes) == 0 {
+		return nil, nil
+	}
+
+	query := fmt.Sprintf("SELECT * FROM %s WHERE hash IN (?)", assetStateTable(serverID))
+	query, args, err := sqlx.In(query, hashes)
+	if err != nil {
+		return nil, err
+	}
+
+	query = n.db.Rebind(query)
+	var infos []*types.AssetStateInfo
+	err = n.db.Select(&infos, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string]*types.AssetStateInfo)
+	for _, info := range infos {
+		res[info.Hash] = info
+	}
+
+	return res, nil
 }
 
 // UpdateAssetRecordReplicaCount updates the count of edge replicas for a specific content identifier in the asset record table.

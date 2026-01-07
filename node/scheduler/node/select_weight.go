@@ -133,8 +133,10 @@ func (wm *weightManager) getWeightRandoms(lock *sync.RWMutex, r *rand.Rand, max 
 
 	for i := 0; i < count; i++ {
 		w := r.Intn(max) + 1
-
-		outS[distributed[w]] = w
+		nodeID, ok := distributed[w]
+		if ok && nodeID != "" {
+			outS[nodeID] = w
+		}
 	}
 
 	return outS

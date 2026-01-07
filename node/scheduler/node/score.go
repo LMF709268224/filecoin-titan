@@ -24,12 +24,12 @@ func (m *Manager) startCalcScoreTimer() {
 func (m *Manager) getScoreLevel(score int) int {
 	for i := 0; i < len(nodeScoreLevel); i++ {
 		value := nodeScoreLevel[i]
-		if value >= score {
+		if score <= value {
 			return i
 		}
 	}
 
-	return 0
+	return len(nodeScoreLevel) - 1
 }
 
 func (m *Manager) getNodeScoreLevel(node *Node) int {
