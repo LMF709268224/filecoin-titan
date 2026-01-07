@@ -293,9 +293,17 @@ func (m *Manager) retrieveNodePullProgresses(isUpload bool) {
 		return true
 	})
 
+	hashes := make([]string, 0, len(toMap))
+	for hash := range toMap {
+		hashes = append(hashes, hash)
+	}
+
+	stateInfos, _ := m.LoadAssetStateInfos(hashes, m.nodeMgr.ServerID)
+	pullingReplicaNodes, _ := m.LoadReplicasNodesByHashes(hashes)
+
 	for hash, info := range toMap {
-		stateInfo, err := m.LoadAssetStateInfo(hash, m.nodeMgr.ServerID)
-		if err != nil {
+		stateInfo, ok := stateInfos[hash]
+		if !ok {
 			continue
 		}
 
@@ -329,12 +337,7 @@ func (m *Manager) retrieveNodePullProgresses(isUpload bool) {
 
 		log.Infof("retrieveNodePullProgresses check %s \n", cid)
 
-		pList, err := m.LoadNodesOfPullingReplica(hash)
-		if err != nil {
-			log.Errorf("retrieveNodePullProgresses %s LoadReplicas err:%s", hash, err.Error())
-			continue
-		}
-
+		pList := pullingReplicaNodes[hash]
 		for _, nodeID := range pList {
 			list := nodePulls[nodeID]
 			nodePulls[nodeID] = append(list, cid)
@@ -906,11 +909,9 @@ func (m *Manager) processMissingAssetReplicas(offset int) int {
 	}
 	defer aRows.Close()
 
-	size := 0
-	// loading asset records
+	var assetRecords []*types.AssetRecord
+	var hashes []string
 	for aRows.Next() {
-		size++
-
 		cInfo := &types.AssetRecord{}
 		err = aRows.StructScan(cInfo)
 		if err != nil {
@@ -922,7 +923,34 @@ func (m *Manager) processMissingAssetReplicas(offset int) int {
 			continue
 		}
 
-		effectiveEdges, candidateReplica, deleteNodes, err := m.checkAssetReliability(cInfo.Hash)
+		assetRecords = append(assetRecords, cInfo)
+		hashes = append(hashes, cInfo.Hash)
+	}
+
+	if len(hashes) == 0 {
+		return 0
+	}
+
+	// Batch load replicas
+	allReplicas, _ := m.LoadReplicasByHashesAndStatuses(hashes, []types.ReplicaStatus{types.ReplicaStatusSucceeded})
+
+	// Collect all involved nodes
+	nodeIDMap := make(map[string]struct{})
+	for _, replicas := range allReplicas {
+		for _, r := range replicas {
+			nodeIDMap[r.NodeID] = struct{}{}
+		}
+	}
+	nodeIDs := make([]string, 0, len(nodeIDMap))
+	for nodeID := range nodeIDMap {
+		nodeIDs = append(nodeIDs, nodeID)
+	}
+
+	// Batch load node infos from DB
+	nodeInfos, _ := m.nodeMgr.LoadNodeInfos(nodeIDs)
+
+	for _, cInfo := range assetRecords {
+		effectiveEdges, candidateReplica, deleteNodes, err := m.checkAssetReliabilityBatch(cInfo.Hash, allReplicas[cInfo.Hash], nodeInfos)
 		if err != nil {
 			log.Errorf("checkAssetReliability err: %s", err.Error())
 			continue
@@ -951,6 +979,7 @@ func (m *Manager) processMissingAssetReplicas(offset int) int {
 		}
 	}
 
+	size := len(assetRecords)
 	if size == checkAssetReplicaLimit {
 		offset += size
 	} else {
@@ -960,23 +989,20 @@ func (m *Manager) processMissingAssetReplicas(offset int) int {
 	return offset
 }
 
-// Check the reliability of assets
-func (m *Manager) checkAssetReliability(hash string) (effectiveEdges, candidateReplica int, deleteNodes []string, outErr error) {
-	// loading asset replicas
-	replicas, outErr := m.LoadReplicasByStatus(hash, []types.ReplicaStatus{types.ReplicaStatusSucceeded})
-	if outErr != nil {
-		log.Errorf("checkAssetReliability LoadReplicasByHash err:%s", outErr.Error())
-		return
-	}
-
+// Check the reliability of assets with preloaded data
+func (m *Manager) checkAssetReliabilityBatch(hash string, replicas []*types.ReplicaInfo, nodeInfos map[string]*types.NodeInfo) (effectiveEdges, candidateReplica int, deleteNodes []string, outErr error) {
 	deleteNodes = make([]string, 0)
 
 	for _, rInfo := range replicas {
 		// Are the nodes unreliable
 		nodeID := rInfo.NodeID
-		lastSeen, err := m.LoadNodeLastSeenTime(nodeID)
-		if err != nil {
-			log.Errorf("checkAssetReliability %s LoadLastSeenOfNode err: %s", nodeID, err.Error())
+		var lastSeen time.Time
+		if node := m.nodeMgr.GetNode(nodeID); node != nil {
+			lastSeen = node.LastRequestTime()
+		} else if info, ok := nodeInfos[nodeID]; ok {
+			lastSeen = info.LastSeen
+		} else {
+			log.Errorf("checkAssetReliability %s LoadLastSeenOfNode err: node not found", nodeID)
 			deleteNodes = append(deleteNodes, nodeID)
 			continue
 		}
@@ -994,7 +1020,6 @@ func (m *Manager) checkAssetReliability(hash string) (effectiveEdges, candidateR
 				effectiveEdges++
 			}
 		}
-
 	}
 
 	return
@@ -1106,10 +1131,8 @@ func (m *Manager) chooseCandidateNodes(count int, filterNodes []string, size flo
 			continue
 		}
 
-		nodeID := node.NodeID
-
-		if !node.DiskEnough(size) {
-			log.Infof("chooseCandidateNodes %s DiskEnough...", nodeID)
+		if !node.HasEnoughDiskSpace(size) {
+			log.Infof("chooseCandidateNodes %s HasEnoughDiskSpace...", nodeID)
 			continue
 		}
 
@@ -1168,7 +1191,7 @@ func (m *Manager) chooseEdgeNodes(count int, bandwidthDown int64, filterNodes []
 		}
 
 		// Calculate node residual capacity
-		if !node.DiskEnough(size) {
+		if !node.HasEnoughDiskSpace(size) {
 			log.Debugf("chooseEdgeNodes node %s disk residual n.DiskUsage:%.2f, n.DiskSpace:%.2f, AvailableDiskSpace:%.2f, TitanDiskUsage:%.2f", node.NodeID, node.DiskUsage, node.DiskSpace, node.AvailableDiskSpace, node.TitanDiskUsage)
 			return false
 		}

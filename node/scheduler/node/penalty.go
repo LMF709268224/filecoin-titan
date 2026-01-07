@@ -12,13 +12,17 @@ func (m *Manager) startNodePenaltyTimer() {
 	ticker := time.NewTicker(penaltyInterval)
 	defer ticker.Stop()
 
+	lastResetDay := time.Now().Day()
+
 	for {
 		<-ticker.C
 
-		// reset
 		now := time.Now()
-		if now.Hour() == 0 && now.Minute() < 1 {
+		if now.Day() != lastResetDay {
+			m.mu.Lock()
 			m.candidateOfflineTime = make(map[string]int)
+			m.mu.Unlock()
+			lastResetDay = now.Day()
 		}
 
 		m.penaltyNode()
@@ -48,6 +52,7 @@ func (m *Manager) penaltyNode() {
 			continue
 		}
 
+		m.mu.Lock()
 		// No penalty for the first 30 minutes of each day
 		count := m.candidateOfflineTime[info.NodeID]
 		if count > 30 {
@@ -59,6 +64,7 @@ func (m *Manager) penaltyNode() {
 
 		offlineNodes[info.NodeID] = 0
 		m.candidateOfflineTime[info.NodeID]++
+		m.mu.Unlock()
 	}
 
 	if len(offlineNodes) > 0 {

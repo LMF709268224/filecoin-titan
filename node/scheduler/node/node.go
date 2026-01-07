@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Filecoin-Titan/titan/api"
@@ -87,6 +88,9 @@ type Node struct {
 	BandwidthFreeDown  int64
 	BandwidthUpScore   int64
 	BandwidthDownScore int64
+
+	OnlineDurationIncrement int
+	mu                      sync.RWMutex
 }
 
 // API represents the node API
@@ -156,6 +160,9 @@ func APIFromCandidate(api api.Candidate) *API {
 
 // InitInfo initializes the node information.
 func (n *Node) InitInfo(nodeInfo *types.NodeInfo) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	if n.Type == types.NodeCandidate {
 		n.bandwidthTracker = NewBandwidthTracker(20)
 	} else {
@@ -163,10 +170,12 @@ func (n *Node) InitInfo(nodeInfo *types.NodeInfo) {
 	}
 
 	oldValue := n.TodayOnlineTimeWindow
+	oldIncr := n.OnlineDurationIncrement
 
 	n.NodeDynamicInfo = nodeInfo.NodeDynamicInfo
 
 	n.TodayOnlineTimeWindow = oldValue
+	n.OnlineDurationIncrement = oldIncr
 
 	n.NetFlowUp = nodeInfo.NetFlowUp
 	n.NetFlowDown = nodeInfo.NetFlowDown
@@ -278,6 +287,9 @@ func (n *Node) IsResourceNode() bool {
 
 // IsAbnormal is node abnormal
 func (n *Node) IsAbnormal() bool {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
 	// Node is considered unavailable if it has been deactivated.
 	if n.DeactivateTime > 0 {
 		return true
@@ -355,11 +367,15 @@ func (n *Node) DownloadAddr() string {
 
 // LastRequestTime returns the last request time of the node
 func (n *Node) LastRequestTime() time.Time {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
 	return n.LastSeen
 }
 
 // SetLastRequestTime sets the last request time of the node
 func (n *Node) SetLastRequestTime(t time.Time) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	n.LastSeen = t
 }
 
@@ -403,8 +419,11 @@ func (n *Node) encryptTokenPayload(tkPayload *types.TokenPayload, publicKey *rsa
 	return rsa.Encrypt(buffer.Bytes(), publicKey)
 }
 
-// DiskEnough Is there enough storage on the compute node
-func (n *Node) DiskEnough(size float64) bool {
+// HasEnoughDiskSpace Is there enough storage on the compute node
+func (n *Node) HasEnoughDiskSpace(size float64) bool {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
 	residual := ((100 - n.DiskUsage) / 100) * n.DiskSpace
 	if residual <= size {
 		return false
@@ -420,6 +439,9 @@ func (n *Node) DiskEnough(size float64) bool {
 
 // NetFlowUpExcess  Whether the upstream traffic exceeds the limit
 func (n *Node) NetFlowUpExcess(size float64) bool {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
 	if n.NetFlowUp <= 0 {
 		return false
 	}
@@ -433,6 +455,9 @@ func (n *Node) NetFlowUpExcess(size float64) bool {
 
 // NetFlowDownExcess  Whether the downstream traffic exceeds the limit
 func (n *Node) NetFlowDownExcess(size float64) bool {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
 	if n.NetFlowDown <= 0 {
 		return false
 	}
@@ -445,6 +470,9 @@ func (n *Node) NetFlowDownExcess(size float64) bool {
 }
 
 func (n *Node) SetBandwidths(free, peak types.FlowUnit) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	n.BandwidthDown = peak.D
 	n.BandwidthUp = peak.U
 
@@ -454,6 +482,76 @@ func (n *Node) SetBandwidths(free, peak types.FlowUnit) {
 	// free
 	n.BandwidthDownScore = int64(math.Min(1, float64(n.BandwidthFreeDown)/float64(50*units.MiB)) * 90)
 	n.BandwidthUpScore = int64(math.Min(1, float64(n.BandwidthFreeUp)/float64(20*units.MiB)) * 90)
+}
+
+// AddOnlineDuration increases the online duration of the node.
+func (n *Node) AddOnlineDuration(minute int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.OnlineDuration += minute
+	n.OnlineDurationIncrement += minute
+}
+
+// AddTodayOnlineTimeWindow increases the today online time window of the node.
+func (n *Node) AddTodayOnlineTimeWindow(window int) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.TodayOnlineTimeWindow += window
+}
+
+// ResetTodayOnlineTimeWindow resets the today online time window to zero.
+func (n *Node) ResetTodayOnlineTimeWindow() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.TodayOnlineTimeWindow = 0
+}
+
+// GetDynamicInfoWithIncrement returns a copy of NodeDynamicInfo with the current increment.
+func (n *Node) GetDynamicInfoWithIncrement() types.NodeDynamicInfo {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	info := n.NodeDynamicInfo
+	info.OnlineDuration = n.OnlineDurationIncrement
+	return info
+}
+
+// ResetOnlineDurationIncrement resets the online duration increment to zero.
+func (n *Node) ResetOnlineDurationIncrement() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.OnlineDurationIncrement = 0
+}
+
+// UpdateMetrics updates the resource metrics of the node.
+func (n *Node) UpdateMetrics(info *types.NodeInfo) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.CPUUsage = info.CPUUsage
+	n.MemoryUsage = info.MemoryUsage
+	n.DiskSpace = info.DiskSpace
+	n.DiskUsage = info.DiskUsage
+}
+
+// UpdateDiskUsage updates the disk usage metrics of the node.
+func (n *Node) UpdateDiskUsage(diskUsage, titanDiskUsage float64) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.DiskUsage = diskUsage
+	n.TitanDiskUsage = titanDiskUsage
+}
+
+// UpdateBandwidths updates the bandwidth metrics of the node.
+func (n *Node) UpdateBandwidths(bandwidthDown, bandwidthUp int64) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if bandwidthDown > 0 {
+		n.BandwidthDown = n.bandwidthTracker.PutBandwidthDown(bandwidthDown)
+	}
+
+	if bandwidthUp > 0 {
+		n.BandwidthUp = n.bandwidthTracker.PutBandwidthUp(bandwidthUp)
+	}
 }
 
 // func (n *Node) AddServiceEvent(event *types.ServiceEvent) {

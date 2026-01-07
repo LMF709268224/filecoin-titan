@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Filecoin-Titan/titan/api/types"
@@ -51,8 +52,10 @@ type Manager struct {
 	l5Nodes        sync.Map
 	l3Nodes        sync.Map
 
-	Edges      int // online edge node count
-	Candidates int // online candidate node count
+	Edges      int64 // online edge node count
+	Candidates int64 // online candidate node count
+	L5Count    int64 // online l5 node count
+	L3Count    int64 // online l3 node count
 	weightMgr  *weightManager
 	config     dtypes.GetSchedulerConfigFunc
 	notify     *pubsub.PubSub
@@ -66,6 +69,7 @@ type Manager struct {
 	GeoMgr *GeoMgr
 	IPMgr  *IPMgr
 
+	mu                 sync.RWMutex
 	serverOnlineCounts map[time.Time]int
 
 	serverTodayOnlineTimeWindow int
@@ -139,19 +143,24 @@ func (m *Manager) startUpdateNodeMetricsTimer() {
 
 		_, cList := m.GetValidCandidateNodes()
 		var wg sync.WaitGroup
+		sem := make(chan struct{}, 20) // Limit concurrency to 20
 		for _, n := range cList {
 			wg.Add(1)
+			sem <- struct{}{}
 			go func(node *Node) {
 				defer wg.Done()
-				info, err := node.API.GetNodeInfo(context.Background())
+				defer func() { <-sem }()
+
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+
+				info, err := node.API.GetNodeInfo(ctx)
 				if err != nil {
+					log.Errorf("GetNodeInfo %s err:%s", node.NodeID, err.Error())
 					return
 				}
 
-				node.CPUUsage = info.CPUUsage
-				node.MemoryUsage = info.MemoryUsage
-				node.DiskSpace = info.DiskSpace
-				node.DiskUsage = info.DiskUsage
+				node.UpdateMetrics(&info)
 			}(n)
 		}
 		wg.Wait()
@@ -168,7 +177,7 @@ func (m *Manager) storeEdgeNode(node *Node) {
 	if loaded {
 		return
 	}
-	m.Edges++
+	atomic.AddInt64(&m.Edges, 1)
 
 	m.DistributeNodeWeight(node)
 
@@ -186,7 +195,7 @@ func (m *Manager) storeCandidateNode(node *Node) {
 	if loaded {
 		return
 	}
-	m.Candidates++
+	atomic.AddInt64(&m.Candidates, 1)
 
 	m.DistributeNodeWeight(node)
 
@@ -203,6 +212,7 @@ func (m *Manager) storeL5Node(node *Node) {
 	if loaded {
 		return
 	}
+	atomic.AddInt64(&m.L5Count, 1)
 }
 
 func (m *Manager) storeL3Node(node *Node) {
@@ -215,6 +225,7 @@ func (m *Manager) storeL3Node(node *Node) {
 	if loaded {
 		return
 	}
+	atomic.AddInt64(&m.L3Count, 1)
 }
 
 // deleteEdgeNode removes an edge node from the manager's list of edge nodes
@@ -227,7 +238,7 @@ func (m *Manager) deleteEdgeNode(node *Node) {
 	if !loaded {
 		return
 	}
-	m.Edges--
+	atomic.AddInt64(&m.Edges, -1)
 }
 
 // deleteCandidateNode removes a candidate node from the manager's list of candidate nodes
@@ -240,7 +251,7 @@ func (m *Manager) deleteCandidateNode(node *Node) {
 	if !loaded {
 		return
 	}
-	m.Candidates--
+	atomic.AddInt64(&m.Candidates, -1)
 }
 
 // deleteL5Node removes a l5 node from the manager's list of l5 nodes
@@ -250,6 +261,7 @@ func (m *Manager) deleteL5Node(node *Node) {
 	if !loaded {
 		return
 	}
+	atomic.AddInt64(&m.L5Count, -1)
 }
 
 func (m *Manager) deleteL3Node(node *Node) {
@@ -258,6 +270,7 @@ func (m *Manager) deleteL3Node(node *Node) {
 	if !loaded {
 		return
 	}
+	atomic.AddInt64(&m.L3Count, -1)
 }
 
 // DistributeNodeWeight Distribute Node Weight
@@ -302,19 +315,21 @@ func qualifiedNAT(natType string) bool {
 func (m *Manager) updateServerOnlineCounts() {
 	now := time.Now()
 
-	m.serverOnlineCounts = make(map[time.Time]int)
-
+	var dates []time.Time
 	for i := 1; i < 8; i++ {
 		date := now.AddDate(0, 0, -i)
 		date = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
-
-		count, err := m.GetOnlineCount(string(m.ServerID), date)
-		if err != nil {
-			log.Errorf("GetOnlineCount %s err: %s", string(m.ServerID), err.Error())
-		} else {
-			m.serverOnlineCounts[date] = count
-		}
+		dates = append(dates, date)
 	}
+
+	counts, err := m.GetOnlineCountsByNode(string(m.ServerID), dates)
+	if err != nil {
+		log.Errorf("GetOnlineCountsByNode %s err: %s", string(m.ServerID), err.Error())
+	}
+
+	m.mu.Lock()
+	m.serverOnlineCounts = counts
+	m.mu.Unlock()
 
 	// // today
 	// today := time.Now()
@@ -333,20 +348,60 @@ func (m *Manager) redistributeNodeSelectWeights() {
 
 	// redistribute weights
 	_, cList := m.GetValidCandidateNodes()
-	for _, node := range cList {
-		info, err := m.LoadNodeInfo(node.NodeID)
-		if err != nil {
-			continue
+	if len(cList) > 0 {
+		nodeIDs := make([]string, 0, len(cList))
+		for _, node := range cList {
+			nodeIDs = append(nodeIDs, node.NodeID)
 		}
 
-		node.OnlineRate = m.ComputeNodeOnlineRate(node.NodeID, info.FirstTime)
-		node.Level = m.getNodeScoreLevel(node)
+		infMap, _ := m.LoadNodeInfos(nodeIDs)
 
-		if !node.IsResourceNode() {
-			continue
+		m.mu.RLock()
+		allDates := make([]time.Time, 0, len(m.serverOnlineCounts))
+		for date := range m.serverOnlineCounts {
+			allDates = append(allDates, date)
 		}
-		wNum := m.weightMgr.getWeightNum(node.Level)
-		node.selectWeights = m.weightMgr.distributeCandidateWeight(node.NodeID, wNum)
+		m.mu.RUnlock()
+
+		onlineCountsMatrix, _ := m.GetNodesOnlineCounts(nodeIDs, allDates)
+
+		for _, node := range cList {
+			info, ok := infMap[node.NodeID]
+			if !ok {
+				continue
+			}
+
+			// Calculate OnlineRate manually from the matrix to avoid N more DB queries
+			var nodeC, serverC int
+			m.mu.RLock()
+			for date, serverCount := range m.serverOnlineCounts {
+				if info.FirstTime.Before(date) {
+					if nodeDateMap, ok := onlineCountsMatrix[node.NodeID]; ok {
+						nodeC += nodeDateMap[date]
+					}
+					serverC += serverCount
+				}
+			}
+			m.mu.RUnlock()
+
+			if serverC > 0 {
+				if nodeC >= serverC {
+					node.OnlineRate = 1.0
+				} else {
+					node.OnlineRate = float64(nodeC) / float64(serverC)
+				}
+			} else {
+				node.OnlineRate = 1.0
+			}
+
+			node.Level = m.getNodeScoreLevel(node)
+
+			if !node.IsResourceNode() {
+				continue
+			}
+			wNum := m.weightMgr.getWeightNum(node.Level)
+			node.selectWeights = m.weightMgr.distributeCandidateWeight(node.NodeID, wNum)
+		}
 	}
 
 	eList := m.GetValidEdgeNode()
@@ -375,17 +430,24 @@ func (m *Manager) ComputeNodeOnlineRate(nodeID string, firstTime time.Time) floa
 	nodeC := 0
 	serverC := 0
 
-	for date, serverCount := range m.serverOnlineCounts {
-		// log.Infof("%s %s/%s %v", nodeID, date.String(), firstTime.String(), firstTime.Before(date))
-		if firstTime.Before(date) {
-			nodeCount, err := m.GetOnlineCount(nodeID, date)
-			if err != nil {
-				log.Errorf("GetOnlineCount %s err: %v", nodeID, err)
-			}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-			nodeC += nodeCount
-			serverC += serverCount
+	// Collect dates that are after firstTime
+	var dates []time.Time
+	for date := range m.serverOnlineCounts {
+		if firstTime.Before(date) {
+			dates = append(dates, date)
 		}
+	}
+
+	// Batch fetch online counts for all relevant dates
+	nodeCountMap, _ := m.GetOnlineCountsByNode(nodeID, dates)
+
+	for _, date := range dates {
+		serverCount := m.serverOnlineCounts[date]
+		nodeC += nodeCountMap[date]
+		serverC += serverCount
 	}
 
 	// today := time.Now()
@@ -412,13 +474,7 @@ func (m *Manager) UpdateNodeBandwidths(nodeID string, bandwidthDown, bandwidthUp
 		return
 	}
 
-	if bandwidthDown > 0 {
-		node.BandwidthDown = node.bandwidthTracker.PutBandwidthDown(bandwidthDown)
-		// log.Infof("UpdateNodeBandwidths node:[%s] [%d]", nodeID, node.BandwidthDown)
-	}
-	if bandwidthUp > 0 {
-		node.BandwidthUp = node.bandwidthTracker.PutBandwidthUp(bandwidthUp)
-	}
+	node.UpdateBandwidths(bandwidthDown, bandwidthUp)
 }
 
 func (m *Manager) checkNodeDeactivate() {
@@ -443,21 +499,19 @@ func (m *Manager) UpdateNodeDiskUsage(nodeID string, diskUsage float64) {
 		return
 	}
 
-	node.DiskUsage = diskUsage
-
 	size, err := m.LoadReplicaSizeByNodeID(nodeID)
 	if err != nil {
 		log.Errorf("LoadReplicaSizeByNodeID %s err:%s", nodeID, err.Error())
 		return
 	}
 
+	titanDiskUsage := float64(size)
 	if node.ClientType == types.NodeAndroid || node.ClientType == types.NodeIOS {
 		if size > 5*units.GiB {
-			size = 5 * units.GiB
+			titanDiskUsage = 5 * units.GiB
 		}
 	}
 
-	node.TitanDiskUsage = float64(size)
-
-	log.Infof("LoadReplicaSizeByNodeID %s update:%v", nodeID, node.TitanDiskUsage)
+	node.UpdateDiskUsage(diskUsage, titanDiskUsage)
+	log.Infof("LoadReplicaSizeByNodeID %s update:%v", nodeID, titanDiskUsage)
 }
