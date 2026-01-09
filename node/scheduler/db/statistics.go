@@ -65,6 +65,50 @@ func (n *SQLDB) SaveRetrieveEventInfo(info *types.RetrieveEvent, succeededCount,
 	return err
 }
 
+// SaveRetrieveEventInfos records multiple retrieval events and updates the associated node information in the database.
+func (n *SQLDB) SaveRetrieveEventInfos(infos []*types.RetrieveEvent, statsMap map[string]*types.NodeStatisticsInfo) error {
+	if len(infos) == 0 {
+		return nil
+	}
+
+	tx, err := n.db.Beginx()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		err = tx.Rollback()
+		if err != nil && err != sql.ErrTxDone {
+			log.Errorf("SaveRetrieveEventInfos Rollback err:%s", err.Error())
+		}
+	}()
+
+	// 1. Update node statistics
+	statsQuery := fmt.Sprintf(
+		`INSERT INTO %s (node_id, retrieve_count, retrieve_succeeded_count, retrieve_failed_count) VALUES (?, ?, ?, ?) 
+				ON DUPLICATE KEY UPDATE retrieve_count=retrieve_count+? ,retrieve_succeeded_count=retrieve_succeeded_count+?, retrieve_failed_count=retrieve_failed_count+?, update_time=NOW()`, nodeStatisticsTable)
+
+	for nodeID, stats := range statsMap {
+		total := stats.RetrieveSucceededCount + stats.RetrieveFailedCount
+		_, err = tx.Exec(statsQuery, nodeID, total, stats.RetrieveSucceededCount, stats.RetrieveFailedCount, total, stats.RetrieveSucceededCount, stats.RetrieveFailedCount)
+		if err != nil {
+			return err
+		}
+	}
+
+	// 2. Insert retrieve events
+	eventQuery := fmt.Sprintf(
+		`INSERT INTO %s (trace_id, node_id, client_id, hash, size, speed, status ) 
+				VALUES (:trace_id, :node_id, :client_id, :hash, :size, :speed, :status )`, nodeRetrieveTable)
+
+	_, err = tx.NamedExec(eventQuery, infos)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
 // SaveReplicaEvent logs a replica event with detailed event information into the database.
 func (n *SQLDB) SaveReplicaEvent(info *types.AssetReplicaEventInfo, succeededCount, failedCount int) error {
 	tx, err := n.db.Beginx()

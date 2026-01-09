@@ -39,7 +39,7 @@ const (
 	// Interval to get asset pull progress from node (Unit:Second)
 	pullProgressInterval = 30 * time.Second
 	// Interval to get asset pull progress from node (Unit:Second)
-	uploadProgressInterval = time.Second
+	uploadProgressInterval = 5 * time.Second
 	// Interval to check candidate backup of asset (Unit:Minute)
 	checkCandidateBackupInterval = 20 * time.Minute
 	// The number of retries to select the pull asset node
@@ -335,7 +335,7 @@ func (m *Manager) retrieveNodePullProgresses(isUpload bool) {
 			continue
 		}
 
-		log.Infof("retrieveNodePullProgresses check %s \n", cid)
+		// log.Infof("retrieveNodePullProgresses check %s \n", cid)
 
 		pList := pullingReplicaNodes[hash]
 		for _, nodeID := range pList {

@@ -228,6 +228,19 @@ func (hs *HttpServer) verifyToken(w http.ResponseWriter, r *http.Request) (*type
 }
 
 func (hs *HttpServer) parseJWTToken(token string, r *http.Request) (*types.TokenPayload, *types.JWTPayload, error) {
+	// Check cache first
+	if cachedPayload, cachedJWT, found := hs.tokenCache.Get(token); found {
+		// Verify the cached token is still valid for this request
+		subCid, err := getCIDFromURLPath(r.URL.Path)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if subCid.String() == cachedPayload.AssetCID || cachedPayload.AssetCID != "" {
+			return cachedPayload, cachedJWT, nil
+		}
+	}
+
 	jwtPayload, err := hs.scheduler.VerifyTokenWithLimitCount(context.Background(), token)
 	if err != nil {
 		return nil, nil, err
@@ -248,7 +261,12 @@ func (hs *HttpServer) parseJWTToken(token string, r *http.Request) (*types.Token
 		log.Debugf("request asset cid %s, parse token cid %s", subCid.String(), rootCid)
 	}
 
-	return &types.TokenPayload{AssetCID: rootCid, ClientID: payload.UserID, Expiration: payload.Expiration}, jwtPayload, nil
+	tokenPayload := &types.TokenPayload{AssetCID: rootCid, ClientID: payload.UserID, Expiration: payload.Expiration}
+
+	// Cache the token for 5 minutes
+	hs.tokenCache.Set(token, tokenPayload, jwtPayload, 5*time.Minute)
+
+	return tokenPayload, jwtPayload, nil
 }
 
 // customResponseFormat checks the request's Accept header and query parameters to determine the desired response format

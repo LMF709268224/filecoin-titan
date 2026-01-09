@@ -47,10 +47,10 @@ const (
 
 // Manager is the node manager responsible for managing the online nodes
 type Manager struct {
-	edgeNodes      sync.Map
-	candidateNodes sync.Map
-	l5Nodes        sync.Map
-	l3Nodes        sync.Map
+	edgeNodes      *shardedNodeMap
+	candidateNodes *shardedNodeMap
+	l5Nodes        *shardedNodeMap
+	l3Nodes        *shardedNodeMap
 
 	Edges      int64 // online edge node count
 	Candidates int64 // online candidate node count
@@ -95,6 +95,11 @@ func NewManager(sdb *db.SQLDB, serverID dtypes.ServerID, pk *rsa.PrivateKey, pb 
 		GeoMgr:               newGeoMgr(),
 		IPMgr:                newIPMgr(ipLimit),
 		candidateOfflineTime: map[string]int{},
+		// Initialize ShardedMaps with 32 shards for better concurrency
+		edgeNodes:      newShardedNodeMap(32),
+		candidateNodes: newShardedNodeMap(32),
+		l5Nodes:        newShardedNodeMap(32),
+		l3Nodes:        newShardedNodeMap(32),
 	}
 
 	nodeManager.updateServerOnlineCounts()
@@ -142,15 +147,13 @@ func (m *Manager) startUpdateNodeMetricsTimer() {
 		<-ticker.C
 
 		_, cList := m.GetValidCandidateNodes()
-		var wg sync.WaitGroup
-		sem := make(chan struct{}, 20) // Limit concurrency to 20
-		for _, n := range cList {
-			wg.Add(1)
-			sem <- struct{}{}
-			go func(node *Node) {
-				defer wg.Done()
-				defer func() { <-sem }()
 
+		// Use global worker pool instead of creating unlimited goroutines
+		pool := GetGlobalWorkerPool()
+
+		for _, n := range cList {
+			node := n // Capture loop variable
+			pool.Submit(func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 
@@ -161,9 +164,11 @@ func (m *Manager) startUpdateNodeMetricsTimer() {
 				}
 
 				node.UpdateMetrics(&info)
-			}(n)
+			})
 		}
-		wg.Wait()
+
+		// Wait for all tasks to complete
+		pool.Wait()
 	}
 }
 
@@ -340,7 +345,7 @@ func (m *Manager) updateServerOnlineCounts() {
 }
 
 func (m *Manager) redistributeNodeSelectWeights() {
-	log.Debugln("start redistributeNodeSelectWeights ...")
+	// log.Debugln("start redistributeNodeSelectWeights ...")
 	// repay all weights
 	m.weightMgr.cleanWeights()
 
@@ -349,7 +354,11 @@ func (m *Manager) redistributeNodeSelectWeights() {
 	// redistribute weights
 	_, cList := m.GetValidCandidateNodes()
 	if len(cList) > 0 {
-		nodeIDs := make([]string, 0, len(cList))
+		// Use slice pool to reduce allocations
+		nodeIDsPtr := GetStringSlice()
+		defer PutStringSlice(nodeIDsPtr)
+		nodeIDs := *nodeIDsPtr
+
 		for _, node := range cList {
 			nodeIDs = append(nodeIDs, node.NodeID)
 		}
@@ -422,7 +431,7 @@ func (m *Manager) redistributeNodeSelectWeights() {
 		node.selectWeights = m.weightMgr.distributeEdgeWeight(node.NodeID, wNum)
 	}
 
-	log.Debugln("end redistributeNodeSelectWeights ...")
+	// log.Debugln("end redistributeNodeSelectWeights ...")
 }
 
 // ComputeNodeOnlineRate Compute node online rate

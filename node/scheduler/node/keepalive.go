@@ -129,8 +129,8 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 	batch := BatchUpdate{
 		SaveDate:   time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()),
 		OnlineData: make(map[string]int),
-		Nodes:      make([]types.NodeDynamicInfo, 0),
-		Details:    make([]*types.ProfitDetails, 0),
+		Nodes:      make([]types.NodeDynamicInfo, 0, 1000), // pre-allocate
+		Details:    make([]*types.ProfitDetails, 0, 1000),  // pre-allocate
 	}
 
 	var wg sync.WaitGroup
@@ -165,7 +165,13 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 				len(batch.Nodes), batch.Nodes[0].NodeID, batch.Nodes[0].OnlineDuration)
 		}
 
-		err := m.UpdateNodeDynamicInfo(batch.Nodes)
+		// Use fast update for large batches (500+ nodes)
+		var err error
+		if len(batch.Nodes) >= 500 {
+			err = m.UpdateNodeDynamicInfoFast(batch.Nodes)
+		} else {
+			err = m.UpdateNodeDynamicInfo(batch.Nodes)
+		}
 		if err != nil {
 			log.Errorf("updateNodeData UpdateNodeDynamicInfo err:%s", err.Error())
 		}

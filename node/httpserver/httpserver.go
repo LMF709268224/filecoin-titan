@@ -45,6 +45,7 @@ type HttpServer struct {
 	rateLimiter         *types.RateLimiter
 	v3Progress          *sync.Map
 	monitor             *Monitor
+	tokenCache          *tokenCache // Token cache to reduce RSA operations
 }
 
 type HttpServerOptions struct {
@@ -72,6 +73,7 @@ func NewHttpServer(opts *HttpServerOptions) *HttpServer {
 		rateLimiter:         opts.RateLimiter,
 		v3Progress:          &sync.Map{},
 		monitor:             NewMonitor(),
+		tokenCache:          newTokenCache(10000), // Cache up to 10k tokens
 	}
 
 	if hs.validation != nil {

@@ -355,14 +355,14 @@ func transformURL(inputURL string) (string, error) {
 
 // DownloadAddr returns the download address of the node
 func (n *Node) DownloadAddr() string {
-	addr := n.RemoteAddr
-	// if n.PortMapping != "" {
-	// 	index := strings.Index(n.RemoteAddr, ":")
-	// 	ip := n.RemoteAddr[:index+1]
-	// 	addr = ip + n.PortMapping
-	// }
+	if len(n.ExternalURL) > 0 {
+		u, err := url.Parse(n.ExternalURL)
+		if err == nil {
+			return u.Host
+		}
+	}
 
-	return addr
+	return n.TCPAddr()
 }
 
 // LastRequestTime returns the last request time of the node

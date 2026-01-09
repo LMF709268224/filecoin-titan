@@ -295,7 +295,11 @@ func (hs *HttpServer) downloadTask(fileName string, reader *downloadProgressTask
 	}
 	defer out.Close()
 
-	if _, err := io.Copy(out, reader); err != nil {
+	// Get buffer from pool for copy operation
+	bufPtr := GetBuffer(262144) // Use 256KB buffer for file copy
+	defer PutBuffer(bufPtr)
+
+	if _, err := io.CopyBuffer(out, reader, *bufPtr); err != nil {
 		hs.setStatus(reader, Failed)
 		return cid.Cid{}, fmt.Errorf("save file failed: %s, path: %s", err.Error(), assetPath)
 	}

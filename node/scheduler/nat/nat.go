@@ -20,7 +20,7 @@ func detectFullConeNAT(ctx context.Context, candidate *node.Node, eURL string) (
 func detectRestrictedNAT(http3Client *http.Client, eURL string) (bool, error) {
 	resp, err := http3Client.Get(eURL)
 	if err != nil {
-		log.Debugf("detectRestrictedNAT failed: %s", err.Error())
+		// log.Debugf("detectRestrictedNAT failed: %s", err.Error())
 		return false, nil
 	}
 	defer resp.Body.Close()
@@ -67,7 +67,7 @@ func analyzeNodeNATType(ctx context.Context, bNode *node.Node, candidateNodes []
 	}
 
 	if !isPrivateIP(externalAddr) && externalAddr != bNode.RemoteAddr {
-		log.Debugf("check candidate %s to edge %s != %s [%s] [%s]", candidate1.NodeID, externalAddr, bNode.RemoteAddr, bNode.NodeID, candidate1.RPCURL())
+		// log.Debugf("check candidate %s to edge %s != %s [%s] [%s]", candidate1.NodeID, externalAddr, bNode.RemoteAddr, bNode.NodeID, candidate1.RPCURL())
 		return types.NatTypeSymmetric, nil
 	}
 
@@ -90,7 +90,7 @@ func analyzeNodeNATType(ctx context.Context, bNode *node.Node, candidateNodes []
 		}
 	}
 
-	log.Debugf("check candidate %s to edge %s tcp connectivity failed [%s]", candidate2.NodeID, bURL, bNode.NodeID)
+	// log.Debugf("check candidate %s to edge %s tcp connectivity failed [%s]", candidate2.NodeID, bURL, bNode.NodeID)
 
 	if ok, err := detectFullConeNAT(ctx, candidate2, bURL); err != nil {
 		return types.NatTypeUnknown, err
@@ -98,7 +98,7 @@ func analyzeNodeNATType(ctx context.Context, bNode *node.Node, candidateNodes []
 		return types.NatTypeFullCone, nil
 	}
 
-	log.Debugf("check candidate %s to edge %s udp connectivity failed [%s]", candidate2.NodeID, bURL, bNode.NodeID)
+	// log.Debugf("check candidate %s to edge %s udp connectivity failed [%s]", candidate2.NodeID, bURL, bNode.NodeID)
 
 	if isBehindRestrictedNAT, err := detectRestrictedNAT(http3Client, bURL); err != nil {
 		return types.NatTypeUnknown, err

@@ -151,7 +151,11 @@ func (hs *HttpServer) handleUploadFileV2(r *http.Request, passNonce string) (cid
 	}
 	defer out.Close()
 
-	if _, err := io.Copy(out, fr); err != nil {
+	// Get buffer from pool for copy operation
+	bufPtr := GetBuffer(262144) // Use 256KB buffer for file copy
+	defer PutBuffer(bufPtr)
+
+	if _, err := io.CopyBuffer(out, fr, *bufPtr); err != nil {
 		log.Debugw("copy file error", "error", err.Error())
 		return cid.Cid{}, http.StatusInternalServerError, fmt.Errorf("save file failed: %s, path: %s", err.Error(), assetPath)
 	}

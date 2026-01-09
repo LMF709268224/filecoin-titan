@@ -11,7 +11,7 @@ import (
 func (m *Manager) GetResourceEdgeNodes() []*Node {
 	nodes := make([]*Node, 0)
 
-	m.edgeNodes.Range(func(key, value interface{}) bool {
+	m.edgeNodes.Range(func(key string, value interface{}) bool {
 		node := value.(*Node)
 
 		if !node.IsResourceNode() {
@@ -30,8 +30,8 @@ func (m *Manager) GetResourceEdgeNodes() []*Node {
 func (m *Manager) GetResourceCandidateNodes() ([]string, []*Node) {
 	var ids []string
 	var nodes []*Node
-	m.candidateNodes.Range(func(key, value interface{}) bool {
-		nodeID := key.(string)
+	m.candidateNodes.Range(func(key string, value interface{}) bool {
+		nodeID := key
 		node := value.(*Node)
 
 		if !node.IsResourceNode() {
@@ -50,7 +50,7 @@ func (m *Manager) GetResourceCandidateNodes() ([]string, []*Node) {
 func (m *Manager) GetValidEdgeNode() []*Node {
 	nodes := make([]*Node, 0)
 
-	m.edgeNodes.Range(func(key, value interface{}) bool {
+	m.edgeNodes.Range(func(key string, value interface{}) bool {
 		node := value.(*Node)
 
 		if node.IsAbnormal() {
@@ -69,7 +69,7 @@ func (m *Manager) GetValidEdgeNode() []*Node {
 func (m *Manager) GetValidL3Node() []*Node {
 	nodes := make([]*Node, 0)
 
-	m.l3Nodes.Range(func(key, value interface{}) bool {
+	m.l3Nodes.Range(func(key string, value interface{}) bool {
 		node := value.(*Node)
 
 		if node.IsAbnormal() {
@@ -88,7 +88,7 @@ func (m *Manager) GetValidL3Node() []*Node {
 func (m *Manager) GetValidL5Node() []*Node {
 	nodes := make([]*Node, 0)
 
-	m.l5Nodes.Range(func(key, value interface{}) bool {
+	m.l5Nodes.Range(func(key string, value interface{}) bool {
 		node := value.(*Node)
 
 		if node.IsAbnormal() {
@@ -107,8 +107,8 @@ func (m *Manager) GetValidL5Node() []*Node {
 func (m *Manager) GetValidCandidateNodes() ([]string, []*Node) {
 	var ids []string
 	var nodes []*Node
-	m.candidateNodes.Range(func(key, value interface{}) bool {
-		nodeID := key.(string)
+	m.candidateNodes.Range(func(key string, value interface{}) bool {
+		nodeID := key
 		node := value.(*Node)
 
 		if node.IsAbnormal() {
@@ -126,7 +126,7 @@ func (m *Manager) GetValidCandidateNodes() ([]string, []*Node) {
 // GetAllCandidateNodes  Get all valid candidate nodes
 func (m *Manager) GetAllCandidateNodes() []*Node {
 	var nodes []*Node
-	m.candidateNodes.Range(func(key, value interface{}) bool {
+	m.candidateNodes.Range(func(key string, value interface{}) bool {
 		node := value.(*Node)
 
 		nodes = append(nodes, node)
@@ -139,7 +139,7 @@ func (m *Manager) GetAllCandidateNodes() []*Node {
 // GetCandidateNodes return n candidate node
 func (m *Manager) GetCandidateNodes(num int) []*Node {
 	var out []*Node
-	m.candidateNodes.Range(func(key, value interface{}) bool {
+	m.candidateNodes.Range(func(key string, value interface{}) bool {
 		node := value.(*Node)
 
 		out = append(out, node)
