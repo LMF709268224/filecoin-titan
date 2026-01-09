@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/Filecoin-Titan/titan/node/scheduler/assets"
 	"github.com/ipfs/go-libipfs/files"
 )
 
@@ -76,7 +77,19 @@ func (d *DecryptPartReader) ReadAt(p []byte, off int64) (n int, err error) {
 		p = p[:d.fileSize-off]
 	}
 
-	encryptedData := make([]byte, len(p))
+	// Get buffer from pool if needed
+	var encryptedData []byte
+	var bufPtr *[]byte
+
+	if len(p) <= 1048576 { // Use pool for buffers up to 1MB
+		bufPtr = assets.GetBuffer(len(p))
+		defer assets.PutBuffer(bufPtr)
+		encryptedData = (*bufPtr)[:len(p)]
+	} else {
+		// For larger sizes, allocate directly
+		encryptedData = make([]byte, len(p))
+	}
+
 	_, err = d.file.ReadAt(encryptedData, off)
 	if err != nil && err != io.EOF {
 		return 0, err

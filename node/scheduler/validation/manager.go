@@ -179,7 +179,7 @@ func (m *Manager) getSeedFromFilecoin() (int64, error) {
 	rs := tps.MinTicket().VRFProof
 	if len(rs) >= 3 {
 		s := binary.BigEndian.Uint32(rs)
-		log.Debugf("lotus Randomness:%d \n", s)
+		// log.Debugf("lotus Randomness:%d \n", s)
 		return int64(s), nil
 	}
 

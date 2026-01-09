@@ -9,7 +9,7 @@ import (
 
 // Plan prepares a plan for project start
 func (m *Manager) Plan(events []statemachine.Event, user interface{}) (interface{}, uint64, error) {
-	log.Debugf("user:%v , events:%v", user, events)
+	// log.Debugf("user:%v , events:%v", user, events)
 	next, processed, err := m.plan(events, user.(*ProjectInfo))
 	if err != nil || next == nil {
 		return nil, processed, nil
@@ -53,7 +53,7 @@ var planners = map[ProjectState]func(events []statemachine.Event, state *Project
 
 // plan creates a plan for the next project  action based on the given events and project state
 func (m *Manager) plan(events []statemachine.Event, state *ProjectInfo) (func(statemachine.Context, ProjectInfo) error, uint64, error) {
-	log.Debugf("hash:%s , state:%s , events:%v", state.UUID, state.State, events)
+	// log.Debugf("hash:%s , state:%s , events:%v", state.UUID, state.State, events)
 	p := planners[state.State]
 	if p == nil {
 		if len(events) == 1 {
@@ -72,7 +72,7 @@ func (m *Manager) plan(events []statemachine.Event, state *ProjectInfo) (func(st
 		return nil, processed, xerrors.Errorf("running planner for state %s failed: %w", state.State, err)
 	}
 
-	log.Debugf("%s: %s , %s", state.UUID, state.State, state.Requirement.NodeIDs)
+	// log.Debugf("%s: %s , %s", state.UUID, state.State, state.Requirement.NodeIDs)
 
 	switch state.State {
 	// Happy path

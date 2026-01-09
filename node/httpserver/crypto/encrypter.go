@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/Filecoin-Titan/titan/node/scheduler/assets"
 	"github.com/google/uuid"
 )
 
@@ -36,8 +37,12 @@ func Encrypt(r io.Reader, pass []byte, tempDir string) (io.Reader, int64, error)
 	}
 	defer tmpFile.Close()
 
+	// Get buffer from pool
+	bufPtr := assets.GetBuffer(chunkSize)
+	defer assets.PutBuffer(bufPtr)
+	buf := *bufPtr
+
 	var (
-		buf        = make([]byte, chunkSize)
 		totalBytes = int64(0)
 		writer     = &cipher.StreamWriter{S: stream, W: tmpFile}
 	)

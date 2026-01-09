@@ -2,8 +2,6 @@ package workload
 
 import (
 	"fmt"
-	"sync"
-	"time"
 
 	"github.com/Filecoin-Titan/titan/api/types"
 	"github.com/Filecoin-Titan/titan/node/cidutil"
@@ -23,8 +21,7 @@ type Manager struct {
 	nodeMgr       *node.Manager
 	*db.SQLDB
 
-	resultQueue []*Result
-	resultLock  sync.Mutex
+	resultQueue chan *Result
 }
 
 // NewManager return new node manager instance
@@ -34,7 +31,7 @@ func NewManager(sdb *db.SQLDB, configFunc dtypes.GetSchedulerConfigFunc, lmgr *l
 		leadershipMgr: lmgr,
 		SQLDB:         sdb,
 		nodeMgr:       nmgr,
-		resultQueue:   make([]*Result, 0),
+		resultQueue:   make(chan *Result, 1000), // buffered channel
 	}
 
 	go manager.handleResults()
@@ -49,49 +46,34 @@ type Result struct {
 }
 
 func (m *Manager) addWorkloadResult(r *Result) {
-	m.resultLock.Lock()
-	defer m.resultLock.Unlock()
-
-	m.resultQueue = append(m.resultQueue, r)
-}
-
-func (m *Manager) popWorkloadResult() *Result {
-	m.resultLock.Lock()
-	defer m.resultLock.Unlock()
-
-	if len(m.resultQueue) > 0 {
-		out := m.resultQueue[0]
-		m.resultQueue = m.resultQueue[1:]
-
-		return out
+	select {
+	case m.resultQueue <- r:
+	default:
+		log.Warn("workload result queue is full, dropping result")
 	}
-
-	return nil
 }
 
 // PushResult sends the result of a workload to the specified node.
 func (m *Manager) PushResult(data *types.WorkloadRecordReq, nodeID string) error {
-	log.Infof("workload PushResult nodeID:[%s] , %s [%s]\n", nodeID, data.WorkloadID, data.AssetCID)
+	// log.Infof("workload PushResult nodeID:[%s] , %s [%s]\n", nodeID, data.WorkloadID, data.AssetCID)
 
-	// m.addWorkloadResult(&Result{data: data, nodeID: nodeID})
-	// m.resultQueue <- &WorkloadResult{data: data, nodeID: nodeID}
+	m.addWorkloadResult(&Result{data: data, nodeID: nodeID})
 
 	return nil
 }
 
 func (m *Manager) handleResults() {
 	for {
-		// result := <-m.resultQueue
-		result := m.popWorkloadResult()
-		if result != nil {
-			m.handleClientWorkload(result.data, result.nodeID)
-		} else {
-			time.Sleep(time.Minute)
+		select {
+		case result := <-m.resultQueue:
+			if result != nil {
+				m.handleClientWorkload(result.data, result.nodeID)
+			}
 		}
 	}
 }
 
-func (m *Manager) saveRetrieveEventFromWorkload(dw types.Workload, hash, downloadNode string) {
+func (m *Manager) collectRetrieveEventFromWorkload(dw types.Workload, hash, downloadNode string, events []*types.RetrieveEvent, statsMap map[string]*types.NodeStatisticsInfo) ([]*types.RetrieveEvent, map[string]*types.NodeStatisticsInfo) {
 	status := types.EventStatusFailed
 	speed := int64(0)
 	succeededCount := 0
@@ -118,14 +100,32 @@ func (m *Manager) saveRetrieveEventFromWorkload(dw types.Workload, hash, downloa
 		Status:   status,
 		Speed:    speed,
 	}
+	events = append(events, event)
 
-	if err := m.SaveRetrieveEventInfo(event, succeededCount, failedCount); err != nil {
-		log.Errorf("handleClientWorkload SaveRetrieveEventInfo  error %s", err.Error())
+	stats, ok := statsMap[dw.SourceID]
+	if !ok {
+		stats = &types.NodeStatisticsInfo{}
+		statsMap[dw.SourceID] = stats
 	}
+	stats.RetrieveSucceededCount += int64(succeededCount)
+	stats.RetrieveFailedCount += int64(failedCount)
+
+	return events, statsMap
 }
 
 // handleClientWorkload handle node workload
 func (m *Manager) handleClientWorkload(data *types.WorkloadRecordReq, downloadNode string) error {
+	events := make([]*types.RetrieveEvent, 0)
+	statsMap := make(map[string]*types.NodeStatisticsInfo)
+
+	defer func() {
+		if len(events) > 0 {
+			if err := m.SaveRetrieveEventInfos(events, statsMap); err != nil {
+				log.Errorf("handleClientWorkload SaveRetrieveEventInfos error %s", err.Error())
+			}
+		}
+	}()
+
 	if data.WorkloadID == "" {
 		hash, err := cidutil.CIDToHash(data.AssetCID)
 		if err != nil {
@@ -134,7 +134,7 @@ func (m *Manager) handleClientWorkload(data *types.WorkloadRecordReq, downloadNo
 
 		// L1 download
 		for _, dw := range data.Workloads {
-			m.saveRetrieveEventFromWorkload(dw, hash, downloadNode)
+			events, statsMap = m.collectRetrieveEventFromWorkload(dw, hash, downloadNode, events, statsMap)
 		}
 
 		return nil
@@ -168,7 +168,7 @@ func (m *Manager) handleClientWorkload(data *types.WorkloadRecordReq, downloadNo
 	limit := int64(float64(record.AssetSize))
 
 	for _, dw := range data.Workloads {
-		m.saveRetrieveEventFromWorkload(dw, hash, record.ClientID)
+		events, statsMap = m.collectRetrieveEventFromWorkload(dw, hash, record.ClientID, events, statsMap)
 
 		if dw.Status == types.WorkloadReqStatusSucceeded {
 			// Only edge can get this reward
