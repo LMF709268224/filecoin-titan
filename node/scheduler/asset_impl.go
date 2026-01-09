@@ -496,7 +496,7 @@ func (s *Scheduler) LoadAWSData(ctx context.Context, limit, offset int, isDistri
 
 // SwitchFillDiskTimer toggles the fill disk timer based on the open parameter.
 func (s *Scheduler) SwitchFillDiskTimer(ctx context.Context, open bool) error {
-	log.Infof("SwitchFillDiskTimer open:%v", open)
+	// log.Infof("SwitchFillDiskTimer open:%v", open)
 	if open {
 		s.AssetManager.StartFillDiskTimer()
 	} else {
@@ -528,7 +528,7 @@ func (s *Scheduler) RemoveNodeFailedReplica(ctx context.Context) error {
 		return err
 	}
 
-	log.Infof("remove replica len :%d", len(rList))
+	// log.Infof("remove replica len :%d", len(rList))
 	chunks := splitSliceIntoChunks(rList, 10)
 
 	for _, chunk := range chunks {
@@ -542,11 +542,11 @@ func (s *Scheduler) RemoveNodeFailedReplica(ctx context.Context) error {
 
 				node := s.NodeManager.GetNode(info.NodeID)
 				if node == nil {
-					log.Infof("remove replica node offline :%s", info.NodeID)
+					// log.Infof("remove replica node offline :%s", info.NodeID)
 					continue
 				}
 
-				log.Infof("remove replica node:%s, cid:%s", info.NodeID, cid)
+				// log.Infof("remove replica node:%s, cid:%s", info.NodeID, cid)
 
 				node.DeleteAsset(context.Background(), cid)
 			}
@@ -582,7 +582,7 @@ func (s *Scheduler) UserAssetDownloadResultV2(ctx context.Context, info *types.R
 
 	s.NodeManager.UpdateNodeBandwidths(info.NodeID, 0, info.Speed)
 
-	log.Infof("UserAssetDownloadResultV2 Hash[%s] ClientID[%s] NodeID[%s] PeakBandwidth[%d] Speed[%d] Size[%d]\n", info.Hash, info.ClientID, info.NodeID, info.PeakBandwidth, info.Speed, info.Size)
+	// log.Infof("UserAssetDownloadResultV2 Hash[%s] ClientID[%s] NodeID[%s] PeakBandwidth[%d] Speed[%d] Size[%d]\n", info.Hash, info.ClientID, info.NodeID, info.PeakBandwidth, info.Speed, info.Size)
 
 	succeededCount := 0
 	failedCount := 0
@@ -614,7 +614,7 @@ func (s *Scheduler) UserAssetDownloadResult(ctx context.Context, userID, cid str
 		return err
 	}
 
-	log.Infof("UserAssetDownloadResult Hash[%s] ClientID[%s] NodeID[%s] PeakBandwidth[%d] Size[%d]\n", hash, userID, nodeID, peakBandwidth, totalTraffic)
+	// log.Infof("UserAssetDownloadResult Hash[%s] ClientID[%s] NodeID[%s] PeakBandwidth[%d] Size[%d]\n", hash, userID, nodeID, peakBandwidth, totalTraffic)
 
 	return s.db.SaveAssetDownloadResult(&types.AssetDownloadResult{Hash: hash, NodeID: nodeID, TotalTraffic: totalTraffic, PeakBandwidth: peakBandwidth, UserID: userID})
 }

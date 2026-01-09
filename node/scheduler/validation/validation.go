@@ -69,6 +69,7 @@ func (m *Manager) computeNodeProfits(nodes []*node.Node) {
 		return
 	}
 
+	detailsList := make([]*types.ProfitDetails, 0, len(nodes))
 	for _, node := range nodes {
 		rsp, err := m.nodeMgr.LoadValidationResultInfos(node.NodeID, 20, 0)
 		if err != nil {
@@ -101,10 +102,14 @@ func (m *Manager) computeNodeProfits(nodes []*node.Node) {
 
 		dInfo := m.nodeMgr.GetNodeValidatableProfitDetails(node, size)
 		if dInfo != nil {
-			err := m.nodeMgr.AddNodeProfitDetails([]*types.ProfitDetails{dInfo})
-			if err != nil {
-				log.Errorf("updateResultInfo AddNodeProfit %s,%d, %.4f err:%s", dInfo.NodeID, dInfo.PType, dInfo.Profit, err.Error())
-			}
+			detailsList = append(detailsList, dInfo)
+		}
+	}
+
+	if len(detailsList) > 0 {
+		err := m.nodeMgr.AddNodeProfitDetails(detailsList)
+		if err != nil {
+			log.Errorf("computeNodeProfits AddNodeProfitDetails err:%s", err.Error())
 		}
 	}
 }
@@ -204,6 +209,8 @@ func (m *Manager) distributeEdges(edges []*node.Node, validateReqs map[string]*a
 	loops := (30 * 60) / duration
 	delay := 0
 
+	pool := node.GetGlobalWorkerPool()
+
 outerLoop:
 	for i := 0; i < loops; i++ {
 		for vID, req := range validateReqs {
@@ -225,7 +232,14 @@ outerLoop:
 					log.Errorf("%s RandomAsset err:%s", eID, err.Error())
 					continue
 				}
-				go m.sendValidateReqToNode(eID, req, delay)
+
+				// Capture variables for closure
+				nodeID := eID
+				validateReq := req
+				d := delay
+				pool.Submit(func() {
+					m.sendValidateReqToNode(nodeID, validateReq, d)
+				})
 			}
 		}
 		delay += duration
@@ -248,7 +262,7 @@ outerLoop:
 // sends a validation request to a node.
 func (m *Manager) sendValidateReqToNode(nID string, req *api.ValidateReq, delay int) {
 	time.Sleep(time.Duration(delay) * time.Second)
-	log.Infof("%d sendValidateReqToNodes v:[%s] n:[%s]", delay, req.TCPSrvAddr, nID)
+	// log.Infof("%d sendValidateReqToNodes v:[%s] n:[%s]", delay, req.TCPSrvAddr, nID)
 
 	status := types.ValidationStatusNodeOffline
 
@@ -374,7 +388,7 @@ func (m *Manager) updateTimeoutResultInfo() {
 		return
 	}
 
-	detailsList := make([]*types.ProfitDetails, 0)
+	detailsList := make([]*types.ProfitDetails, 0, len(list))
 
 	for _, resultInfo := range list {
 		bandwidth := int64(resultInfo.Bandwidth) * resultInfo.Duration
@@ -405,9 +419,11 @@ func (m *Manager) updateTimeoutResultInfo() {
 		}
 	}
 
-	err = m.nodeMgr.AddNodeProfitDetails(detailsList)
-	if err != nil {
-		log.Errorf("AddNodeProfit err:%s", err.Error())
+	if len(detailsList) > 0 {
+		err = m.nodeMgr.AddNodeProfitDetails(detailsList)
+		if err != nil {
+			log.Errorf("updateTimeoutResultInfo AddNodeProfitDetails err:%s", err.Error())
+		}
 	}
 }
 

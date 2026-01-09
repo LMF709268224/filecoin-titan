@@ -117,6 +117,21 @@ func (n *SQLDB) SaveReplicaStatus(info *types.ReplicaInfo) error {
 	return err
 }
 
+// SaveReplicaStatuses inserts or updates the status of multiple replicas in the database.
+func (n *SQLDB) SaveReplicaStatuses(infos []*types.ReplicaInfo) error {
+	if len(infos) == 0 {
+		return nil
+	}
+
+	query := fmt.Sprintf(
+		`INSERT INTO %s (hash, node_id, status, is_candidate, start_time, total_size, workload_id)
+				VALUES (:hash, :node_id, :status, :is_candidate, NOW(), :total_size, :workload_id)
+				ON DUPLICATE KEY UPDATE status=:status, start_time=NOW(), total_size=:total_size, workload_id=:workload_id`, replicaInfoTable)
+
+	_, err := n.db.NamedExec(query, infos)
+	return err
+}
+
 // UpdateAssetInfo updates the asset information including state, retry count, and replicas in multiple tables within a transaction.
 func (n *SQLDB) UpdateAssetInfo(hash, state string, totalBlock, totalSize, retryCount, replenishReplicas int64, serverID dtypes.ServerID) error {
 	tx, err := n.db.Beginx()

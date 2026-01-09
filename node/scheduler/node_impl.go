@@ -886,7 +886,7 @@ func (s *Scheduler) GetNodeInfo(ctx context.Context, nodeID string) (*types.Node
 		nodeInfo.Mx = node.RateOfL2Mx(n.OnlineDuration)
 		nodeInfo.TodayOnlineTimeWindow = s.loadNodeTodayOnlineTimeWindow(nodeID, todayDate)
 
-		log.Debugf("%s node select codes:%v , url:%s", nodeID, n.SelectWeights(), n.ExternalURL)
+		// log.Debugf("%s node select codes:%v , url:%s", nodeID, n.SelectWeights(), n.ExternalURL)
 	} else {
 		nodeInfo.Mx = node.RateOfL2Mx(nodeInfo.OnlineDuration)
 	}
@@ -1055,7 +1055,7 @@ func (s *Scheduler) GetEdgeDownloadInfos(ctx context.Context, cid string) (*type
 	}
 
 	edgeDownloadRatio := s.getEdgeDownloadRatio()
-	log.Debugln("getEdgeDownloadRatio : ", edgeDownloadRatio)
+	// log.Debugln("getEdgeDownloadRatio : ", edgeDownloadRatio)
 	if edgeDownloadRatio >= 1 {
 		sort.Slice(infos, func(i, j int) bool {
 			return infos[i].NodeID < infos[j].NodeID
@@ -1391,7 +1391,7 @@ func (s *Scheduler) NodeKeepaliveV3(ctx context.Context, req *types.KeepaliveReq
 
 	if node.Type == types.NodeCandidate {
 		now := time.Now().Unix()
-		log.Infof("NodeKeepaliveV3 node [%s] DeactivateTime:[%d] , [%d] \n", nodeID, node.DeactivateTime, now)
+		// log.Infof("NodeKeepaliveV3 node [%s] DeactivateTime:[%d] , [%d] \n", nodeID, node.DeactivateTime, now)
 
 		if node.DeactivateTime > 0 && node.DeactivateTime < now {
 			return &types.KeepaliveRsp{ErrCode: int(terrors.NodeDeactivate), ErrMsg: fmt.Sprintf("The node %s has been deactivate and cannot be logged in", nodeID)}, nil
@@ -1453,7 +1453,7 @@ func (s *Scheduler) NodeKeepalive(ctx context.Context) (*types.KeepaliveRsp, err
 
 	if node.Type == types.NodeCandidate {
 		now := time.Now().Unix()
-		log.Infof("NodeKeepalive node [%s] DeactivateTime:[%d] , [%d] \n", nodeID, node.DeactivateTime, now)
+		// log.Infof("NodeKeepalive node [%s] DeactivateTime:[%d] , [%d] \n", nodeID, node.DeactivateTime, now)
 
 		if node.DeactivateTime > 0 && node.DeactivateTime < now {
 			return &types.KeepaliveRsp{ErrCode: int(terrors.NodeDeactivate), ErrMsg: fmt.Sprintf("The node %s has been deactivate and cannot be logged in", nodeID)}, nil
@@ -1511,7 +1511,7 @@ func (s *Scheduler) NodeKeepaliveV2(ctx context.Context) (uuid.UUID, error) {
 		if node != nil {
 			if node.Type == types.NodeCandidate {
 				now := time.Now().Unix()
-				log.Infof("NodeKeepaliveV2 node [%s] DeactivateTime:[%d] , [%d] \n", nodeID, node.DeactivateTime, now)
+				// log.Infof("NodeKeepaliveV2 node [%s] DeactivateTime:[%d] , [%d] \n", nodeID, node.DeactivateTime, now)
 
 				if node.DeactivateTime > 0 && node.DeactivateTime < now {
 					return uuid, &api.ErrNode{Code: int(terrors.NodeDeactivate), Message: fmt.Sprintf("The node %s has been deactivate and cannot be logged in", nodeID)}
@@ -1627,7 +1627,7 @@ func (s *Scheduler) UpdateBandwidths(ctx context.Context, bandwidthDown, bandwid
 func (s *Scheduler) DownloadDataResult(ctx context.Context, bucket, cid string, size int64) error {
 	nodeID := handler.GetNodeID(ctx)
 
-	log.Infof("awsTask DownloadDataResult %s : %s : %s : %d", nodeID, cid, bucket, size)
+	// log.Infof("awsTask DownloadDataResult %s : %s : %s : %d", nodeID, cid, bucket, size)
 
 	s.AssetManager.UpdateFillAssetResponseCount(bucket, cid, nodeID, size)
 
@@ -2034,7 +2034,7 @@ func (s *Scheduler) GetTunserverURLFromUser(ctx context.Context, req *types.Tuns
 			nodeID = nID
 		}
 	} else {
-		log.Infof("GetTunserverURLFromUser %s get:%s", req.AreaID, geoInfo.Geo)
+		// log.Infof("GetTunserverURLFromUser %s get:%s", req.AreaID, geoInfo.Geo)
 
 		list := s.NodeManager.GeoMgr.FindNodesFromGeo(geoInfo.Continent, geoInfo.Country, geoInfo.Province, geoInfo.City, types.NodeCandidate)
 		for _, info := range list {

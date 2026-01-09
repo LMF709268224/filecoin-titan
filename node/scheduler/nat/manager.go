@@ -204,7 +204,7 @@ func (m *Manager) retryCandidateDetectNatType(rInfo *retryNode) {
 		log.Infof("%s checkDomain [%s] %v", nodeID, eNode.ExternalURL, err)
 		eNode.IsStorageNode = err == nil
 	}
-	log.Debugf("retry detect node %s nat type %s , %d", rInfo.id, eNode.NATType, rInfo.retry)
+	// log.Debugf("retry detect node %s nat type %s , %d", rInfo.id, eNode.NATType, rInfo.retry)
 }
 
 func (m *Manager) retryEdgeDetectNatType(rInfo *retryNode) {
@@ -230,7 +230,7 @@ func (m *Manager) retryEdgeDetectNatType(rInfo *retryNode) {
 	if bNode.NATType == types.NatTypeUnknown.String() && rInfo.retry < maxRetry {
 		m.addEdgeNode(rInfo)
 	}
-	log.Debugf("retry detect node %s nat type %s , %d", rInfo.id, bNode.NATType, rInfo.retry)
+	// log.Debugf("retry detect node %s nat type %s , %d", rInfo.id, bNode.NATType, rInfo.retry)
 }
 
 // DetermineCandidateNATType Determine node NATType

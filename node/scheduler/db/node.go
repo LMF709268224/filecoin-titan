@@ -172,46 +172,123 @@ func (n *SQLDB) UpdateNodeDynamicInfo(infos []types.NodeDynamicInfo) error {
 	if len(infos) == 0 {
 		return nil
 	}
-	// Use UPDATE instead of INSERT...ON DUPLICATE KEY UPDATE to avoid scheduler_sid requirement
-	stmt, err := n.db.Preparex(`UPDATE ` + nodeInfoTable + ` SET 
-		nat_type=?, 
-		last_seen=?, 
-		online_duration=online_duration+?, 
-		disk_usage=?, 
-		bandwidth_up=?, 
-		bandwidth_down=?, 
-		titan_disk_usage=?, 
-		available_disk_space=?, 
-		download_traffic=?, 
-		upload_traffic=? 
-		WHERE node_id=?`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-	totalUpdated := 0
-	for _, info := range infos {
-		result, err := stmt.Exec(
-			info.NATType,
-			info.LastSeen,
-			info.OnlineDuration,
-			info.DiskUsage,
-			info.BandwidthUp,
-			info.BandwidthDown,
-			info.TitanDiskUsage,
-			info.AvailableDiskSpace,
-			info.DownloadTraffic,
-			info.UploadTraffic,
-			info.NodeID,
-		)
-		if err != nil {
-			continue
+
+	// Process in batches to avoid too large SQL statements
+	const batchSize = 100
+	for i := 0; i < len(infos); i += batchSize {
+		end := i + batchSize
+		if end > len(infos) {
+			end = len(infos)
 		}
-		rowsAffected, _ := result.RowsAffected()
-		totalUpdated += int(rowsAffected)
+
+		if err := n.updateNodeDynamicInfoBatch(infos[i:end]); err != nil {
+			log.Errorf("updateNodeDynamicInfoBatch error: %s", err.Error())
+			// Continue with next batch even if one fails
+		}
 	}
 
 	return nil
+}
+
+// updateNodeDynamicInfoBatch performs a single batch update using CASE WHEN
+func (n *SQLDB) updateNodeDynamicInfoBatch(infos []types.NodeDynamicInfo) error {
+	if len(infos) == 0 {
+		return nil
+	}
+
+	// Build node ID list for WHERE clause
+	nodeIDs := make([]string, len(infos))
+	for i, info := range infos {
+		nodeIDs[i] = info.NodeID
+	}
+
+	// Build CASE WHEN statements for each field
+	query := `UPDATE ` + nodeInfoTable + ` SET 
+		nat_type = CASE node_id `
+	args := make([]interface{}, 0, len(infos)*11)
+
+	// nat_type
+	for _, info := range infos {
+		query += `WHEN ? THEN ? `
+		args = append(args, info.NodeID, info.NATType)
+	}
+	query += `END, last_seen = CASE node_id `
+
+	// last_seen
+	for _, info := range infos {
+		query += `WHEN ? THEN ? `
+		args = append(args, info.NodeID, info.LastSeen)
+	}
+	query += `END, online_duration = online_duration + CASE node_id `
+
+	// online_duration (increment)
+	for _, info := range infos {
+		query += `WHEN ? THEN ? `
+		args = append(args, info.NodeID, info.OnlineDuration)
+	}
+	query += `END, disk_usage = CASE node_id `
+
+	// disk_usage
+	for _, info := range infos {
+		query += `WHEN ? THEN ? `
+		args = append(args, info.NodeID, info.DiskUsage)
+	}
+	query += `END, bandwidth_up = CASE node_id `
+
+	// bandwidth_up
+	for _, info := range infos {
+		query += `WHEN ? THEN ? `
+		args = append(args, info.NodeID, info.BandwidthUp)
+	}
+	query += `END, bandwidth_down = CASE node_id `
+
+	// bandwidth_down
+	for _, info := range infos {
+		query += `WHEN ? THEN ? `
+		args = append(args, info.NodeID, info.BandwidthDown)
+	}
+	query += `END, titan_disk_usage = CASE node_id `
+
+	// titan_disk_usage
+	for _, info := range infos {
+		query += `WHEN ? THEN ? `
+		args = append(args, info.NodeID, info.TitanDiskUsage)
+	}
+	query += `END, available_disk_space = CASE node_id `
+
+	// available_disk_space
+	for _, info := range infos {
+		query += `WHEN ? THEN ? `
+		args = append(args, info.NodeID, info.AvailableDiskSpace)
+	}
+	query += `END, download_traffic = CASE node_id `
+
+	// download_traffic
+	for _, info := range infos {
+		query += `WHEN ? THEN ? `
+		args = append(args, info.NodeID, info.DownloadTraffic)
+	}
+	query += `END, upload_traffic = CASE node_id `
+
+	// upload_traffic
+	for _, info := range infos {
+		query += `WHEN ? THEN ? `
+		args = append(args, info.NodeID, info.UploadTraffic)
+	}
+	query += `END WHERE node_id IN (?)`
+
+	// Expand the IN clause
+	inQuery, inArgs, err := sqlx.In(query, nodeIDs)
+	if err != nil {
+		return err
+	}
+
+	// Combine all arguments: CASE WHEN args + IN args
+	allArgs := append(args, inArgs...)
+
+	inQuery = n.db.Rebind(inQuery)
+	_, err = n.db.Exec(inQuery, allArgs...)
+	return err
 }
 
 // SaveNodeRegisterInfos stores registration details for multiple nodes.

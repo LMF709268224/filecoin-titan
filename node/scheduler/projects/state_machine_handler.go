@@ -21,7 +21,7 @@ var (
 func failedCoolDown(ctx statemachine.Context, info ProjectInfo, t time.Duration) error {
 	retryStart := time.Now().Add(t)
 	if time.Now().Before(retryStart) {
-		log.Debugf("%s(%s), waiting %s before retrying", info.State, info.UUID, time.Until(retryStart))
+		// log.Debugf("%s(%s), waiting %s before retrying", info.State, info.UUID, time.Until(retryStart))
 		select {
 		case <-time.After(time.Until(retryStart)):
 		case <-ctx.Context().Done():
@@ -127,7 +127,7 @@ func (m *Manager) handleNodeSelect(ctx statemachine.Context, info ProjectInfo) e
 
 // handleUpdate handles the selection nodes for project
 func (m *Manager) handleUpdate(ctx statemachine.Context, info ProjectInfo) error {
-	log.Debugf("handle Update : %s", info.UUID)
+	// log.Debugf("handle Update : %s", info.UUID)
 
 	curCount := int64(0)
 
@@ -172,7 +172,7 @@ func (m *Manager) handleUpdate(ctx statemachine.Context, info ProjectInfo) error
 
 // handleDeploying handles the project deploying process of seed nodes
 func (m *Manager) handleDeploying(ctx statemachine.Context, info ProjectInfo) error {
-	log.Debugf("handle deploying, %s", info.UUID)
+	// log.Debugf("handle deploying, %s", info.UUID)
 
 	if info.EdgeWaitings > 0 {
 		return nil
@@ -212,7 +212,7 @@ func (m *Manager) handleDeploysFailed(ctx statemachine.Context, info ProjectInfo
 		return nil
 	}
 
-	log.Debugf(": %s, retries: %d", info.UUID, info.RetryCount)
+	// log.Debugf(": %s, retries: %d", info.UUID, info.RetryCount)
 
 	if err := failedCoolDown(ctx, info, MinRetryTime); err != nil {
 		return err
