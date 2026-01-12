@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/Filecoin-Titan/titan/api"
@@ -44,23 +45,25 @@ func (m *Manager) startValidationTicker() {
 
 	doFunc := func(t time.Time) {
 		hour := t.Hour()
-		log.Infof("start validation ------------- %d:%d  (%d != 0)[%v] [%v] \n", hour, t.Minute(), hour%2, hour%2 != 0, t.Minute() == 0)
+		minute := t.Minute()
+		log.Infof("start validation ------------- %d:%02d ([%v] [%v]) ", hour, minute, hour%2 != 0, minute == 0)
 
-		if hour%2 != 0 && t.Minute() == 0 {
+		if hour%2 != 0 && minute == 0 {
 			m.doValidate()
 		} else {
 			m.cleanValidator()
-
 			nodes := m.nodeMgr.GetResourceEdgeNodes()
 			m.computeNodeProfits(nodes)
 		}
+
+		log.Infof("end validation -------------  %d:%02d ([%v] [%v]) ", hour, minute, hour%2 != 0, minute == 0)
 	}
 
-	doFunc(time.Now())
+	go doFunc(time.Now())
 
 	for {
 		t := <-ticker.C
-		doFunc(t)
+		go doFunc(t)
 	}
 }
 
@@ -70,41 +73,55 @@ func (m *Manager) computeNodeProfits(nodes []*node.Node) {
 	}
 
 	detailsList := make([]*types.ProfitDetails, 0, len(nodes))
-	for _, node := range nodes {
-		rsp, err := m.nodeMgr.LoadValidationResultInfos(node.NodeID, 20, 0)
-		if err != nil {
-			log.Warnf("%s LoadValidationResultInfos err:%v", node.NodeID, err)
-			continue
-		}
+	var mu sync.Mutex
+	limitCh := make(chan struct{}, 100) // limit concurrent db queries
+	var wg sync.WaitGroup
 
-		limit := 10
-		useLen := 0
-		size := 0.0
+	for _, n := range nodes {
+		wg.Add(1)
+		go func(nodeStruct *node.Node) {
+			defer wg.Done()
+			limitCh <- struct{}{}
+			defer func() { <-limitCh }()
 
-		for _, info := range rsp.ValidationResultInfos {
-			if info.Status == types.ValidationStatusCancel ||
-				info.Status == types.ValidationStatusCreate ||
-				info.Status == types.ValidationStatusValidatorMismatch {
-				continue
+			rsp, err := m.nodeMgr.LoadValidationResultInfos(nodeStruct.NodeID, 20, 0)
+			if err != nil {
+				log.Warnf("%s LoadValidationResultInfos err:%v", nodeStruct.NodeID, err)
+				return
 			}
 
-			useLen++
-			size += info.Bandwidth * float64(info.Duration)
+			limit := 10
+			useLen := 0
+			size := 0.0
 
-			if useLen >= limit {
-				break
+			for _, info := range rsp.ValidationResultInfos {
+				if info.Status == types.ValidationStatusCancel ||
+					info.Status == types.ValidationStatusCreate ||
+					info.Status == types.ValidationStatusValidatorMismatch {
+					continue
+				}
+
+				useLen++
+				size += info.Bandwidth * float64(info.Duration)
+
+				if useLen >= limit {
+					break
+				}
 			}
-		}
 
-		if useLen > 0 {
-			size = size / float64(useLen)
-		}
+			if useLen > 0 {
+				size = size / float64(useLen)
+			}
 
-		dInfo := m.nodeMgr.GetNodeValidatableProfitDetails(node, size)
-		if dInfo != nil {
-			detailsList = append(detailsList, dInfo)
-		}
+			dInfo := m.nodeMgr.GetNodeValidatableProfitDetails(nodeStruct, size)
+			if dInfo != nil {
+				mu.Lock()
+				detailsList = append(detailsList, dInfo)
+				mu.Unlock()
+			}
+		}(n)
 	}
+	wg.Wait()
 
 	if len(detailsList) > 0 {
 		err := m.nodeMgr.AddNodeProfitDetails(detailsList)
@@ -145,6 +162,8 @@ func (m *Manager) startValidate() error {
 	_, candidates := m.nodeMgr.GetValidCandidateNodes()
 
 	if len(candidates) == 0 {
+		nodes := m.nodeMgr.GetResourceEdgeNodes()
+		m.computeNodeProfits(nodes)
 		return nil
 	}
 
@@ -200,13 +219,16 @@ func (m *Manager) startValidate() error {
 }
 
 func (m *Manager) distributeEdges(edges []*node.Node, validateReqs map[string]*api.ValidateReq) []*node.Node {
-	dbInfos := make([]*types.ValidationResultInfo, 0)
 	totalEdges := len(edges)
-	currentEdgeIndex := 0
+	if totalEdges == 0 {
+		return nil
+	}
+
 	edgesPerRound := 3
 	duration := 20
+	loops := (20 * 60) / duration
 
-	loops := (30 * 60) / duration
+	currentEdgeIndex := 0
 	delay := 0
 
 	pool := node.GetGlobalWorkerPool()
@@ -215,57 +237,53 @@ outerLoop:
 	for i := 0; i < loops; i++ {
 		for vID, req := range validateReqs {
 			if currentEdgeIndex >= totalEdges {
-				continue outerLoop
+				break outerLoop
 			}
 
 			for j := 0; j < edgesPerRound; j++ {
 				if currentEdgeIndex >= totalEdges {
-					continue outerLoop
+					break outerLoop
 				}
 				eID := edges[currentEdgeIndex].NodeID
 				currentEdgeIndex++
 
-				dbInfo, err := m.getValidationResultInfo(eID, vID)
-				dbInfos = append(dbInfos, dbInfo)
-
-				if err != nil {
-					log.Errorf("%s RandomAsset err:%s", eID, err.Error())
-					continue
-				}
-
-				// Capture variables for closure
 				nodeID := eID
 				validateReq := req
 				d := delay
-				pool.Submit(func() {
-					m.sendValidateReqToNode(nodeID, validateReq, d)
+
+				time.AfterFunc(time.Duration(d)*time.Second, func() {
+					pool.Submit(func() {
+						m.sendValidateReqToNode(nodeID, vID, validateReq)
+					})
 				})
 			}
 		}
 		delay += duration
 	}
 
-	err := m.nodeMgr.SaveValidationResultInfos(dbInfos)
-	if err != nil {
-		log.Errorf("SaveValidationResultInfos err:%s", err.Error())
-	}
-
 	// No spot check of L2
-	start := currentEdgeIndex
-	if start < totalEdges {
-		return edges[start:]
+	if currentEdgeIndex < totalEdges {
+		return edges[currentEdgeIndex:]
 	}
 
 	return nil
 }
 
 // sends a validation request to a node.
-func (m *Manager) sendValidateReqToNode(nID string, req *api.ValidateReq, delay int) {
-	time.Sleep(time.Duration(delay) * time.Second)
-	// log.Infof("%d sendValidateReqToNodes v:[%s] n:[%s]", delay, req.TCPSrvAddr, nID)
+func (m *Manager) sendValidateReqToNode(nID, vID string, req *api.ValidateReq) {
+	// 1. Prepare validation info (Random Asset & DB record) JIT
+	dbInfo, err := m.getValidationResultInfo(nID, vID)
+	if err != nil {
+		log.Errorf("%s RandomAsset err:%s", nID, err.Error())
+	}
 
+	err = m.nodeMgr.SaveValidationResultInfos([]*types.ValidationResultInfo{dbInfo})
+	if err != nil {
+		log.Errorf("%s SaveValidationResultInfos err:%s", nID, err.Error())
+	}
+
+	// 2. Execute validation
 	status := types.ValidationStatusNodeOffline
-
 	cNode := m.nodeMgr.GetNode(nID)
 	if cNode != nil {
 		cNode.LastValidateTime = time.Now().Unix()
@@ -278,7 +296,7 @@ func (m *Manager) sendValidateReqToNode(nID string, req *api.ValidateReq, delay 
 		status = types.ValidationStatusNodeTimeOut
 	}
 
-	err := m.nodeMgr.UpdateValidationResultStatus(m.curRoundID, nID, status)
+	err = m.nodeMgr.UpdateValidationResultStatus(m.curRoundID, nID, status)
 	if err != nil {
 		log.Errorf("%s UpdateValidationResultStatus err:%s", nID, err.Error())
 	}
@@ -388,36 +406,53 @@ func (m *Manager) updateTimeoutResultInfo() {
 		return
 	}
 
+	if len(list) == 0 {
+		return
+	}
+
 	detailsList := make([]*types.ProfitDetails, 0, len(list))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	limitCh := make(chan struct{}, 20)
 
 	for _, resultInfo := range list {
-		bandwidth := int64(resultInfo.Bandwidth) * resultInfo.Duration
-		resultInfo.Status = types.ValidationStatusValidatorTimeOut
+		wg.Add(1)
+		go func(resultInfo *types.ValidationResultInfo) {
+			defer wg.Done()
+			limitCh <- struct{}{}
+			defer func() { <-limitCh }()
 
-		node := m.nodeMgr.GetNode(resultInfo.NodeID)
-		if node != nil {
-			if m.curRoundID == "" {
-				dInfo := m.nodeMgr.GetNodeValidatableProfitDetails(node, float64(node.BandwidthUp))
-				if dInfo != nil {
-					dInfo.CID = resultInfo.Cid
+			bandwidth := int64(resultInfo.Bandwidth) * resultInfo.Duration
+			resultInfo.Status = types.ValidationStatusValidatorTimeOut
 
-					resultInfo.Profit = dInfo.Profit
-					detailsList = append(detailsList, dInfo)
+			node := m.nodeMgr.GetNode(resultInfo.NodeID)
+			if node != nil {
+				if m.curRoundID == "" {
+					dInfo := m.nodeMgr.GetNodeValidatableProfitDetails(node, float64(node.BandwidthUp))
+					if dInfo != nil {
+						dInfo.CID = resultInfo.Cid
+						resultInfo.Profit = dInfo.Profit
+
+						mu.Lock()
+						detailsList = append(detailsList, dInfo)
+						mu.Unlock()
+					}
+				} else {
+					resultInfo.Status = types.ValidationStatusNodeTimeOut
 				}
+
+				node.UploadTraffic += bandwidth
 			} else {
-				resultInfo.Status = types.ValidationStatusNodeTimeOut
+				resultInfo.Status = types.ValidationStatusNodeOffline
 			}
 
-			node.UploadTraffic += bandwidth
-		} else {
-			resultInfo.Status = types.ValidationStatusNodeOffline
-		}
-
-		err = m.nodeMgr.UpdateValidationResultInfo(resultInfo)
-		if err != nil {
-			log.Errorf("%d updateTimeoutResultInfo UpdateValidationResultInfo err:%s", resultInfo.ID, err.Error())
-		}
+			err = m.nodeMgr.UpdateValidationResultInfo(resultInfo)
+			if err != nil {
+				log.Errorf("%d updateTimeoutResultInfo UpdateValidationResultInfo err:%s", resultInfo.ID, err.Error())
+			}
+		}(resultInfo)
 	}
+	wg.Wait()
 
 	if len(detailsList) > 0 {
 		err = m.nodeMgr.AddNodeProfitDetails(detailsList)
