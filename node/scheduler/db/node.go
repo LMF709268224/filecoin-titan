@@ -205,7 +205,7 @@ func (n *SQLDB) updateNodeDynamicInfoBatch(infos []types.NodeDynamicInfo) error 
 	// Build CASE WHEN statements for each field
 	query := `UPDATE ` + nodeInfoTable + ` SET 
 		nat_type = CASE node_id `
-	args := make([]interface{}, 0, len(infos)*11)
+	args := make([]interface{}, 0, len(infos)*21)
 
 	// nat_type
 	for _, info := range infos {
@@ -275,19 +275,18 @@ func (n *SQLDB) updateNodeDynamicInfoBatch(infos []types.NodeDynamicInfo) error 
 		query += `WHEN ? THEN ? `
 		args = append(args, info.NodeID, info.UploadTraffic)
 	}
-	query += `END WHERE node_id IN (?)`
-
-	// Expand the IN clause
-	inQuery, inArgs, err := sqlx.In(query, nodeIDs)
-	if err != nil {
-		return err
+	query += `END WHERE node_id IN (`
+	for i := range nodeIDs {
+		if i > 0 {
+			query += ","
+		}
+		query += "?"
+		args = append(args, nodeIDs[i])
 	}
+	query += `)`
 
-	// Combine all arguments: CASE WHEN args + IN args
-	allArgs := append(args, inArgs...)
-
-	inQuery = n.db.Rebind(inQuery)
-	_, err = n.db.Exec(inQuery, allArgs...)
+	query = n.db.Rebind(query)
+	_, err := n.db.Exec(query, args...)
 	return err
 }
 
