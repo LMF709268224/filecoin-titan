@@ -47,10 +47,7 @@ const (
 
 // Manager is the node manager responsible for managing the online nodes
 type Manager struct {
-	edgeNodes      *shardedNodeMap
-	candidateNodes *shardedNodeMap
-	l5Nodes        *shardedNodeMap
-	l3Nodes        *shardedNodeMap
+	onlineNodes *shardedNodeMap // Unified sharded map for all online nodes
 
 	Edges      int64 // online edge node count
 	Candidates int64 // online candidate node count
@@ -95,11 +92,8 @@ func NewManager(sdb *db.SQLDB, serverID dtypes.ServerID, pk *rsa.PrivateKey, pb 
 		GeoMgr:               newGeoMgr(),
 		IPMgr:                newIPMgr(ipLimit),
 		candidateOfflineTime: map[string]int{},
-		// Initialize ShardedMaps with 32 shards for better concurrency
-		edgeNodes:      newShardedNodeMap(32),
-		candidateNodes: newShardedNodeMap(32),
-		l5Nodes:        newShardedNodeMap(32),
-		l3Nodes:        newShardedNodeMap(32),
+		// Initialize ShardedMap with 128 shards for better concurrency and unified management
+		onlineNodes: newShardedNodeMap(128),
 	}
 
 	nodeManager.updateServerOnlineCounts()
@@ -178,7 +172,7 @@ func (m *Manager) storeEdgeNode(node *Node) {
 		return
 	}
 	nodeID := node.NodeID
-	_, loaded := m.edgeNodes.LoadOrStore(nodeID, node)
+	_, loaded := m.onlineNodes.LoadOrStore(nodeID, node)
 	if loaded {
 		return
 	}
@@ -196,7 +190,7 @@ func (m *Manager) storeCandidateNode(node *Node) {
 	}
 
 	nodeID := node.NodeID
-	_, loaded := m.candidateNodes.LoadOrStore(nodeID, node)
+	_, loaded := m.onlineNodes.LoadOrStore(nodeID, node)
 	if loaded {
 		return
 	}
@@ -213,7 +207,7 @@ func (m *Manager) storeL5Node(node *Node) {
 	}
 
 	nodeID := node.NodeID
-	_, loaded := m.l5Nodes.LoadOrStore(nodeID, node)
+	_, loaded := m.onlineNodes.LoadOrStore(nodeID, node)
 	if loaded {
 		return
 	}
@@ -226,7 +220,7 @@ func (m *Manager) storeL3Node(node *Node) {
 	}
 
 	nodeID := node.NodeID
-	_, loaded := m.l3Nodes.LoadOrStore(nodeID, node)
+	_, loaded := m.onlineNodes.LoadOrStore(nodeID, node)
 	if loaded {
 		return
 	}
@@ -239,7 +233,7 @@ func (m *Manager) deleteEdgeNode(node *Node) {
 	m.notify.Pub(node, types.EventNodeOffline.String())
 
 	nodeID := node.NodeID
-	_, loaded := m.edgeNodes.LoadAndDelete(nodeID)
+	_, loaded := m.onlineNodes.LoadAndDelete(nodeID)
 	if !loaded {
 		return
 	}
@@ -252,7 +246,7 @@ func (m *Manager) deleteCandidateNode(node *Node) {
 	m.notify.Pub(node, types.EventNodeOffline.String())
 
 	nodeID := node.NodeID
-	_, loaded := m.candidateNodes.LoadAndDelete(nodeID)
+	_, loaded := m.onlineNodes.LoadAndDelete(nodeID)
 	if !loaded {
 		return
 	}
@@ -262,7 +256,7 @@ func (m *Manager) deleteCandidateNode(node *Node) {
 // deleteL5Node removes a l5 node from the manager's list of l5 nodes
 func (m *Manager) deleteL5Node(node *Node) {
 	nodeID := node.NodeID
-	_, loaded := m.l5Nodes.LoadAndDelete(nodeID)
+	_, loaded := m.onlineNodes.LoadAndDelete(nodeID)
 	if !loaded {
 		return
 	}
@@ -271,7 +265,7 @@ func (m *Manager) deleteL5Node(node *Node) {
 
 func (m *Manager) deleteL3Node(node *Node) {
 	nodeID := node.NodeID
-	_, loaded := m.l3Nodes.LoadAndDelete(nodeID)
+	_, loaded := m.onlineNodes.LoadAndDelete(nodeID)
 	if !loaded {
 		return
 	}
@@ -280,12 +274,12 @@ func (m *Manager) deleteL3Node(node *Node) {
 
 // DistributeNodeWeight Distribute Node Weight
 func (m *Manager) DistributeNodeWeight(node *Node) {
-	node.Level = m.getNodeScoreLevel(node)
+	node.Level = int32(m.getNodeScoreLevel(node))
 	if !node.IsResourceNode() {
 		return
 	}
 
-	wNum := m.weightMgr.getWeightNum(node.Level)
+	wNum := m.weightMgr.getWeightNum(int(node.Level))
 	if node.Type == types.NodeCandidate {
 		node.selectWeights = m.weightMgr.distributeCandidateWeight(node.NodeID, wNum)
 	} else if node.Type == types.NodeEdge {
@@ -397,18 +391,18 @@ func (m *Manager) redistributeNodeSelectWeights() {
 				if nodeC >= serverC {
 					node.OnlineRate = 1.0
 				} else {
-					node.OnlineRate = float64(nodeC) / float64(serverC)
+					node.OnlineRate = float32(float64(nodeC) / float64(serverC))
 				}
 			} else {
 				node.OnlineRate = 1.0
 			}
 
-			node.Level = m.getNodeScoreLevel(node)
+			node.Level = int32(m.getNodeScoreLevel(node))
 
 			if !node.IsResourceNode() {
 				continue
 			}
-			wNum := m.weightMgr.getWeightNum(node.Level)
+			wNum := m.weightMgr.getWeightNum(int(node.Level))
 			node.selectWeights = m.weightMgr.distributeCandidateWeight(node.NodeID, wNum)
 		}
 	}
@@ -422,12 +416,12 @@ func (m *Manager) redistributeNodeSelectWeights() {
 
 		// node.OnlineRate, _ = m.ComputeNodeOnlineRate(node.NodeID, info.FirstTime)
 		// node.TodayOnlineTimeWindow = 0
-		node.Level = m.getNodeScoreLevel(node)
+		node.Level = int32(m.getNodeScoreLevel(node))
 
 		if !node.IsResourceNode() {
 			continue
 		}
-		wNum := m.weightMgr.getWeightNum(node.Level)
+		wNum := m.weightMgr.getWeightNum(int(node.Level))
 		node.selectWeights = m.weightMgr.distributeEdgeWeight(node.NodeID, wNum)
 	}
 
@@ -463,7 +457,7 @@ func (m *Manager) ComputeNodeOnlineRate(nodeID string, firstTime time.Time) floa
 	// todayDate := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
 	// todayCount, err := m.GetOnlineCount(nodeID, todayDate)
 
-	log.Infof("%s serverOnlineCounts [%v] %d/%d [%d][%v]", nodeID, m.serverOnlineCounts, nodeC, serverC)
+	// log.Debugf("%s serverOnlineCounts [%v] %d/%d [%d][%v]", nodeID, m.serverOnlineCounts, nodeC, serverC)
 
 	if serverC == 0 {
 		return 1.0
@@ -522,5 +516,21 @@ func (m *Manager) UpdateNodeDiskUsage(nodeID string, diskUsage float64) {
 	}
 
 	node.UpdateDiskUsage(diskUsage, titanDiskUsage)
-	log.Infof("LoadReplicaSizeByNodeID %s update:%v", nodeID, titanDiskUsage)
+	// log.Debugf("LoadReplicaSizeByNodeID %s update:%v", nodeID, titanDiskUsage)
+}
+
+// EnrichNodeInfos enriches the NodeInfo slice with online information from the manager.
+func (m *Manager) EnrichNodeInfos(infos []types.NodeInfo, onlineCountMap map[string]int) {
+	for i := range infos {
+		ni := &infos[i]
+		n := m.GetNode(ni.NodeID)
+		if n != nil {
+			n.FillDynamicInfo(ni)
+			ni.Status = types.NodeServicing
+			ni.TodayOnlineTimeWindow = onlineCountMap[ni.NodeID]
+		} else {
+			ni.Status = types.NodeOffline
+			ni.Mx = RateOfL2Mx(ni.OnlineDuration)
+		}
+	}
 }

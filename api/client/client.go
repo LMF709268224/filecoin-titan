@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Filecoin-Titan/titan/api"
@@ -21,6 +22,8 @@ import (
 
 var (
 	defaultHTTP3Client *http.Client
+	http3Clients       = make(map[*quic.Transport]*http.Client)
+	http3ClientsMu     sync.RWMutex
 )
 
 // NewScheduler creates a new http jsonrpc client.
@@ -179,24 +182,44 @@ func NewHTTP3Client() *http.Client {
 				InsecureSkipVerify: true,
 			},
 			QUICConfig: &quic.Config{
-				MaxIncomingStreams:    100,
-				MaxIncomingUniStreams: 100,
+				MaxIncomingStreams:             10,
+				MaxIncomingUniStreams:          10,
+				InitialStreamReceiveWindow:     16 * 1024,
+				InitialConnectionReceiveWindow: 32 * 1024,
+				MaxStreamReceiveWindow:         64 * 1024,
+				MaxConnectionReceiveWindow:     128 * 1024,
+				KeepAlivePeriod:                30 * time.Second,
 			},
 		},
 	}
-	
+
 	return defaultHTTP3Client
 }
 
 // NewHTTP3ClientWithPacketConn new http3 client for nat trave
-func NewHTTP3ClientWithPacketConn(tansport *quic.Transport) (*http.Client, error) {
+func NewHTTP3ClientWithPacketConn(transport *quic.Transport) (*http.Client, error) {
+	http3ClientsMu.RLock()
+	client, ok := http3Clients[transport]
+	http3ClientsMu.RUnlock()
+	if ok {
+		return client, nil
+	}
+
+	http3ClientsMu.Lock()
+	defer http3ClientsMu.Unlock()
+
+	// Double check after lock
+	if client, ok := http3Clients[transport]; ok {
+		return client, nil
+	}
+
 	dial := func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
 		remoteAddr, err := net.ResolveUDPAddr("udp", addr)
 		if err != nil {
 			return nil, err
 		}
 
-		return tansport.DialEarly(ctx, remoteAddr, tlsCfg, cfg)
+		return transport.DialEarly(ctx, remoteAddr, tlsCfg, cfg)
 	}
 
 	roundTripper := &http3.Transport{
@@ -204,11 +227,19 @@ func NewHTTP3ClientWithPacketConn(tansport *quic.Transport) (*http.Client, error
 			InsecureSkipVerify: true,
 		},
 		QUICConfig: &quic.Config{
-			MaxIncomingStreams:    3,
-			MaxIncomingUniStreams: 3,
+			MaxIncomingStreams:             10,
+			MaxIncomingUniStreams:          10,
+			InitialStreamReceiveWindow:     16 * 1024,
+			InitialConnectionReceiveWindow: 32 * 1024,
+			MaxStreamReceiveWindow:         64 * 1024,
+			MaxConnectionReceiveWindow:     128 * 1024,
+			KeepAlivePeriod:                30 * time.Second,
 		},
 		Dial: dial,
 	}
 
-	return &http.Client{Transport: roundTripper, Timeout: 30 * time.Second}, nil
+	client = &http.Client{Transport: roundTripper, Timeout: 20 * time.Second}
+	http3Clients[transport] = client
+
+	return client, nil
 }

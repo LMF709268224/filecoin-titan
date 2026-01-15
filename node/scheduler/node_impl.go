@@ -776,11 +776,11 @@ func (s *Scheduler) lnNodeConnected(ctx context.Context, opts *types.ConnectOpti
 		nodeInfo.FirstTime = dbInfo.FirstTime
 	}
 
-	nNode.OnlineRate = s.NodeManager.ComputeNodeOnlineRate(nodeID, nodeInfo.FirstTime)
+	nNode.OnlineRate = float32(s.NodeManager.ComputeNodeOnlineRate(nodeID, nodeInfo.FirstTime))
 
 	nNode.InitInfo(nodeInfo)
 
-	log.Infof("ln node %s connected, version %s remoteAddr %s", nodeID, ver, remoteAddr)
+	log.Debugf("ln node %s connected, version %s remoteAddr %s", nodeID, ver, remoteAddr)
 
 	err = s.saveNodeInfo(nodeInfo)
 	if err != nil {
@@ -871,19 +871,8 @@ func (s *Scheduler) GetNodeInfo(ctx context.Context, nodeID string) (*types.Node
 
 	n := s.NodeManager.GetNode(nodeID)
 	if n != nil {
+		n.FillInfo(nodeInfo)
 		nodeInfo.Status = types.NodeServicing
-		nodeInfo.NATType = n.NATType
-		nodeInfo.Type = n.Type
-		nodeInfo.CPUUsage = n.CPUUsage
-		nodeInfo.MemoryUsage = n.MemoryUsage
-		nodeInfo.DiskUsage = n.DiskUsage
-		nodeInfo.DiskSpace = n.DiskSpace
-		nodeInfo.ExternalIP = n.ExternalIP
-		nodeInfo.IncomeIncr = n.IncomeIncr
-		nodeInfo.IsTestNode = n.IsTestNode
-		nodeInfo.AreaID = n.AreaID
-		nodeInfo.RemoteAddr = n.RemoteAddr
-		nodeInfo.Mx = node.RateOfL2Mx(n.OnlineDuration)
 		nodeInfo.TodayOnlineTimeWindow = s.loadNodeTodayOnlineTimeWindow(nodeID, todayDate)
 
 		// log.Debugf("%s node select codes:%v , url:%s", nodeID, n.SelectWeights(), n.ExternalURL)
@@ -913,7 +902,7 @@ func (s *Scheduler) GetNodeList(ctx context.Context, offset int, limit int) (*ty
 	today := time.Now()
 	todayDate := time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
 
-	nodeInfos := make([]types.NodeInfo, 0)
+	nodeInfos := make([]types.NodeInfo, 0, limit)
 	var nodeIDs []string
 	for rows.Next() {
 		nodeInfo := types.NodeInfo{}
@@ -932,32 +921,14 @@ func (s *Scheduler) GetNodeList(ctx context.Context, offset int, limit int) (*ty
 		replicaCountMap, _ := s.db.LoadSucceedReplicaCounts(nodeIDs)
 		onlineCountMap, _ := s.db.GetNodesOnlineCount(nodeIDs, todayDate)
 
+		s.NodeManager.EnrichNodeInfos(nodeInfos, onlineCountMap)
+
 		for i := range nodeInfos {
 			ni := &nodeInfos[i]
 			if stats, ok := statsMap[ni.NodeID]; ok {
 				ni.NodeStatisticsInfo = stats
 			}
 			ni.ReplicaCount = replicaCountMap[ni.NodeID]
-
-			n := s.NodeManager.GetNode(ni.NodeID)
-			if n != nil {
-				ni.Status = types.NodeServicing
-				ni.NATType = n.NATType
-				ni.Type = n.Type
-				ni.CPUUsage = n.CPUUsage
-				ni.MemoryUsage = n.MemoryUsage
-				ni.DiskUsage = n.DiskUsage
-				ni.DiskSpace = n.DiskSpace
-				ni.ExternalIP = n.ExternalIP
-				ni.IncomeIncr = n.IncomeIncr
-				ni.IsTestNode = n.IsTestNode
-				ni.AreaID = n.AreaID
-				ni.RemoteAddr = n.RemoteAddr
-				ni.Mx = node.RateOfL2Mx(n.OnlineDuration)
-				ni.TodayOnlineTimeWindow = onlineCountMap[ni.NodeID]
-			} else {
-				ni.Mx = node.RateOfL2Mx(ni.OnlineDuration)
-			}
 		}
 	}
 

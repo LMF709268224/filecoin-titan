@@ -1,7 +1,6 @@
 package node
 
 import (
-	"hash/fnv"
 	"sync"
 )
 
@@ -40,9 +39,11 @@ func newShardedNodeMap(shardCount int) *shardedNodeMap {
 
 // getShard returns the shard for the given key
 func (sm *shardedNodeMap) getShard(key string) *nodeMapShard {
-	h := fnv.New32a()
-	h.Write([]byte(key))
-	hash := h.Sum32()
+	var hash uint32 = 2166136261
+	for i := 0; i < len(key); i++ {
+		hash ^= uint32(key[i])
+		hash *= 16777619
+	}
 	return sm.shards[hash&sm.shardMask]
 }
 

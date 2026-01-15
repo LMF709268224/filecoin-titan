@@ -438,7 +438,7 @@ func (n *SQLDB) LoadActiveNodeInfos(limit, offset int) (*sqlx.Rows, int64, error
 	t := time.Now().Add(-(time.Hour * 6))
 
 	var total int64
-	cQuery := fmt.Sprintf(`SELECT count(node_id) FROM %s  where last_seen>?`, nodeInfoTable)
+	cQuery := fmt.Sprintf(`SELECT count(node_id) FROM %s WHERE last_seen>?`, nodeInfoTable)
 	err := n.db.Get(&total, cQuery, t)
 	if err != nil {
 		return nil, 0, err
@@ -448,9 +448,26 @@ func (n *SQLDB) LoadActiveNodeInfos(limit, offset int) (*sqlx.Rows, int64, error
 		limit = loadNodeInfosDefaultLimit
 	}
 
-	// EXPLAIN SELECT a.*,b.node_type as type FROM node_info a LEFT JOIN node_register_info b ON a.node_id = b.node_id where a.last_seen>'2025-06-30 00:00:00' order by node_id asc LIMIT 10 OFFSET 10;
-	sQuery := fmt.Sprintf(`SELECT a.*,b.node_type as type FROM %s a LEFT JOIN %s b ON a.node_id = b.node_id where a.last_seen>? order by node_id asc LIMIT ? OFFSET ?`, nodeInfoTable, nodeRegisterTable)
-	rows, err := n.db.QueryxContext(context.Background(), sQuery, t, limit, offset)
+	// 1. Get the paginated node IDs first (Fast index-only scan)
+	var ids []string
+	idQuery := fmt.Sprintf(`SELECT node_id FROM %s WHERE last_seen>? ORDER BY node_id ASC LIMIT ? OFFSET ?`, nodeInfoTable)
+	err = n.db.Select(&ids, idQuery, t, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if len(ids) == 0 {
+		return nil, total, nil
+	}
+
+	// 2. Fetch full details for these specific IDs
+	sQuery := fmt.Sprintf(`SELECT a.*,b.node_type as type FROM %s a LEFT JOIN %s b ON a.node_id = b.node_id WHERE a.node_id IN (?) ORDER BY a.node_id ASC`, nodeInfoTable, nodeRegisterTable)
+	sQuery, args, err := sqlx.In(sQuery, ids)
+	if err != nil {
+		return nil, 0, err
+	}
+	sQuery = n.db.Rebind(sQuery)
+	rows, err := n.db.QueryxContext(context.Background(), sQuery, args...)
 	return rows, total, err
 }
 

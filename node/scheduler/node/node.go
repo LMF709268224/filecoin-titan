@@ -28,69 +28,88 @@ import (
 
 // Node represents an Edge or Candidate node
 type Node struct {
-	// NodeID string
+	mu                        sync.RWMutex
+	resetCountOfIPChangesTime time.Time
 	*API
 	jsonrpc.ClientCloser
-	// *types.NodeInfo
+	PublicKey           *rsa.PublicKey
+	ResourcesStatistics *types.ResourcesStatistics
+	bandwidthTracker    *BandwidthTracker
+	selectWeights       []int
+	countOfIPChanges    int64
+	LastValidateTime    int64
+	BackProjectTime     int64
+	NetFlowUp           int64
+	NetFlowDown         int64
+	DeactivateTime      int64
+	BandwidthFreeUp     int64
+	BandwidthFreeDown   int64
+	BandwidthUpScore    int64
+	BandwidthDownScore  int64
 
-	Token string
-
-	selectWeights             []int // The select weights assigned by the scheduler to each online node
-	countOfIPChanges          int64
-	resetCountOfIPChangesTime time.Time
-
-	// node info
-	PublicKey          *rsa.PublicKey
-	IsPrivateMinioOnly bool
-	IsStorageNode      bool
-
-	OnlineRate float64
-
-	// Increase the count every 5 seconds
-	// KeepaliveCount   int
-	LastValidateTime int64
-
-	types.NodeDynamicInfo
-
+	Token       string
 	ExternalIP  string
 	RemoteAddr  string // ExternalIP:UDPPort
-	TCPPort     int
 	ExternalURL string
-	// PortMapping string
+	AreaID      string
+	WSServerID  string
 
-	IsTestNode      bool
-	Type            types.NodeType
-	CPUUsage        float64
-	MemoryUsage     float64
-	ClientType      types.NodeClientType
-	BackProjectTime int64
-	Level           int
-	IncomeIncr      float64 // Base points increase every half hour (30 minute)
-	// GeoInfo         *region.GeoInfo
-	AreaID string
-	// InternalIP      string
-	// Status          types.NodeStatus
+	OnlineRate              float32
+	CPUUsage                float32
+	MemoryUsage             float32
+	DiskSpace               float32
+	IncomeIncr              float32
+	TCPPort                 int32
+	Level                   int32
+	OnlineDurationIncrement int32
 
-	NetFlowUp      int64
-	NetFlowDown    int64
-	DiskSpace      float64
-	WSServerID     string
-	DeactivateTime int64
-	ForceOffline   bool
-	// FirstTime      time.Time
-	// Memory         float64
-	// CPUCores       int
-	ResourcesStatistics *types.ResourcesStatistics
+	Type               types.NodeType
+	ClientType         types.NodeClientType
+	IsPrivateMinioOnly bool
+	IsStorageNode      bool
+	IsTestNode         bool
+	ForceOffline       bool
 
-	bandwidthTracker *BandwidthTracker
+	types.NodeDynamicInfo
+}
 
-	BandwidthFreeUp    int64
-	BandwidthFreeDown  int64
-	BandwidthUpScore   int64
-	BandwidthDownScore int64
+// FillInfo fills the node information to the types.NodeInfo
+func (n *Node) FillInfo(info *types.NodeInfo) {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
 
-	OnlineDurationIncrement int
-	mu                      sync.RWMutex
+	info.NATType = n.NATType
+	info.Type = n.Type
+	info.CPUUsage = float64(n.CPUUsage)
+	info.MemoryUsage = float64(n.MemoryUsage)
+	info.DiskUsage = n.DiskUsage
+	info.DiskSpace = float64(n.DiskSpace)
+	info.ExternalIP = n.ExternalIP
+	info.IncomeIncr = float64(n.IncomeIncr)
+	info.IsTestNode = n.IsTestNode
+	info.AreaID = n.AreaID
+	info.RemoteAddr = n.RemoteAddr
+	info.OnlineDuration = n.OnlineDuration
+	info.Mx = RateOfL2Mx(n.OnlineDuration)
+}
+
+// FillDynamicInfo fills specific dynamic information to the types.NodeInfo
+func (n *Node) FillDynamicInfo(ni *types.NodeInfo) {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
+	ni.NATType = n.NATType
+	ni.Type = n.Type
+	ni.CPUUsage = float64(n.CPUUsage)
+	ni.MemoryUsage = float64(n.MemoryUsage)
+	ni.DiskUsage = n.DiskUsage
+	ni.DiskSpace = float64(n.DiskSpace)
+	ni.ExternalIP = n.ExternalIP
+	ni.IncomeIncr = float64(n.IncomeIncr)
+	ni.IsTestNode = n.IsTestNode
+	ni.AreaID = n.AreaID
+	ni.RemoteAddr = n.RemoteAddr
+	ni.Mx = RateOfL2Mx(n.OnlineDuration)
 }
 
 // API represents the node API
@@ -179,7 +198,7 @@ func (n *Node) InitInfo(nodeInfo *types.NodeInfo) {
 
 	n.NetFlowUp = nodeInfo.NetFlowUp
 	n.NetFlowDown = nodeInfo.NetFlowDown
-	n.DiskSpace = nodeInfo.DiskSpace
+	n.DiskSpace = float32(nodeInfo.DiskSpace)
 	n.WSServerID = nodeInfo.WSServerID
 	// n.FirstTime = nodeInfo.FirstTime
 	// n.PortMapping = nodeInfo.PortMapping
@@ -191,15 +210,15 @@ func (n *Node) InitInfo(nodeInfo *types.NodeInfo) {
 	n.Type = nodeInfo.Type
 	n.ExternalIP = nodeInfo.ExternalIP
 	// n.InternalIP = nodeInfo.InternalIP
-	n.MemoryUsage = nodeInfo.MemoryUsage
-	n.CPUUsage = nodeInfo.CPUUsage
+	n.MemoryUsage = float32(nodeInfo.MemoryUsage)
+	n.CPUUsage = float32(nodeInfo.CPUUsage)
 	n.AreaID = nodeInfo.AreaID
 	n.NATType = nodeInfo.NATType
 	n.ClientType = nodeInfo.ClientType
 	n.BackProjectTime = nodeInfo.BackProjectTime
 	n.RemoteAddr = nodeInfo.RemoteAddr
-	n.Level = nodeInfo.Level
-	n.IncomeIncr = nodeInfo.IncomeIncr
+	n.Level = int32(nodeInfo.Level)
+	n.IncomeIncr = float32(nodeInfo.IncomeIncr)
 	n.LastSeen = nodeInfo.LastSeen
 
 	n.bandwidthTracker.PutBandwidthDown(nodeInfo.BandwidthDown)
@@ -424,7 +443,7 @@ func (n *Node) HasEnoughDiskSpace(size float64) bool {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
-	residual := ((100 - n.DiskUsage) / 100) * n.DiskSpace
+	residual := ((100 - n.DiskUsage) / 100) * float64(n.DiskSpace)
 	if residual <= size {
 		return false
 	}
@@ -489,7 +508,7 @@ func (n *Node) AddOnlineDuration(minute int) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.OnlineDuration += minute
-	n.OnlineDurationIncrement += minute
+	n.OnlineDurationIncrement += int32(minute)
 }
 
 // AddTodayOnlineTimeWindow increases the today online time window of the node.
@@ -511,7 +530,7 @@ func (n *Node) GetDynamicInfoWithIncrement() types.NodeDynamicInfo {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	info := n.NodeDynamicInfo
-	info.OnlineDuration = n.OnlineDurationIncrement
+	info.OnlineDuration = int(n.OnlineDurationIncrement)
 	return info
 }
 
@@ -526,9 +545,9 @@ func (n *Node) ResetOnlineDurationIncrement() {
 func (n *Node) UpdateMetrics(info *types.NodeInfo) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	n.CPUUsage = info.CPUUsage
-	n.MemoryUsage = info.MemoryUsage
-	n.DiskSpace = info.DiskSpace
+	n.CPUUsage = float32(info.CPUUsage)
+	n.MemoryUsage = float32(info.MemoryUsage)
+	n.DiskSpace = float32(info.DiskSpace)
 	n.DiskUsage = info.DiskUsage
 }
 

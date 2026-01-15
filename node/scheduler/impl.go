@@ -165,7 +165,7 @@ func (s *Scheduler) initNode(ctx *NodeConnectContext) {
 
 	ctx.cNode.Token = ctx.opts.Token
 	ctx.cNode.ExternalURL = ctx.opts.ExternalURL
-	ctx.cNode.TCPPort = ctx.opts.TcpServerPort
+	ctx.cNode.TCPPort = int32(ctx.opts.TcpServerPort)
 	ctx.cNode.IsPrivateMinioOnly = ctx.opts.IsPrivateMinioOnly
 	ctx.cNode.ResourcesStatistics = ctx.opts.ResourcesStatistics
 }
@@ -231,7 +231,7 @@ func (s *Scheduler) handleNodeTypeLogic(ctx *NodeConnectContext, dbInfo *types.N
 	if !ctx.alreadyConnect {
 		if ctx.nodeType == types.NodeEdge {
 			incr, _ := s.NodeManager.GetEdgeBaseProfitDetails(ctx.cNode, 0)
-			ctx.cNode.IncomeIncr = incr
+			ctx.cNode.IncomeIncr = float32(incr)
 		}
 
 		if ctx.cNode.IsResourceNode() {
@@ -251,7 +251,7 @@ func (s *Scheduler) handleNodeTypeLogic(ctx *NodeConnectContext, dbInfo *types.N
 		// init LastValidateTime
 		ctx.cNode.LastValidateTime = s.getNodeLastValidateTime(ctx.nodeID)
 
-		ctx.cNode.OnlineRate = s.NodeManager.ComputeNodeOnlineRate(ctx.nodeID, ctx.nodeInfo.FirstTime)
+		ctx.cNode.OnlineRate = float32(s.NodeManager.ComputeNodeOnlineRate(ctx.nodeID, ctx.nodeInfo.FirstTime))
 
 		err = s.NodeManager.NodeOnline(ctx.cNode, ctx.nodeInfo)
 		if err != nil {

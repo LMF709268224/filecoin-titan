@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/Filecoin-Titan/titan/api"
@@ -702,39 +703,54 @@ func (s *Scheduler) getUploadInfo(userID string, urlMode bool, traceID string, i
 		return nil, err
 	}
 
+	// Limit the number of nodes to probe to avoid excessive network overhead
+	maxProbes := 10
+	if len(cNodes) > maxProbes {
+		cNodes = cNodes[:maxProbes]
+	}
+
 	ret := &types.UploadInfo{
 		List:          make([]*types.NodeUploadInfo, 0),
 		AlreadyExists: false,
 	}
 
-	// TODO remove FilePassNonce in order to avoid L1-updates
-	payload := &types.JWTPayload{Allow: []auth.Permission{api.RoleUser}, ID: userID, TraceID: traceID} //  FilePassNonce: passNonce
+	payload := &types.JWTPayload{Allow: []auth.Permission{api.RoleUser}, ID: userID, TraceID: traceID}
 
-	var suffix string = "/uploadv2"
+	suffix := "/uploadv2"
 	if urlMode {
 		suffix = "/uploadv3"
 	}
 
-	for i := 0; i < len(cNodes); i++ {
-		cNode := cNodes[i]
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, cNode := range cNodes {
+		wg.Add(1)
+		go func(node *node.Node) {
+			defer wg.Done()
 
-		// if len(ret.List) > 5 {
-		// 	break
-		// }
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
 
-		token, err := cNode.API.AuthNew(context.Background(), payload)
-		if err != nil {
-			log.Errorf("getUploadInfo node:[%s] AuthNew err:%s", cNode.NodeID, err.Error())
-			// return nil, &api.ErrWeb{Code: terrors.RequestNodeErr.Int(), Message: err.Error()}
-			continue
-		}
+			token, err := node.API.AuthNew(ctx, payload)
+			if err != nil {
+				log.Errorf("getUploadInfo node:[%s] AuthNew err:%s", node.NodeID, err.Error())
+				return
+			}
 
-		uploadURL := fmt.Sprintf("http://%s%s", cNode.RemoteAddr, suffix)
-		if len(cNode.ExternalURL) > 0 {
-			uploadURL = fmt.Sprintf("%s%s", cNode.ExternalURL, suffix)
-		}
+			uploadURL := fmt.Sprintf("http://%s%s", node.RemoteAddr, suffix)
+			if len(node.ExternalURL) > 0 {
+				uploadURL = fmt.Sprintf("%s%s", node.ExternalURL, suffix)
+			}
 
-		ret.List = append(ret.List, &types.NodeUploadInfo{UploadURL: uploadURL, Token: token, NodeID: cNode.NodeID})
+			mu.Lock()
+			ret.List = append(ret.List, &types.NodeUploadInfo{UploadURL: uploadURL, Token: token, NodeID: node.NodeID})
+			mu.Unlock()
+		}(cNode)
+	}
+	wg.Wait()
+
+	if len(ret.List) == 0 {
+		return nil, &api.ErrWeb{Code: terrors.NotFoundNode.Int(), Message: "no available nodes for upload"}
 	}
 
 	rand.Shuffle(len(ret.List), func(i, j int) { ret.List[i], ret.List[j] = ret.List[j], ret.List[i] })

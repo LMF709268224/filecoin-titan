@@ -12,7 +12,7 @@ func (n *SQLDB) UpdateNodeDynamicInfoFast(infos []types.NodeDynamicInfo) error {
 	}
 
 	// For small batches, use the existing method
-	if len(infos) < 500 {
+	if len(infos) < 100 {
 		return n.UpdateNodeDynamicInfo(infos)
 	}
 
@@ -40,48 +40,47 @@ func (n *SQLDB) UpdateNodeDynamicInfoFast(infos []types.NodeDynamicInfo) error {
 			available_disk_space FLOAT,
 			download_traffic BIGINT,
 			upload_traffic BIGINT
-		)
+		) ENGINE=InnoDB
 	`)
 	if err != nil {
 		return err
 	}
 
-	// Clear temporary table if it exists from previous run
-	_, err = tx.Exec(`TRUNCATE TABLE temp_node_updates`)
-	if err != nil {
-		// If TRUNCATE fails, try DELETE
-		_, err = tx.Exec(`DELETE FROM temp_node_updates`)
+	// Batch insert into temporary table using multi-valued INSERT
+	const batchSize = 250
+	values := make([]interface{}, 0, batchSize*11)
+
+	for i := 0; i < len(infos); i += batchSize {
+		end := i + batchSize
+		if end > len(infos) {
+			end = len(infos)
+		}
+
+		batch := infos[i:end]
+		query := `INSERT INTO temp_node_updates 
+			(node_id, nat_type, last_seen, online_duration, disk_usage, 
+			 bandwidth_up, bandwidth_down, titan_disk_usage, available_disk_space, 
+			 download_traffic, upload_traffic) VALUES `
+
+		values = values[:0]
+		for j, info := range batch {
+			if j > 0 {
+				query += ","
+			}
+			query += "(?,?,?,?,?,?,?,?,?,?,?)"
+			values = append(values,
+				info.NodeID, info.NATType, info.LastSeen,
+				info.OnlineDuration, info.DiskUsage,
+				info.BandwidthUp, info.BandwidthDown,
+				info.TitanDiskUsage, info.AvailableDiskSpace,
+				info.DownloadTraffic, info.UploadTraffic)
+		}
+
+		_, err = tx.Exec(query, values...)
 		if err != nil {
 			return err
 		}
 	}
-
-	// Batch insert into temporary table
-	stmt, err := tx.Preparex(`
-		INSERT INTO temp_node_updates 
-		(node_id, nat_type, last_seen, online_duration, disk_usage, 
-		 bandwidth_up, bandwidth_down, titan_disk_usage, available_disk_space, 
-		 download_traffic, upload_traffic)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?)
-	`)
-	if err != nil {
-		return err
-	}
-
-	for _, info := range infos {
-		_, err = stmt.Exec(
-			info.NodeID, info.NATType, info.LastSeen,
-			info.OnlineDuration, info.DiskUsage,
-			info.BandwidthUp, info.BandwidthDown,
-			info.TitanDiskUsage, info.AvailableDiskSpace,
-			info.DownloadTraffic, info.UploadTraffic,
-		)
-		if err != nil {
-			stmt.Close()
-			return err
-		}
-	}
-	stmt.Close()
 
 	// Single UPDATE with JOIN
 	_, err = tx.Exec(`
@@ -104,10 +103,9 @@ func (n *SQLDB) UpdateNodeDynamicInfoFast(infos []types.NodeDynamicInfo) error {
 	}
 
 	// Drop temporary table
-	_, err = tx.Exec(`DROP TEMPORARY TABLE IF EXISTS temp_node_updates`)
+	_, err = tx.Exec(`DROP TEMPORARY TABLE temp_node_updates`)
 	if err != nil {
 		log.Warnf("Failed to drop temporary table: %s", err.Error())
-		// Don't fail the transaction for this
 	}
 
 	return tx.Commit()
