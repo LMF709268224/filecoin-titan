@@ -43,54 +43,36 @@ type Manager struct {
 
 	leadershipMgr *leadership.Manager
 
-	lck             sync.Mutex
-	isCacheValid    bool // use cache to reduce 'ChainHead' calls
-	cachedEpoch     uint64
-	cachedTimestamp time.Time
+	// Use sync.Map for lock-free reads and easy maintenance
+	validators sync.Map
 
-	lotusRPCAddress string
-
+	lotusRPCAddress  string
 	enableValidation bool
-
-	validators []string
-	vLock      sync.Mutex
 }
 
 func (m *Manager) addValidator(nodeID string) {
-	m.lck.Lock()
-	defer m.lck.Unlock()
-
-	m.validators = append(m.validators, nodeID)
+	m.validators.Store(nodeID, struct{}{})
 }
 
 // IsValidator checks if the given nodeID is a validator.
 func (m *Manager) IsValidator(nodeID string) bool {
-	m.lck.Lock()
-	defer m.lck.Unlock()
-
-	if len(m.validators) == 0 {
-		return false
-	}
-
-	for _, nID := range m.validators {
-		if nID == nodeID {
-			return true
-		}
-	}
-
-	return false
+	_, ok := m.validators.Load(nodeID)
+	return ok
 }
 
 // GetValidators returns a list of validators.
 func (m *Manager) GetValidators() []string {
-	return m.validators
+	var list []string
+	m.validators.Range(func(key, value interface{}) bool {
+		list = append(list, key.(string))
+		return true
+	})
+	return list
 }
 
 func (m *Manager) cleanValidator() {
-	m.lck.Lock()
-	defer m.lck.Unlock()
-
-	m.validators = []string{}
+	// Replacing the Map with a new one is the cleanest way to clear it
+	m.validators = sync.Map{}
 }
 
 // NewManager return new node manager instance
@@ -134,28 +116,16 @@ func (m *Manager) Stop(ctx context.Context) error {
 }
 
 func (m *Manager) getGameEpoch() (uint64, error) {
-	m.lck.Lock()
-	defer m.lck.Unlock()
-
-	if !m.isCacheValid {
-		m.cachedTimestamp = time.Now()
-		h, err := lotuscli.ChainHead(m.lotusRPCAddress)
-		if err != nil {
-			return 0, err
-		}
-
-		m.cachedEpoch = h
-		m.isCacheValid = true
+	// Directly call RPC without holding a lock to prevent blocking the whole system
+	h, err := lotuscli.ChainHead(m.lotusRPCAddress)
+	if err != nil {
+		log.Errorf("getGameEpoch ChainHead err:%s", err.Error())
+		// If RPC fails, we could potentially return a locally calculated epoch,
+		// but for now, we just pass the error.
+		return 0, err
 	}
 
-	duration := time.Since(m.cachedTimestamp)
-	if duration < 0 {
-		return 0, xerrors.Errorf("current time is not correct with negative duration: %s", duration)
-	}
-
-	elapseEpoch := int64(duration.Seconds()) / filecoinEpochDuration
-
-	return m.cachedEpoch + uint64(elapseEpoch), nil
+	return h, nil
 }
 
 func (m *Manager) getSeedFromFilecoin() (int64, error) {

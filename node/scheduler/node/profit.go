@@ -126,9 +126,9 @@ func (m *Manager) GetEdgeBaseProfitDetails(node *Node, minute int) (float64, *ty
 // GetCandidateBaseProfitDetails Basic Rewards
 func (m *Manager) GetCandidateBaseProfitDetails(node *Node, minute int) *types.ProfitDetails {
 	// Every 1 minutes
-	arR := rateOfAR(node.OnlineRate)
+	arR := rateOfAR(float64(node.OnlineRate))
 	arO := rateOfOnline(node.OnlineDuration)
-	mcx := l1RBase * node.OnlineRate * arR * arO
+	mcx := l1RBase * float64(node.OnlineRate) * arR * arO
 
 	// count := roundDivision(minute, 1)
 	mcx = mcx * float64(minute)

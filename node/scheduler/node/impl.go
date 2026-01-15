@@ -11,8 +11,12 @@ import (
 func (m *Manager) GetResourceEdgeNodes() []*Node {
 	nodes := make([]*Node, 0)
 
-	m.edgeNodes.Range(func(key string, value interface{}) bool {
+	m.onlineNodes.Range(func(key string, value interface{}) bool {
 		node := value.(*Node)
+
+		if node.Type != types.NodeEdge {
+			return true
+		}
 
 		if !node.IsResourceNode() {
 			return true
@@ -30,9 +34,13 @@ func (m *Manager) GetResourceEdgeNodes() []*Node {
 func (m *Manager) GetResourceCandidateNodes() ([]string, []*Node) {
 	var ids []string
 	var nodes []*Node
-	m.candidateNodes.Range(func(key string, value interface{}) bool {
+	m.onlineNodes.Range(func(key string, value interface{}) bool {
 		nodeID := key
 		node := value.(*Node)
+
+		if node.Type != types.NodeCandidate {
+			return true
+		}
 
 		if !node.IsResourceNode() {
 			return true
@@ -50,8 +58,12 @@ func (m *Manager) GetResourceCandidateNodes() ([]string, []*Node) {
 func (m *Manager) GetValidEdgeNode() []*Node {
 	nodes := make([]*Node, 0)
 
-	m.edgeNodes.Range(func(key string, value interface{}) bool {
+	m.onlineNodes.Range(func(key string, value interface{}) bool {
 		node := value.(*Node)
+
+		if node.Type != types.NodeEdge {
+			return true
+		}
 
 		if node.IsAbnormal() {
 			return true
@@ -69,8 +81,12 @@ func (m *Manager) GetValidEdgeNode() []*Node {
 func (m *Manager) GetValidL3Node() []*Node {
 	nodes := make([]*Node, 0)
 
-	m.l3Nodes.Range(func(key string, value interface{}) bool {
+	m.onlineNodes.Range(func(key string, value interface{}) bool {
 		node := value.(*Node)
+
+		if node.Type != types.NodeL3 {
+			return true
+		}
 
 		if node.IsAbnormal() {
 			return true
@@ -88,8 +104,12 @@ func (m *Manager) GetValidL3Node() []*Node {
 func (m *Manager) GetValidL5Node() []*Node {
 	nodes := make([]*Node, 0)
 
-	m.l5Nodes.Range(func(key string, value interface{}) bool {
+	m.onlineNodes.Range(func(key string, value interface{}) bool {
 		node := value.(*Node)
+
+		if node.Type != types.NodeL5 {
+			return true
+		}
 
 		if node.IsAbnormal() {
 			return true
@@ -107,9 +127,13 @@ func (m *Manager) GetValidL5Node() []*Node {
 func (m *Manager) GetValidCandidateNodes() ([]string, []*Node) {
 	var ids []string
 	var nodes []*Node
-	m.candidateNodes.Range(func(key string, value interface{}) bool {
+	m.onlineNodes.Range(func(key string, value interface{}) bool {
 		nodeID := key
 		node := value.(*Node)
+
+		if node.Type != types.NodeCandidate {
+			return true
+		}
 
 		if node.IsAbnormal() {
 			return true
@@ -126,8 +150,12 @@ func (m *Manager) GetValidCandidateNodes() ([]string, []*Node) {
 // GetAllCandidateNodes  Get all valid candidate nodes
 func (m *Manager) GetAllCandidateNodes() []*Node {
 	var nodes []*Node
-	m.candidateNodes.Range(func(key string, value interface{}) bool {
+	m.onlineNodes.Range(func(key string, value interface{}) bool {
 		node := value.(*Node)
+
+		if node.Type != types.NodeCandidate {
+			return true
+		}
 
 		nodes = append(nodes, node)
 		return true
@@ -139,8 +167,12 @@ func (m *Manager) GetAllCandidateNodes() []*Node {
 // GetCandidateNodes return n candidate node
 func (m *Manager) GetCandidateNodes(num int) []*Node {
 	var out []*Node
-	m.candidateNodes.Range(func(key string, value interface{}) bool {
+	m.onlineNodes.Range(func(key string, value interface{}) bool {
 		node := value.(*Node)
+
+		if node.Type != types.NodeCandidate {
+			return true
+		}
 
 		out = append(out, node)
 		return len(out) < num
@@ -151,24 +183,11 @@ func (m *Manager) GetCandidateNodes(num int) []*Node {
 
 // GetNode retrieves a node with the given node ID
 func (m *Manager) GetNode(nodeID string) *Node {
-	edge := m.GetEdgeNode(nodeID)
-	if edge != nil {
-		return edge
-	}
+	nodeI, exist := m.onlineNodes.Load(nodeID)
+	if exist && nodeI != nil {
+		node := nodeI.(*Node)
 
-	candidate := m.GetCandidateNode(nodeID)
-	if candidate != nil {
-		return candidate
-	}
-
-	l5 := m.GetL5Node(nodeID)
-	if l5 != nil {
-		return l5
-	}
-
-	l3 := m.GetL3Node(nodeID)
-	if l3 != nil {
-		return l3
+		return node
 	}
 
 	return nil
@@ -176,10 +195,8 @@ func (m *Manager) GetNode(nodeID string) *Node {
 
 // GetEdgeNode retrieves an edge node with the given node ID
 func (m *Manager) GetEdgeNode(nodeID string) *Node {
-	nodeI, exist := m.edgeNodes.Load(nodeID)
-	if exist && nodeI != nil {
-		node := nodeI.(*Node)
-
+	node := m.GetNode(nodeID)
+	if node != nil && node.Type == types.NodeEdge {
 		return node
 	}
 
@@ -188,10 +205,8 @@ func (m *Manager) GetEdgeNode(nodeID string) *Node {
 
 // GetCandidateNode retrieves a candidate node with the given node ID
 func (m *Manager) GetCandidateNode(nodeID string) *Node {
-	nodeI, exist := m.candidateNodes.Load(nodeID)
-	if exist && nodeI != nil {
-		node := nodeI.(*Node)
-
+	node := m.GetNode(nodeID)
+	if node != nil && node.Type == types.NodeCandidate {
 		return node
 	}
 
@@ -200,10 +215,8 @@ func (m *Manager) GetCandidateNode(nodeID string) *Node {
 
 // GetL5Node retrieves a l5 node with the given node ID
 func (m *Manager) GetL5Node(nodeID string) *Node {
-	nodeI, exist := m.l5Nodes.Load(nodeID)
-	if exist && nodeI != nil {
-		node := nodeI.(*Node)
-
+	node := m.GetNode(nodeID)
+	if node != nil && node.Type == types.NodeL5 {
 		return node
 	}
 
@@ -212,10 +225,8 @@ func (m *Manager) GetL5Node(nodeID string) *Node {
 
 // GetL3Node retrieves a l3 node with the given node ID
 func (m *Manager) GetL3Node(nodeID string) *Node {
-	nodeI, exist := m.l3Nodes.Load(nodeID)
-	if exist && nodeI != nil {
-		node := nodeI.(*Node)
-
+	node := m.GetNode(nodeID)
+	if node != nil && node.Type == types.NodeL3 {
 		return node
 	}
 

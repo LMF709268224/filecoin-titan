@@ -58,13 +58,13 @@ func NewManager(nodeManager *node.Manager, sdb *db.SQLDB, ds datastore.Batching)
 
 // StartTimer Start initializes and starts the project state machine and associated tickers
 func (m *Manager) StartTimer(ctx context.Context) {
-	if err := m.initStateMachines(); err != nil {
-		log.Errorf("restartStateMachines err: %s", err.Error())
-	}
+	// if err := m.initStateMachines(); err != nil {
+	// 	log.Errorf("restartStateMachines err: %s", err.Error())
+	// }
 
-	go m.startCheckDeployProgressesTimer()
-	go m.startCheckFailedProjectTimer()
-	go m.startCheckServicingProjectTimer()
+	// go m.startCheckDeployProgressesTimer()
+	// go m.startCheckFailedProjectTimer()
+	// go m.startCheckServicingProjectTimer()
 }
 
 type deployingProjectsInfo struct {

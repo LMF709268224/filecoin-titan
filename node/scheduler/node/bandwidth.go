@@ -9,29 +9,20 @@ import (
 
 // BandwidthTracker represents the bandwidth tracker for a node
 type BandwidthTracker struct {
-	maxSize int
-
-	bandwidthDowns     []int64
-	bandwidthDownIndex int
-	bandwidthDownMutex sync.RWMutex
-
-	bandwidthUps     []int64
-	bandwidthUpIndex int
-	bandwidthUpMutex sync.RWMutex
+	bandwidthDowns []int64
+	bandwidthUps   []int64
+	mu             sync.Mutex
+	maxSize        int16
+	downIndex      int16
+	upIndex        int16
 }
 
 // NewBandwidthTracker creates a new NodeBandwidth instance
 func NewBandwidthTracker(size int) *BandwidthTracker {
 	nb := &BandwidthTracker{
-		maxSize: size,
-
-		bandwidthDowns:     make([]int64, 0, size),
-		bandwidthDownIndex: 0,
-		bandwidthDownMutex: sync.RWMutex{},
-
-		bandwidthUps:     make([]int64, 0, size),
-		bandwidthUpIndex: 0,
-		bandwidthUpMutex: sync.RWMutex{},
+		maxSize:        int16(size),
+		bandwidthDowns: make([]int64, 0, size),
+		bandwidthUps:   make([]int64, 0, size),
 	}
 
 	nb.PutBandwidthDown(units.GiB)
@@ -46,23 +37,28 @@ func (nst *BandwidthTracker) PutBandwidthDown(speed int64) int64 {
 		return nst.getAverageBandwidthDown()
 	}
 
-	nst.bandwidthDownMutex.Lock()
-	defer nst.bandwidthDownMutex.Unlock()
+	nst.mu.Lock()
+	defer nst.mu.Unlock()
 
-	if len(nst.bandwidthDowns) < nst.maxSize {
+	if len(nst.bandwidthDowns) < int(nst.maxSize) {
 		nst.bandwidthDowns = append(nst.bandwidthDowns, speed)
 	} else {
-		nst.bandwidthDowns[nst.bandwidthDownIndex] = speed
-		nst.bandwidthDownIndex = (nst.bandwidthDownIndex + 1) % nst.maxSize
+		nst.bandwidthDowns[nst.downIndex] = speed
+		nst.downIndex = (nst.downIndex + 1) % nst.maxSize
 	}
 
-	// log.Infof("UpdateNodeBandwidths speed:[%d]  %v", speed, nst.bandwidthDowns)
-
-	return nst.getAverageBandwidthDown()
+	return nst.getAverageBandwidthDownLocked()
 }
 
 // getAverageBandwidthDown calculates and returns the average download speed
 func (nst *BandwidthTracker) getAverageBandwidthDown() int64 {
+	nst.mu.Lock()
+	defer nst.mu.Unlock()
+
+	return nst.getAverageBandwidthDownLocked()
+}
+
+func (nst *BandwidthTracker) getAverageBandwidthDownLocked() int64 {
 	if len(nst.bandwidthDowns) == 0 {
 		return 0
 	}
@@ -81,10 +77,10 @@ func (nst *BandwidthTracker) getAverageBandwidthDown() int64 {
 		sum += speed
 	}
 
-	len := int64(len(nst.bandwidthDowns))
+	count := int64(len(nst.bandwidthDowns))
 
 	adjustedSum := sum - minSpeed
-	adjustedCount := len - 1
+	adjustedCount := count - 1
 
 	return adjustedSum / adjustedCount
 }
@@ -95,23 +91,28 @@ func (nst *BandwidthTracker) PutBandwidthUp(speed int64) int64 {
 		return nst.getAverageBandwidthUp()
 	}
 
-	nst.bandwidthUpMutex.Lock()
-	defer nst.bandwidthUpMutex.Unlock()
+	nst.mu.Lock()
+	defer nst.mu.Unlock()
 
-	if len(nst.bandwidthUps) < nst.maxSize {
+	if len(nst.bandwidthUps) < int(nst.maxSize) {
 		nst.bandwidthUps = append(nst.bandwidthUps, speed)
 	} else {
-		nst.bandwidthUps[nst.bandwidthUpIndex] = speed
-		nst.bandwidthUpIndex = (nst.bandwidthUpIndex + 1) % nst.maxSize
+		nst.bandwidthUps[nst.upIndex] = speed
+		nst.upIndex = (nst.upIndex + 1) % nst.maxSize
 	}
 
-	// log.Infof("UpdateNodeBandwidths speed:[%d]  %v", speed, nst.bandwidthUps)
-
-	return nst.getAverageBandwidthUp()
+	return nst.getAverageBandwidthUpLocked()
 }
 
 // getAverageBandwidthUp calculates and returns the average upload speed
 func (nst *BandwidthTracker) getAverageBandwidthUp() int64 {
+	nst.mu.Lock()
+	defer nst.mu.Unlock()
+
+	return nst.getAverageBandwidthUpLocked()
+}
+
+func (nst *BandwidthTracker) getAverageBandwidthUpLocked() int64 {
 	if len(nst.bandwidthUps) == 0 {
 		return 0
 	}
@@ -130,10 +131,10 @@ func (nst *BandwidthTracker) getAverageBandwidthUp() int64 {
 		sum += speed
 	}
 
-	len := int64(len(nst.bandwidthUps))
+	count := int64(len(nst.bandwidthUps))
 
 	adjustedSum := sum - minSpeed
-	adjustedCount := len - 1
+	adjustedCount := count - 1
 
 	return adjustedSum / adjustedCount
 }
