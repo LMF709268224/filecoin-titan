@@ -788,21 +788,42 @@ func (n *SQLDB) processNodeProfitBatch(batch []*types.ProfitDetails) error {
 		return err
 	}
 
-	// 2. Update node_info profits
-	// Since each node has different profit increment, we still do individual updates,
-	// but they are shared in the same transaction which is reasonably fast.
-	iQuery := fmt.Sprintf(`UPDATE %s SET profit=profit+?,penalty_profit=penalty_profit+? WHERE node_id=?`, nodeInfoTable)
-	stmt, err := tx.Prepare(iQuery)
+	// 2. Optimized Bulk Update for node_info profits using a temporary table
+	_, err = tx.Exec(`CREATE TEMPORARY TABLE IF NOT EXISTS temp_profit_updates (
+		node_id VARCHAR(255) PRIMARY KEY,
+		profit_inc DOUBLE,
+		penalty_inc DOUBLE
+	)`)
 	if err != nil {
 		return err
 	}
-	defer stmt.Close()
+	// Important: Clear temp table in case the connection was reused from a failed previous attempt
+	_, err = tx.Exec(`TRUNCATE temp_profit_updates`)
+	if err != nil {
+		return err
+	}
 
-	for _, info := range batch {
-		_, err = stmt.Exec(info.Profit, info.Penalty, info.NodeID)
-		if err != nil {
-			log.Errorf("nodeProfitBatch Exec UPDATE %s err:%s", info.NodeID, err.Error())
+	uSql := `INSERT INTO temp_profit_updates (node_id, profit_inc, penalty_inc) VALUES `
+	uValues := make([]interface{}, 0, len(batch)*3)
+	for i, info := range batch {
+		if i > 0 {
+			uSql += ","
 		}
+		uSql += "(?, ?, ?)"
+		uValues = append(uValues, info.NodeID, info.Profit, info.Penalty)
+	}
+	uSql += ` ON DUPLICATE KEY UPDATE profit_inc=profit_inc+VALUES(profit_inc), penalty_inc=penalty_inc+VALUES(penalty_inc)`
+
+	_, err = tx.Exec(uSql, uValues...)
+	if err != nil {
+		return err
+	}
+
+	finalUpdate := fmt.Sprintf(`UPDATE %s n JOIN temp_profit_updates t ON n.node_id = t.node_id 
+		SET n.profit = n.profit + t.profit_inc, n.penalty_profit = n.penalty_profit + t.penalty_inc`, nodeInfoTable)
+	_, err = tx.Exec(finalUpdate)
+	if err != nil {
+		return err
 	}
 
 	return tx.Commit()

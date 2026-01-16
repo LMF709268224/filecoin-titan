@@ -7,8 +7,8 @@ import (
 )
 
 type BatchUpdate struct {
-	Nodes      []types.NodeDynamicInfo
-	Details    []*types.ProfitDetails
+	Nodes      *[]types.NodeDynamicInfo
+	Details    *[]*types.ProfitDetails
 	OnlineData map[string]int
 	SaveDate   time.Time
 }
@@ -67,33 +67,56 @@ func (m *Manager) startNodeKeepaliveTimer() {
 
 func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 	now := time.Now()
-	t := now.Add(-keepaliveTime)
+
+	// --- Scheduler Health Guard (Anti-Kill) Logic ---
+	// Expected interval is 'minute' minutes (2 or 10).
+	// If the actual gap is much larger (e.g., > 5 mins over expected),
+	// the scheduler was likely frozen.
+	gracePeriod := time.Duration(0)
+	if !m.lastKeepaliveTime.IsZero() {
+		gap := now.Sub(m.lastKeepaliveTime)
+		expected := time.Duration(minute) * time.Minute
+		if gap > expected+5*time.Minute {
+			gracePeriod = gap - expected
+			log.Warnf("Scheduler lag detected! Gap: %v, Expected: %v. Applying grace extension: %v", gap, expected, gracePeriod)
+		}
+	}
+	// Update last run time before processing
+	m.lastKeepaliveTime = now
+
+	// Standard threshold (10 minutes) + Grace period from scheduler lag
+	t := now.Add(-(keepaliveTime + gracePeriod))
+
 	timeWindow := (minute * 60) / 5
 	m.mu.Lock()
 	m.serverTodayOnlineTimeWindow += timeWindow
 	m.mu.Unlock()
 
-	totalNodes := int(m.Edges + m.Candidates + m.L5Count + m.L3Count)
-	if totalNodes < 1000 {
-		totalNodes = 1000
+	nodesCount := int(m.Edges + m.Candidates + m.L5Count + m.L3Count)
+	if nodesCount < 1000 {
+		nodesCount = 1000
 	}
 
 	batch := BatchUpdate{
 		SaveDate:   time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()),
-		OnlineData: make(map[string]int, totalNodes),
-		Nodes:      make([]types.NodeDynamicInfo, 0, totalNodes),
-		Details:    make([]*types.ProfitDetails, 0, totalNodes),
+		OnlineData: make(map[string]int, nodesCount),
+		Nodes:      GetDynamicInfoSlice(),
+		Details:    GetProfitDetailsSlice(),
 	}
+	defer func() {
+		PutDynamicInfoSlice(batch.Nodes)
+		PutProfitDetailsSlice(batch.Details)
+	}()
 
 	m.onlineNodes.Range(func(nodeID string, value interface{}) bool {
 		node := value.(*Node)
 		isOnline, dyInfo, dInfo := m.processNode(node, t, minute, isSave)
 		if isOnline && isSave {
 			if dyInfo != nil {
-				batch.Nodes = append(batch.Nodes, *dyInfo)
+				*batch.Nodes = append(*batch.Nodes, *dyInfo)
 			}
 			if dInfo != nil {
-				batch.Details = append(batch.Details, dInfo)
+				*batch.Details = append(*batch.Details, dInfo)
 			}
 			batch.OnlineData[node.NodeID] = node.TodayOnlineTimeWindow
 			node.ResetOnlineDurationIncrement()
@@ -108,23 +131,18 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 		m.serverTodayOnlineTimeWindow = 0
 		m.mu.Unlock()
 
-		if len(batch.Nodes) > 0 {
-			log.Infof("Updating online duration for %d nodes. Sample: nodeID=%s, increment=%d",
-				len(batch.Nodes), batch.Nodes[0].NodeID, batch.Nodes[0].OnlineDuration)
-		}
-
 		// Use fast update for large batches (500+ nodes)
 		var err error
-		if len(batch.Nodes) >= 500 {
-			err = m.UpdateNodeDynamicInfoFast(batch.Nodes)
+		if len(*batch.Nodes) >= 500 {
+			err = m.UpdateNodeDynamicInfoFast(*batch.Nodes)
 		} else {
-			err = m.UpdateNodeDynamicInfo(batch.Nodes)
+			err = m.UpdateNodeDynamicInfo(*batch.Nodes)
 		}
 		if err != nil {
 			log.Errorf("updateNodeData UpdateNodeDynamicInfo err:%s", err.Error())
 		}
 
-		err = m.AddNodeProfitDetails(batch.Details)
+		err = m.AddNodeProfitDetails(*batch.Details)
 		if err != nil {
 			log.Errorf("updateNodeData AddNodeProfits err:%s", err.Error())
 		}
@@ -133,11 +151,6 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 		if err != nil {
 			log.Errorf("updateNodeData UpdateNodeOnlineCount err:%s", err.Error())
 		}
-
-		// Explicitly clear large slices to help GC
-		batch.Nodes = nil
-		batch.Details = nil
-		batch.OnlineData = nil
 	}
 }
 

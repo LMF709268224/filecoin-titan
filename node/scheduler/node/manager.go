@@ -71,6 +71,7 @@ type Manager struct {
 
 	serverTodayOnlineTimeWindow int
 	candidateOfflineTime        map[string]int // offline minute
+	lastKeepaliveTime           time.Time      // for anti-killing logic
 }
 
 // NewManager creates a new instance of the node manager

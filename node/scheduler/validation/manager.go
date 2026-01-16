@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Filecoin-Titan/titan/api"
@@ -48,6 +49,13 @@ type Manager struct {
 
 	lotusRPCAddress  string
 	enableValidation bool
+
+	cache atomic.Value // Stores *chainCache
+}
+
+type chainCache struct {
+	epoch     uint64
+	timestamp time.Time
 }
 
 func (m *Manager) addValidator(nodeID string) {
@@ -116,14 +124,25 @@ func (m *Manager) Stop(ctx context.Context) error {
 }
 
 func (m *Manager) getGameEpoch() (uint64, error) {
-	// Directly call RPC without holding a lock to prevent blocking the whole system
+	c, _ := m.cache.Load().(*chainCache)
+	if c != nil && time.Since(c.timestamp) < 15*time.Second && c.epoch > 0 {
+		return c.epoch, nil
+	}
+
+	// Directly call RPC without holding any lock
 	h, err := lotuscli.ChainHead(m.lotusRPCAddress)
 	if err != nil {
 		log.Errorf("getGameEpoch ChainHead err:%s", err.Error())
-		// If RPC fails, we could potentially return a locally calculated epoch,
-		// but for now, we just pass the error.
+		if c != nil {
+			return c.epoch, nil // Return stale data if RPC fails to prevent system freeze
+		}
 		return 0, err
 	}
+
+	m.cache.Store(&chainCache{
+		epoch:     h,
+		timestamp: time.Now(),
+	})
 
 	return h, nil
 }

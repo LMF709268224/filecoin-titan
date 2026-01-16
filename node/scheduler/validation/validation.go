@@ -72,16 +72,39 @@ func (m *Manager) computeNodeProfits(nodes []*node.Node) {
 		return
 	}
 
+	totalNodes := len(nodes)
+	batchSize := 200 // Process nodes in batches of 200 to keep memory and DB load stable
+
+	for i := 0; i < totalNodes; i += batchSize {
+		end := i + batchSize
+		if end > totalNodes {
+			end = totalNodes
+		}
+
+		m.processNodeProfitBatch(nodes[i:end])
+		// Optional: Small pause between batches if system load is very high
+		// time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func (m *Manager) processNodeProfitBatch(nodes []*node.Node) {
 	detailsList := make([]*types.ProfitDetails, 0, len(nodes))
 	var mu sync.Mutex
-	limitCh := make(chan struct{}, 100) // limit concurrent db queries
 	var wg sync.WaitGroup
+
+	limitCh := make(chan struct{}, 50) // More conservative concurrency
 
 	for _, n := range nodes {
 		wg.Add(1)
 		go func(nodeStruct *node.Node) {
 			defer wg.Done()
-			limitCh <- struct{}{}
+
+			select {
+			case limitCh <- struct{}{}:
+			case <-time.After(30 * time.Second): // Fail-safe timeout
+				log.Warnf("%s timeout waiting for DB limit channel", nodeStruct.NodeID)
+				return
+			}
 			defer func() { <-limitCh }()
 
 			rsp, err := m.nodeMgr.LoadValidationResultInfos(nodeStruct.NodeID, 20, 0)
@@ -126,7 +149,7 @@ func (m *Manager) computeNodeProfits(nodes []*node.Node) {
 	if len(detailsList) > 0 {
 		err := m.nodeMgr.AddNodeProfitDetails(detailsList)
 		if err != nil {
-			log.Errorf("computeNodeProfits AddNodeProfitDetails err:%s", err.Error())
+			log.Errorf("processNodeProfitBatch AddNodeProfitDetails err:%s", err.Error())
 		}
 	}
 }
