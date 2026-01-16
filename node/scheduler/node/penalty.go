@@ -39,8 +39,20 @@ func (m *Manager) penaltyNode() {
 	offlineNodes := make(map[string]float64)
 	detailsList := make([]*types.ProfitDetails, 0)
 
+	// Prepare updates outside the lock to minimize contention
+	type updateInfo struct {
+		nodeID          string
+		count           int
+		profit          float64
+		offlineDuration int
+		freeDeduction   int
+		onlineDuration  int
+	}
+	toUpdate := make([]updateInfo, 0)
+
 	for _, info := range list {
-		if m.GetNode(info.NodeID) != nil {
+		// If node is online, skip
+		if _, online := m.onlineNodes.Load(info.NodeID); online {
 			continue
 		}
 
@@ -52,20 +64,33 @@ func (m *Manager) penaltyNode() {
 			continue
 		}
 
-		m.mu.Lock()
-		// No penalty for the first 30 minutes of each day
+		m.mu.RLock()
 		count := m.candidateOfflineTime[info.NodeID]
-		if count > 30 {
-			dInfo := m.CalculatePenalty(info.NodeID, info.Profit, (max(info.OfflineDuration+1-info.FreeDeductionTime, 0)), info.OnlineDuration)
+		m.mu.RUnlock()
+
+		toUpdate = append(toUpdate, updateInfo{
+			nodeID:          info.NodeID,
+			count:           count,
+			profit:          info.Profit,
+			offlineDuration: info.OfflineDuration,
+			freeDeduction:   info.FreeDeductionTime,
+			onlineDuration:  info.OnlineDuration,
+		})
+	}
+
+	// Now apply updates
+	m.mu.Lock()
+	for _, item := range toUpdate {
+		if item.count > 30 {
+			dInfo := m.CalculatePenalty(item.nodeID, item.profit, (max(item.offlineDuration+1-item.freeDeduction, 0)), item.onlineDuration)
 			if dInfo != nil {
 				detailsList = append(detailsList, dInfo)
 			}
 		}
-
-		offlineNodes[info.NodeID] = 0
-		m.candidateOfflineTime[info.NodeID]++
-		m.mu.Unlock()
+		offlineNodes[item.nodeID] = 0
+		m.candidateOfflineTime[item.nodeID]++
 	}
+	m.mu.Unlock()
 
 	if len(offlineNodes) > 0 {
 		err := m.UpdateNodePenalty(offlineNodes)
@@ -74,8 +99,10 @@ func (m *Manager) penaltyNode() {
 		}
 	}
 
-	err = m.AddNodeProfitDetails(detailsList)
-	if err != nil {
-		log.Errorf("AddNodeProfit err:%s", err.Error())
+	if len(detailsList) > 0 {
+		err = m.AddNodeProfitDetails(detailsList)
+		if err != nil {
+			log.Errorf("AddNodeProfit err:%s", err.Error())
+		}
 	}
 }

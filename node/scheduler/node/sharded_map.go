@@ -94,12 +94,17 @@ func (sm *shardedNodeMap) LoadAndDelete(key string) (interface{}, bool) {
 func (sm *shardedNodeMap) Range(f func(key string, value interface{}) bool) {
 	for _, shard := range sm.shards {
 		shard.mu.RLock()
-		for k, v := range shard.items {
-			if !f(k, v) {
-				shard.mu.RUnlock()
+		// Copy pointers to avoid holding lock during callback
+		nodes := make([]*Node, 0, len(shard.items))
+		for _, v := range shard.items {
+			nodes = append(nodes, v)
+		}
+		shard.mu.RUnlock()
+
+		for _, node := range nodes {
+			if !f(node.NodeID, node) {
 				return
 			}
 		}
-		shard.mu.RUnlock()
 	}
 }

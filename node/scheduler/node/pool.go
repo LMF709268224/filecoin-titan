@@ -3,6 +3,8 @@ package node
 import (
 	"sync"
 	"sync/atomic"
+
+	"github.com/Filecoin-Titan/titan/api/types"
 )
 
 // WorkerPool implements a simple goroutine pool to limit concurrency
@@ -103,7 +105,49 @@ var (
 			return &buf
 		},
 	}
+
+	// Pool for NodeDynamicInfo slices
+	DynamicInfoSlicePool = sync.Pool{
+		New: func() interface{} {
+			s := make([]types.NodeDynamicInfo, 0, 1000)
+			return &s
+		},
+	}
+
+	// Pool for ProfitDetails slices
+	ProfitDetailsSlicePool = sync.Pool{
+		New: func() interface{} {
+			s := make([]*types.ProfitDetails, 0, 1000)
+			return &s
+		},
+	}
 )
+
+// GetDynamicInfoSlice gets a NodeDynamicInfo slice from the pool
+func GetDynamicInfoSlice() *[]types.NodeDynamicInfo {
+	return DynamicInfoSlicePool.Get().(*[]types.NodeDynamicInfo)
+}
+
+// PutDynamicInfoSlice returns a NodeDynamicInfo slice to the pool
+func PutDynamicInfoSlice(s *[]types.NodeDynamicInfo) {
+	if s != nil {
+		*s = (*s)[:0] // reset length
+		DynamicInfoSlicePool.Put(s)
+	}
+}
+
+// GetProfitDetailsSlice gets a ProfitDetails slice from the pool
+func GetProfitDetailsSlice() *[]*types.ProfitDetails {
+	return ProfitDetailsSlicePool.Get().(*[]*types.ProfitDetails)
+}
+
+// PutProfitDetailsSlice returns a ProfitDetails slice to the pool
+func PutProfitDetailsSlice(s *[]*types.ProfitDetails) {
+	if s != nil {
+		*s = (*s)[:0] // reset length
+		ProfitDetailsSlicePool.Put(s)
+	}
+}
 
 // GetBuffer gets a buffer from the appropriate pool
 func GetBuffer(size int) *[]byte {
