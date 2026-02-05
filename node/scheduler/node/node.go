@@ -242,8 +242,20 @@ func (n *Node) GetNumberOfIPChanges() (int64, time.Time) {
 	return n.countOfIPChanges, n.resetCountOfIPChangesTime
 }
 
+// Close closes the node RPC connection
+func (n *Node) Close() error {
+	if n.ClientCloser != nil {
+		n.ClientCloser()
+	}
+	return nil
+}
+
 // ConnectRPC connects to the node RPC
 func (n *Node) ConnectRPC(transport *quic.Transport, addr string, nodeType types.NodeType) error {
+	if n.ClientCloser != nil {
+		n.ClientCloser()
+	}
+
 	httpClient, err := client.NewHTTP3ClientWithPacketConn(transport)
 	if err != nil {
 		return err
