@@ -91,7 +91,7 @@ func NewManager(nodeMgr *node.Manager, configFunc dtypes.GetSchedulerConfigFunc,
 		close:         make(chan struct{}),
 		updateCh:      make(chan struct{}, 1),
 		notify:        p,
-		resultQueue:   make(chan *api.ValidationResult),
+		resultQueue:   make(chan *api.ValidationResult, 1000), // buffered channel
 		leadershipMgr: lmgr,
 	}
 

@@ -158,6 +158,7 @@ func (m *Manager) nodesKeepalive(minute int, isSave bool) {
 func (m *Manager) SetNodeOffline(node *Node) {
 	m.IPMgr.RemoveNodeIP(node.NodeID, node.ExternalIP)
 	m.GeoMgr.RemoveNodeGeo(node.NodeID, node.Type, node.AreaID)
+	node.Close()
 
 	switch node.Type {
 	case types.NodeCandidate:
