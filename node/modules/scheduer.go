@@ -10,6 +10,7 @@ import (
 	"github.com/Filecoin-Titan/titan/node/modules/dtypes"
 	"github.com/Filecoin-Titan/titan/node/modules/helpers"
 	"github.com/Filecoin-Titan/titan/node/repo"
+	"github.com/Filecoin-Titan/titan/node/scheduler"
 	"github.com/Filecoin-Titan/titan/node/scheduler/assets"
 	"github.com/Filecoin-Titan/titan/node/scheduler/db"
 	"github.com/Filecoin-Titan/titan/node/scheduler/leadership"
@@ -209,4 +210,19 @@ func RegisterToEtcd(mctx helpers.MetricsCtx, lc fx.Lifecycle, configFunc dtypes.
 	})
 
 	return eCli, nil
+}
+
+// NewGoroutineMonitor creates and starts a goroutine monitor
+func NewGoroutineMonitor(mctx helpers.MetricsCtx, lc fx.Lifecycle, nm *node.Manager) *scheduler.GoroutineMonitor {
+	monitor := scheduler.NewGoroutineMonitor(nm)
+
+	ctx := helpers.LifecycleCtx(mctx, lc)
+	lc.Append(fx.Hook{
+		OnStart: func(context.Context) error {
+			go monitor.Start(ctx)
+			return nil
+		},
+	})
+
+	return monitor
 }

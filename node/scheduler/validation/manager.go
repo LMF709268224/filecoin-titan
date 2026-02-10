@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Filecoin-Titan/titan/api"
+	"github.com/Filecoin-Titan/titan/api/types"
 	"github.com/Filecoin-Titan/titan/lotuscli"
 	"github.com/Filecoin-Titan/titan/node/modules/dtypes"
 	"github.com/Filecoin-Titan/titan/node/scheduler/leadership"
@@ -51,6 +52,10 @@ type Manager struct {
 	enableValidation bool
 
 	cache atomic.Value // Stores *chainCache
+
+	profitBatch     []*types.ProfitDetails
+	resultInfoBatch []*types.ValidationResultInfo
+	batchMu         sync.Mutex
 }
 
 type chainCache struct {
@@ -86,13 +91,15 @@ func (m *Manager) cleanValidator() {
 // NewManager return new node manager instance
 func NewManager(nodeMgr *node.Manager, configFunc dtypes.GetSchedulerConfigFunc, p *pubsub.PubSub, lmgr *leadership.Manager) *Manager {
 	manager := &Manager{
-		nodeMgr:       nodeMgr,
-		config:        configFunc,
-		close:         make(chan struct{}),
-		updateCh:      make(chan struct{}, 1),
-		notify:        p,
-		resultQueue:   make(chan *api.ValidationResult, 1000), // buffered channel
-		leadershipMgr: lmgr,
+		nodeMgr:         nodeMgr,
+		config:          configFunc,
+		close:           make(chan struct{}),
+		updateCh:        make(chan struct{}, 1),
+		notify:          p,
+		resultQueue:     make(chan *api.ValidationResult, 1000), // buffered channel
+		leadershipMgr:   lmgr,
+		profitBatch:     make([]*types.ProfitDetails, 0),
+		resultInfoBatch: make([]*types.ValidationResultInfo, 0),
 	}
 
 	manager.initCfg()
@@ -114,6 +121,7 @@ func (m *Manager) initCfg() {
 // Start start validate and elect task
 func (m *Manager) Start(ctx context.Context) {
 	go m.startValidationTicker()
+	go m.startBatchFlushTicker()
 
 	m.handleResults()
 }
@@ -191,4 +199,54 @@ func (m *Manager) getTipsetByHeight(height uint64) (*lotuscli.TipSet, error) {
 	}
 
 	return nil, xerrors.Errorf("getTipsetByHeight can't found a non-empty tipset from height: %d", height)
+}
+
+func (m *Manager) addProfitToBatch(profit *types.ProfitDetails) {
+	m.batchMu.Lock()
+	defer m.batchMu.Unlock()
+	m.profitBatch = append(m.profitBatch, profit)
+}
+
+func (m *Manager) addResultInfoToBatch(resultInfo *types.ValidationResultInfo) {
+	m.batchMu.Lock()
+	defer m.batchMu.Unlock()
+	m.resultInfoBatch = append(m.resultInfoBatch, resultInfo)
+}
+
+func (m *Manager) startBatchFlushTicker() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			m.flushBatch()
+		case <-m.close:
+			m.flushBatch()
+			return
+		}
+	}
+}
+
+func (m *Manager) flushBatch() {
+	m.batchMu.Lock()
+	profits := m.profitBatch
+	results := m.resultInfoBatch
+	m.profitBatch = make([]*types.ProfitDetails, 0)
+	m.resultInfoBatch = make([]*types.ValidationResultInfo, 0)
+	m.batchMu.Unlock()
+
+	if len(profits) > 0 {
+		if err := m.nodeMgr.AddNodeProfitDetails(profits); err != nil {
+			log.Errorf("flushBatch AddNodeProfitDetails err: %v", err)
+		}
+	}
+
+	if len(results) > 0 {
+		for _, result := range results {
+			if err := m.nodeMgr.UpdateValidationResultInfo(result); err != nil {
+				log.Errorf("flushBatch UpdateValidationResultInfo err: %v", err)
+			}
+		}
+	}
 }

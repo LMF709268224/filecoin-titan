@@ -1,9 +1,7 @@
 package sync
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"sync"
 	"time"
 
@@ -146,7 +144,7 @@ func (ds *DataSync) performDataSync(nodeID string) error {
 	if ok, err := node.CompareTopHash(ctx, topChecksum); err != nil {
 		return xerrors.Errorf("compare top hash %w", err)
 	} else if ok {
-		log.Infof("node %s asset is sync", nodeID)
+		log.Debugf("node %s asset is sync", nodeID)
 		return nil
 	}
 
@@ -164,7 +162,7 @@ func (ds *DataSync) performDataSync(nodeID string) error {
 		log.Errorf("UpdateSyncTime error %s", err.Error())
 	}
 
-	log.Warnf("node %s mismatch buckets len:%d", nodeID, len(mismatchBuckets))
+	log.Debugf("node %s mismatch buckets len:%d", nodeID, len(mismatchBuckets))
 	return nil
 }
 
@@ -175,21 +173,5 @@ func (ds *DataSync) fetchTopHash(nodeID string) (string, error) {
 
 // retrieves the hashes of buckets for a nodeID.
 func (ds *DataSync) fetchBucketHashes(nodeID string) (map[uint32]string, error) {
-	hashBytes, err := ds.nodeManager.LoadBucketHashes(nodeID)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(hashBytes) == 0 {
-		return make(map[uint32]string), nil
-	}
-
-	buffer := bytes.NewBuffer(hashBytes)
-	dec := gob.NewDecoder(buffer)
-
-	out := make(map[uint32]string)
-	if err = dec.Decode(&out); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return ds.nodeManager.GetBucketHashes(nodeID)
 }

@@ -79,6 +79,7 @@ func ConfigScheduler(c interface{}) Option {
 		Override(new(dtypes.SetSchedulerConfigFunc), modules.NewSetSchedulerConfigFunc),
 		Override(new(dtypes.GetSchedulerConfigFunc), modules.NewGetSchedulerConfigFunc),
 		Override(new(*rsa.PrivateKey), modules.NewPrivateKey),
+		Override(new(*scheduler.GoroutineMonitor), modules.NewGoroutineMonitor),
 		Override(new(dtypes.GeoDBPath), func() dtypes.GeoDBPath {
 			return dtypes.GeoDBPath(cfg.GeoDBPath)
 		}),

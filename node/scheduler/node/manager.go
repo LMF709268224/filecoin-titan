@@ -1,8 +1,11 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"crypto/rsa"
+	"encoding/gob"
+	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -72,6 +75,8 @@ type Manager struct {
 	serverTodayOnlineTimeWindow int
 	candidateOfflineTime        map[string]int // offline minute
 	lastKeepaliveTime           time.Time      // for anti-killing logic
+	nodeExistsCache             sync.Map       // cache for node existence (stores time.Time for negative cache)
+	bucketHashesCache           sync.Map       // cache for decoded bucket hashes
 }
 
 // NewManager creates a new instance of the node manager
@@ -94,7 +99,9 @@ func NewManager(sdb *db.SQLDB, serverID dtypes.ServerID, pk *rsa.PrivateKey, pb 
 		IPMgr:                newIPMgr(ipLimit),
 		candidateOfflineTime: map[string]int{},
 		// Initialize ShardedMap with 128 shards for better concurrency and unified management
-		onlineNodes: newShardedNodeMap(128),
+		onlineNodes:       newShardedNodeMap(128),
+		nodeExistsCache:   sync.Map{},
+		bucketHashesCache: sync.Map{},
 	}
 
 	nodeManager.updateServerOnlineCounts()
@@ -534,4 +541,56 @@ func (m *Manager) EnrichNodeInfos(infos []types.NodeInfo, onlineCountMap map[str
 			ni.Mx = RateOfL2Mx(ni.OnlineDuration)
 		}
 	}
+}
+
+// NodeExists checks if a node exists, using a cache with negative caching support.
+func (m *Manager) NodeExists(nodeID string) error {
+	if val, ok := m.nodeExistsCache.Load(nodeID); ok {
+		if b, ok := val.(bool); ok && b {
+			return nil
+		}
+		if t, ok := val.(time.Time); ok {
+			if time.Now().Before(t) {
+				return fmt.Errorf("node not exists")
+			}
+		}
+	}
+
+	err := m.SQLDB.NodeExists(nodeID)
+	if err == nil {
+		m.nodeExistsCache.Store(nodeID, true)
+	} else {
+		// Negative cache for 5 minutes
+		m.nodeExistsCache.Store(nodeID, time.Now().Add(5*time.Minute))
+	}
+	return err
+}
+
+// GetBucketHashes retrieves and decodes bucket hashes for a node, using a cache.
+func (m *Manager) GetBucketHashes(nodeID string) (map[uint32]string, error) {
+	if val, ok := m.bucketHashesCache.Load(nodeID); ok {
+		return val.(map[uint32]string), nil
+	}
+
+	data, err := m.LoadBucketHashes(nodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return make(map[uint32]string), nil
+	}
+
+	out := make(map[uint32]string)
+	buffer := bytes.NewBuffer(data)
+	dec := gob.NewDecoder(buffer)
+	if err := dec.Decode(&out); err != nil {
+		return nil, err
+	}
+
+	if len(out) > 0 {
+		m.bucketHashesCache.Store(nodeID, out)
+	}
+
+	return out, nil
 }

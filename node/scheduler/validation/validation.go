@@ -351,13 +351,9 @@ func (m *Manager) getValidationResultInfo(nodeID, vID string) (*types.Validation
 // RandomAsset get node asset with random seed
 func (m *Manager) RandomAsset(nodeID string, seed int64) (*cid.Cid, error) {
 	r := rand.New(rand.NewSource(seed))
-	bytes, err := m.nodeMgr.LoadBucketHashes(nodeID)
-	if err != nil {
-		return nil, err
-	}
 
-	hashes := make(map[uint32]string)
-	if err := decode(bytes, &hashes); err != nil {
+	hashes, err := m.nodeMgr.GetBucketHashes(nodeID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -377,13 +373,13 @@ func (m *Manager) RandomAsset(nodeID string, seed int64) (*cid.Cid, error) {
 	bucketID := bucketIDs[index]
 
 	id := fmt.Sprintf("%s:%d", nodeID, bucketID)
-	bytes, err = m.nodeMgr.LoadBucket(id)
+	data, err := m.nodeMgr.LoadBucket(id)
 	if err != nil {
 		return nil, err
 	}
 
 	assetHashes := make([]string, 0)
-	if err = decode(bytes, &assetHashes); err != nil {
+	if err = decode(data, &assetHashes); err != nil {
 		return nil, err
 	}
 
@@ -394,12 +390,12 @@ func (m *Manager) RandomAsset(nodeID string, seed int64) (*cid.Cid, error) {
 	index = r.Intn(len(assetHashes))
 	hash := assetHashes[index]
 
-	bytes, err = hex.DecodeString(hash)
+	data, err = hex.DecodeString(hash)
 	if err != nil {
 		return nil, err
 	}
 
-	c := cid.NewCidV0(bytes)
+	c := cid.NewCidV0(data)
 	return &c, nil
 }
 
@@ -514,11 +510,7 @@ func (m *Manager) updateResultInfo(status types.ValidationStatus, vr *api.Valida
 			dInfo := m.nodeMgr.GetNodeValidatableProfitDetails(node, size)
 			if dInfo != nil {
 				profit = dInfo.Profit
-
-				err := m.nodeMgr.AddNodeProfitDetails([]*types.ProfitDetails{dInfo})
-				if err != nil {
-					log.Errorf("updateResultInfo AddNodeProfit %s,%d, %.4f err:%s", dInfo.NodeID, dInfo.PType, dInfo.Profit, err.Error())
-				}
+				m.addProfitToBatch(dInfo)
 			}
 
 			node.UploadTraffic += int64(size)
@@ -548,7 +540,8 @@ func (m *Manager) updateResultInfo(status types.ValidationStatus, vr *api.Valida
 		m.nodeMgr.UpdateNodeBandwidths(vr.Validator, bandwidth, 0)
 	}
 
-	return m.nodeMgr.UpdateValidationResultInfo(resultInfo)
+	m.addResultInfoToBatch(resultInfo)
+	return nil
 }
 
 // PushResult push validation result info to queue
