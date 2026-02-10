@@ -2108,7 +2108,8 @@ func (s *Scheduler) LoadNodeBandwidthScores(ctx context.Context, nodeID string, 
 }
 
 func (s *Scheduler) AddNodeServiceEvent(ctx context.Context, event *types.ServiceEvent) error {
-	err := s.db.NodeExists(event.NodeID)
+	// check node exists
+	err := s.NodeManager.NodeExists(event.NodeID)
 	if err != nil {
 		return err
 	}

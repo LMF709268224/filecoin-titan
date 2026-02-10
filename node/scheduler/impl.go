@@ -77,6 +77,9 @@ type Scheduler struct {
 
 	PrivateKey *rsa.PrivateKey
 	Transport  *quic.Transport
+
+	// GoroutineMonitor forces FX to instantiate the monitor and run its startup hooks
+	GoroutineMonitor *GoroutineMonitor
 }
 
 var _ api.Scheduler = &Scheduler{}
