@@ -67,7 +67,9 @@ func (m *Manager) removeAssetFromView(nodeID string, assetCID string) error {
 	}
 
 	if len(bucketHashes) == 0 {
-		return m.DeleteAssetsView(nodeID)
+		err := m.DeleteAssetsView(nodeID)
+		m.nodeMgr.DeleteBucketHashesCache(nodeID)
+		return err
 	}
 
 	topHash, err := calculateOverallHash(bucketHashes)
@@ -80,7 +82,9 @@ func (m *Manager) removeAssetFromView(nodeID string, assetCID string) error {
 		return err
 	}
 
-	return m.SaveAssetsView(nodeID, topHash, bytes)
+	err = m.SaveAssetsView(nodeID, topHash, bytes)
+	m.nodeMgr.DeleteBucketHashesCache(nodeID)
+	return err
 }
 
 // addAssetToView adds an asset to the node's asset view
@@ -138,6 +142,7 @@ func (m *Manager) addAssetToView(nodeID string, assetCID string) error {
 	if err := m.SaveAssetsView(nodeID, topHash, bytes); err != nil {
 		return err
 	}
+	m.nodeMgr.DeleteBucketHashesCache(nodeID)
 
 	bytes, err = encode(assetHashes)
 	if err != nil {

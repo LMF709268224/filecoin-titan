@@ -21,6 +21,7 @@ import (
 	"github.com/docker/go-units"
 	"github.com/google/uuid"
 	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-jsonrpc"
@@ -69,6 +70,7 @@ type Node struct {
 	IsStorageNode      bool
 	IsTestNode         bool
 	ForceOffline       bool
+	http3Transport     *http3.Transport
 
 	types.NodeDynamicInfo
 }
@@ -242,23 +244,30 @@ func (n *Node) GetNumberOfIPChanges() (int64, time.Time) {
 	return n.countOfIPChanges, n.resetCountOfIPChangesTime
 }
 
-// Close closes the node RPC connection
+// Close closes the node RPC connection and underlying QUIC transport
 func (n *Node) Close() error {
 	if n.ClientCloser != nil {
 		n.ClientCloser()
+		n.ClientCloser = nil
+	}
+	if n.http3Transport != nil {
+		n.http3Transport.Close()
+		n.http3Transport = nil
 	}
 	return nil
 }
 
 // ConnectRPC connects to the node RPC
 func (n *Node) ConnectRPC(transport *quic.Transport, addr string, nodeType types.NodeType) error {
-	if n.ClientCloser != nil {
-		n.ClientCloser()
-	}
+	n.Close()
 
 	httpClient, err := client.NewHTTP3ClientWithPacketConn(transport)
 	if err != nil {
 		return err
+	}
+
+	if t, ok := httpClient.Transport.(*http3.Transport); ok {
+		n.http3Transport = t
 	}
 
 	rpcURL := fmt.Sprintf("https://%s/rpc/v0", addr)

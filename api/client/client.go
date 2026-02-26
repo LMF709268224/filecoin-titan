@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/Filecoin-Titan/titan/api"
@@ -22,8 +21,6 @@ import (
 
 var (
 	defaultHTTP3Client *http.Client
-	http3Clients       = make(map[*quic.Transport]*http.Client)
-	http3ClientsMu     sync.RWMutex
 )
 
 // NewScheduler creates a new http jsonrpc client.
@@ -196,23 +193,10 @@ func NewHTTP3Client() *http.Client {
 	return defaultHTTP3Client
 }
 
-// NewHTTP3ClientWithPacketConn new http3 client for nat trave
+// NewHTTP3ClientWithPacketConn new http3 client for nat trave.
+// It returns a fresh http.Client with its own http3.Transport for each caller
+// so that connections can be effectively closed by closing the Transport.
 func NewHTTP3ClientWithPacketConn(transport *quic.Transport) (*http.Client, error) {
-	http3ClientsMu.RLock()
-	client, ok := http3Clients[transport]
-	http3ClientsMu.RUnlock()
-	if ok {
-		return client, nil
-	}
-
-	http3ClientsMu.Lock()
-	defer http3ClientsMu.Unlock()
-
-	// Double check after lock
-	if client, ok := http3Clients[transport]; ok {
-		return client, nil
-	}
-
 	dial := func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
 		remoteAddr, err := net.ResolveUDPAddr("udp", addr)
 		if err != nil {
@@ -238,8 +222,7 @@ func NewHTTP3ClientWithPacketConn(transport *quic.Transport) (*http.Client, erro
 		Dial: dial,
 	}
 
-	client = &http.Client{Transport: roundTripper, Timeout: 20 * time.Second}
-	http3Clients[transport] = client
+	client := &http.Client{Transport: roundTripper, Timeout: 20 * time.Second}
 
 	return client, nil
 }

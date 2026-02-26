@@ -246,6 +246,11 @@ func (m *Manager) deleteEdgeNode(node *Node) {
 		return
 	}
 	atomic.AddInt64(&m.Edges, -1)
+
+	m.bucketHashesCache.Delete(nodeID)
+
+	m.IPMgr.RemoveNodeIP(nodeID, node.ExternalIP)
+	m.GeoMgr.RemoveNodeGeo(nodeID, node.Type, node.AreaID)
 }
 
 // deleteCandidateNode removes a candidate node from the manager's list of candidate nodes
@@ -259,6 +264,11 @@ func (m *Manager) deleteCandidateNode(node *Node) {
 		return
 	}
 	atomic.AddInt64(&m.Candidates, -1)
+
+	m.bucketHashesCache.Delete(nodeID)
+
+	m.IPMgr.RemoveNodeIP(nodeID, node.ExternalIP)
+	m.GeoMgr.RemoveNodeGeo(nodeID, node.Type, node.AreaID)
 }
 
 // deleteL5Node removes a l5 node from the manager's list of l5 nodes
@@ -269,6 +279,8 @@ func (m *Manager) deleteL5Node(node *Node) {
 		return
 	}
 	atomic.AddInt64(&m.L5Count, -1)
+
+	m.bucketHashesCache.Delete(nodeID)
 }
 
 func (m *Manager) deleteL3Node(node *Node) {
@@ -278,6 +290,8 @@ func (m *Manager) deleteL3Node(node *Node) {
 		return
 	}
 	atomic.AddInt64(&m.L3Count, -1)
+
+	m.bucketHashesCache.Delete(nodeID)
 }
 
 // DistributeNodeWeight Distribute Node Weight
@@ -593,4 +607,9 @@ func (m *Manager) GetBucketHashes(nodeID string) (map[uint32]string, error) {
 	}
 
 	return out, nil
+}
+
+// DeleteBucketHashesCache deletes the bucket hashes cache for a node.
+func (m *Manager) DeleteBucketHashesCache(nodeID string) {
+	m.bucketHashesCache.Delete(nodeID)
 }

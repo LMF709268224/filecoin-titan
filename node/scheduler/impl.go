@@ -110,29 +110,31 @@ type NodeConnectContext struct {
 	alreadyConnect bool
 }
 
-func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions, nodeType types.NodeType) error {
-	context := &NodeConnectContext{
+func (s *Scheduler) nodeConnect(ctx context.Context, opts *types.ConnectOptions, nodeType types.NodeType) (err error) {
+	connectCtx := &NodeConnectContext{
 		nodeID:     handler.GetNodeID(ctx),
 		remoteAddr: handler.GetRemoteAddr(ctx),
 		nodeType:   nodeType,
 		opts:       opts,
 	}
 
-	err := s.validateNodeExistence(context)
+	err = s.validateNodeExistence(connectCtx)
 	if err != nil {
-		return xerrors.Errorf("nodeConnect err node: %s, type: %d, error: %s", context.nodeID, nodeType, err.Error())
+		return xerrors.Errorf("nodeConnect err node: %s, type: %d, error: %s", connectCtx.nodeID, nodeType, err.Error())
 	}
 
-	err = s.storeNodeIP(context)
+	err = s.storeNodeIP(connectCtx)
 	if err != nil {
 		return err
 	}
 
-	s.initNode(context)
+	s.initNode(connectCtx)
 
-	defer s.deferCleanup(context, err)
+	defer func() {
+		s.deferCleanup(connectCtx, err)
+	}()
 
-	err = s.processNodeConnection(context)
+	err = s.processNodeConnection(connectCtx)
 	return err
 }
 

@@ -814,7 +814,7 @@ func (s *Scheduler) NodeLogin(ctx context.Context, nodeID, sign string) (string,
 		case <-time.After(30 * time.Second):
 		case <-ctx.Done():
 		}
-		return "", xerrors.Errorf("NodeLogin the number of nodes exceeds the limit")
+		return "", xerrors.Errorf("NodeLogin the total number of nodes exceeds the limit;")
 	}
 
 	publicKey, err := titanrsa.Pem2PublicKey([]byte(pem))
