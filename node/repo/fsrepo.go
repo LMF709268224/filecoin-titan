@@ -4,6 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+
 	"github.com/ipfs/go-datastore"
 	fslock "github.com/ipfs/go-fs-lock"
 	logging "github.com/ipfs/go-log/v2"
@@ -11,12 +18,6 @@ import (
 	"github.com/multiformats/go-base32"
 	"github.com/multiformats/go-multiaddr"
 	"golang.org/x/xerrors"
-	"io"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"strings"
-	"sync"
 
 	"github.com/Filecoin-Titan/titan/node/config"
 
@@ -50,6 +51,8 @@ func NewRepoTypeFromString(t string) RepoType {
 		return Candidate
 	case "Wallet":
 		return Wallet
+	case "Supervisor":
+		return Supervisor
 	default:
 		panic("unknown RepoType")
 	}
@@ -192,6 +195,30 @@ func (locator) RepoFlags() []string {
 
 func (locator) APIInfoEnvVars() (primary string, fallbacks []string, deprecated []string) {
 	return "LOCATOR_API_INFO", nil, nil
+}
+
+var Supervisor supervisor
+
+type supervisor struct{}
+
+func (supervisor) Type() string {
+	return "Supervisor"
+}
+
+func (supervisor) Config() interface{} {
+	return config.DefaultSupervisorCfg()
+}
+
+func (supervisor) APIFlags() []string {
+	return []string{"supervisor-api-url"}
+}
+
+func (supervisor) RepoFlags() []string {
+	return []string{"supervisor-repo"}
+}
+
+func (supervisor) APIInfoEnvVars() (primary string, fallbacks []string, deprecated []string) {
+	return "SUPERVISOR_API_INFO", nil, nil
 }
 
 var log = logging.Logger("repo")

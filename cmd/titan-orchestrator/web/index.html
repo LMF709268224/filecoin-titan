@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Titan Orchestrator | Dashboard</title>
+    <link rel="stylesheet" href="orchestrator.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body class="dark-theme">
+    <div class="container">
+        <header>
+            <div class="logo">
+                <span class="icon">🛰️</span>
+                <h1>Titan Orchestrator</h1>
+            </div>
+            <div class="status-badge" id="server-status">Connecting...</div>
+        </header>
+
+        <main>
+            <section class="controls">
+                <h2>Worker Instances</h2>
+                <button class="btn btn-primary" id="add-instance-btn">+ Add Instance</button>
+            </section>
+
+            <div class="grid" id="instance-grid">
+                <!-- Instances will be injected here -->
+            </div>
+        </main>
+
+        <footer>
+            <p>&copy; 2026 Filecoin-Titan Orchestrator. Decentralized Control Plane.</p>
+        </footer>
+    </div>
+
+    <!-- Modal for Editing/Adding Instance -->
+    <div id="modal-overlay" class="hidden">
+        <div class="modal">
+            <h3 id="modal-title">Edit Instance</h3>
+            <form id="instance-form">
+                <div class="form-group">
+                    <label for="inst-name">Instance Name (ID)</label>
+                    <input type="text" id="inst-name" placeholder="e.g. titan-edge-01" required>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="inst-hash">Binary Hash (MD5)</label>
+                        <input type="text" id="inst-hash" placeholder="6e805ef7..." required>
+                    </div>
+                    <div class="form-group">
+                        <label for="inst-url">Download URL</label>
+                        <input type="text" id="inst-url" placeholder="http://..." required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="config-hash">Config Hash (MD5)</label>
+                        <input type="text" id="config-hash" placeholder="Optional config hash">
+                    </div>
+                    <div class="form-group">
+                        <label for="config-url">Config URL</label>
+                        <input type="text" id="config-url" placeholder="Optional config URL">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Launch Arguments (JSON Array)</label>
+                    <textarea id="inst-args" rows="2"
+                        placeholder='["--config", "{config}"] or ["-c", "{remote_config}"]'></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Custom Instance Directory (Optional)</label>
+                    <input type="text" id="inst-dir"
+                        placeholder="e.g. /root/.titanedge (Defaults to internal worker dir)">
+                </div>
+                <div class="form-group">
+                    <label>Tags (Comma separated, e.g. edge, candidate)</label>
+                    <input type="text" id="inst-tags" placeholder="Optional tags">
+                </div>
+                <div class="form-group">
+                    <label>Template Parameters (JSON Object)</label>
+                    <textarea id="inst-params" rows="6" placeholder='{"port": 5577, ...}'></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="close-modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="save-instance">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="toast" class="toast hidden">Saved!</div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
