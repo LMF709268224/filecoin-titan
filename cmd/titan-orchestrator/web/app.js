@@ -31,13 +31,14 @@ function render() {
 
     Object.entries(state.instances).forEach(([id, info]) => {
         const card = document.createElement('div');
-        card.className = 'card';
+        const isEnabled = info.enabled !== false;
+        card.className = `card ${!isEnabled ? 'disabled' : ''}`;
 
         const paramsStr = JSON.stringify(info.params || {}, null, 2);
 
         card.innerHTML = `
             <div class="card-header">
-                <div class="card-title">${id}</div>
+                <div class="card-title">${id} ${!isEnabled ? '<span class="badge badge-error">OFFLINE</span>' : ''}</div>
                 <button class="btn btn-secondary btn-sm" onclick="editInstance('${id}')">Edit</button>
             </div>
             <div class="card-meta">BIN: ${info.hash?.substring(0, 8)}... | CFG: ${info.config_hash?.substring(0, 8) || 'N/A'}</div>
@@ -47,6 +48,7 @@ function render() {
             <div class="card-tags">
                 ${(info.tags || []).map(t => `<span class="badge">${t}</span>`).join('') || '<span class="badge badge-outline">Global</span>'}
             </div>
+            <div class="card-meta"><b>ENV:</b> ${JSON.stringify(info.env || {}) !== '{}' ? 'Configured' : 'None'}</div>
             <div class="card-params">${paramsStr}</div>
             <div class="card-actions">
                 <button class="btn btn-danger btn-sm" onclick="deleteInstance('${id}')">Delete</button>
@@ -63,12 +65,14 @@ window.editInstance = (id) => {
     document.getElementById('modal-title').textContent = 'Edit Instance';
     document.getElementById('inst-name').value = id;
     document.getElementById('inst-name').disabled = true;
+    document.getElementById('inst-enabled').checked = info.enabled !== false;
     document.getElementById('inst-hash').value = info.hash || '';
     document.getElementById('inst-url').value = info.url || '';
     document.getElementById('config-hash').value = info.config_hash || '';
     document.getElementById('config-url').value = info.config_url || '';
     document.getElementById('inst-dir').value = info.instance_dir || '';
     document.getElementById('inst-args').value = JSON.stringify(info.args || [], null, 2);
+    document.getElementById('inst-env').value = JSON.stringify(info.env || {}, null, 2);
     document.getElementById('inst-tags').value = (info.tags || []).join(', ');
     document.getElementById('inst-params').value = JSON.stringify(info.params || {}, null, 2);
     modalOverlay.classList.remove('hidden');
@@ -79,12 +83,14 @@ document.getElementById('add-instance-btn').onclick = () => {
     document.getElementById('modal-title').textContent = 'Add New Instance';
     document.getElementById('inst-name').value = '';
     document.getElementById('inst-name').disabled = false;
+    document.getElementById('inst-enabled').checked = true;
     document.getElementById('inst-hash').value = '';
     document.getElementById('inst-url').value = '';
     document.getElementById('config-hash').value = '';
     document.getElementById('config-url').value = '';
     document.getElementById('inst-dir').value = '';
     document.getElementById('inst-args').value = '[\n  "--config",\n  "{config}"\n]';
+    document.getElementById('inst-env').value = '{}';
     document.getElementById('inst-tags').value = '';
     document.getElementById('inst-params').value = '{\n  "port": 5577\n}';
     modalOverlay.classList.remove('hidden');
@@ -98,6 +104,7 @@ instanceForm.onsubmit = async (e) => {
     e.preventDefault();
 
     const id = document.getElementById('inst-name').value;
+    const isEnabled = document.getElementById('inst-enabled').checked;
     const hash = document.getElementById('inst-hash').value;
     const url = document.getElementById('inst-url').value;
     const configHash = document.getElementById('config-hash').value;
@@ -106,6 +113,14 @@ instanceForm.onsubmit = async (e) => {
     const tagsStr = document.getElementById('inst-tags').value;
     let params = {};
     let args = [];
+    let env = {};
+
+    try {
+        env = JSON.parse(document.getElementById('inst-env').value);
+    } catch (err) {
+        alert('Invalid JSON in Environment Variables');
+        return;
+    }
 
     try {
         params = JSON.parse(document.getElementById('inst-params').value);
@@ -127,12 +142,14 @@ instanceForm.onsubmit = async (e) => {
     // Update local state
     state.instances[id] = {
         ...state.instances[id],
+        enabled: isEnabled,
         hash,
         url,
         config_hash: configHash,
         config_url: configUrl,
         instance_dir: instDir,
         args,
+        env,
         tags,
         params
     };

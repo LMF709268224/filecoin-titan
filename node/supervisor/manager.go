@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -41,7 +42,8 @@ type InstanceTarget struct {
 	InstanceDir string                 `json:"instance_dir"` // Optional: custom dir for run_config.yaml and user_config.yaml
 	Env         map[string]string      `json:"env"`          // Optional: extra environment variables
 	Params      map[string]interface{} `json:"params"`
-	Tags        []string               `json:"tags"` // Optional: tags for selective running
+	Tags        []string               `json:"tags"`    // Optional: tags for selective running
+	Enabled     *bool                  `json:"enabled"` // Optional: global ON/OFF switch
 }
 
 type InstanceState struct {
@@ -66,16 +68,24 @@ type Manager struct {
 
 	mu        sync.Mutex
 	instances map[string]*InstanceState
+
+	// Log Rotation Settings
+	logMaxAge       time.Duration
+	logRotationTime time.Duration
+	logRotationSize int64
 }
 
-func NewManager(repoPath string, serverUrl string, allowedTags []string) *Manager {
+func NewManager(repoPath string, serverUrl string, allowedTags []string, logMaxAge, logRotationTime time.Duration, logRotationSize int64) *Manager {
 	return &Manager{
-		repoPath:     repoPath,
-		binPath:      filepath.Join(repoPath, "workers", "bin"),
-		instancePath: filepath.Join(repoPath, "workers", "instances"),
-		serverUrl:    serverUrl,
-		allowedTags:  allowedTags,
-		instances:    make(map[string]*InstanceState),
+		repoPath:        repoPath,
+		binPath:         filepath.Join(repoPath, "workers", "bin"),
+		instancePath:    filepath.Join(repoPath, "workers", "instances"),
+		serverUrl:       serverUrl,
+		allowedTags:     allowedTags,
+		instances:       make(map[string]*InstanceState),
+		logMaxAge:       logMaxAge,
+		logRotationTime: logRotationTime,
+		logRotationSize: logRotationSize,
 	}
 }
 
@@ -131,6 +141,15 @@ func (m *Manager) applyTopology(topo Topology) {
 				}
 				continue
 			}
+		}
+
+		// 3. Global Enable/Disable switch
+		if target.Enabled != nil && !*target.Enabled {
+			log.Infof("Instance %s is DISABLED in topology. Stopping if running.", name)
+			if exists {
+				m.stopInstance(name, state)
+			}
+			continue
 		}
 
 		if !exists {
@@ -285,15 +304,15 @@ func (m *Manager) applyTopology(topo Topology) {
 			// Build subprocess environment: inherit parent env + per-instance overrides
 			cmd.Env = buildEnv(finalEnv)
 
-			// Redirect stdout/stderr to per-instance log file
-			logFile, logErr := openInstanceLog(instanceDir, name)
+			// Redirect stdout/stderr to per-instance log file (with rotation)
+			logWriter, logErr := m.openInstanceLog(instanceDir, name)
 			if logErr != nil {
 				log.Warnf("Failed to open log file for %s: %v, falling back to stdout", name, logErr)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 			} else {
-				cmd.Stdout = logFile
-				cmd.Stderr = logFile
+				cmd.Stdout = logWriter
+				cmd.Stderr = logWriter
 			}
 
 			if err := cmd.Start(); err != nil {
@@ -369,17 +388,20 @@ func (m *Manager) provisionInstance(name string, serverArgs []string, serverInst
 		os.WriteFile(userConfigPath, []byte(
 			"# Titan Supervisor User Config\n"+
 				"# Use this file to override server-side settings locally.\n\n"+
-				"# Override the instance data directory:\n"+
-				"# instance_dir: \"/home/user/.titanedge\"\n\n"+
-				"# Override command-line arguments:\n"+
-				"# args: [\"--port\", \"9099\", \"--custom-flag\"]\n\n"+
-				"# Override or add environment variables:\n"+
-				"# env:\n"+
-				"#   DEBUG: \"true\"\n\n"+
-				"# Override or add parameters (can be used in args via {params.KEY}):\n"+
-				"# params:\n"+
-				"#   Port: 8888\n\n"+
-				"# Protect remote configuration asset from being overwritten:\n"+
+				"# 1. Override the instance data directory (e.g., for reusing identity)\n"+
+				"# instance_dir: \"/root/.titanedge\"\n\n"+
+				"# 2. Local Environment Overrides (e.g., for specialized logging or secrets)\n"+
+				"# These will override server-side environment variables.\n"+
+				"env:\n"+
+				"  # GOLOG_LOG_LEVEL: \"DEBUG\"\n"+
+				"  # MY_LOCAL_VAR: \"something\"\n\n"+
+				"# 3. Local Argument Overrides (Replace entire argument list)\n"+
+				"# args: [\"daemon\", \"start\", \"--custom-flag\"]\n\n"+
+				"# 4. Local Parameter Overrides (Substituted into args via {params.KEY})\n"+
+				"params:\n"+
+				"  # CODE: \"new-registration-code\"\n\n"+
+				"# 5. Configuration Protection\n"+
+				"# Set to true to prevent remote configuration assets from overwriting local changes.\n"+
 				"# protect_config: true\n",
 		), 0644)
 	}
@@ -640,16 +662,24 @@ func isProcessRunning(pid int) bool {
 	return err == nil
 }
 
-// openInstanceLog opens (or creates) a per-instance log file in append mode.
-// Log path: <instanceDir>/instance.log
-func openInstanceLog(instanceDir, name string) (*os.File, error) {
+func (m *Manager) openInstanceLog(instanceDir, name string) (io.Writer, error) {
 	logPath := filepath.Join(instanceDir, "instance.log")
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+
+	// Use rotatelogs for automatic management
+	rl, err := rotatelogs.New(
+		logPath+"-%Y%m%d-%H%M%S.log",
+		rotatelogs.WithLinkName(logPath),
+		rotatelogs.WithRotationTime(m.logRotationTime),
+		rotatelogs.WithMaxAge(m.logMaxAge),
+		rotatelogs.WithRotationSize(m.logRotationSize),
+	)
 	if err != nil {
 		return nil, err
 	}
-	log.Infof("Instance %s logging to: %s", name, logPath)
-	return f, nil
+
+	log.Infof("Instance %s logging initialized: path=%s, maxAge=%v, rotationTime=%v, maxSize=%v MiB",
+		name, logPath, m.logMaxAge, m.logRotationTime, m.logRotationSize/(1024*1024))
+	return rl, nil
 }
 
 // buildEnv returns os.Environ() merged with the provided extra key=value pairs.

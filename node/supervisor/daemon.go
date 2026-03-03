@@ -11,7 +11,7 @@ import (
 var log = logging.Logger("supervisor")
 
 // StartDaemon initializes the repo and starts the main Supervisor control loop.
-func StartDaemon(ctx context.Context, repoPath string, serverUrl string, allowedTags []string) error {
+func StartDaemon(ctx context.Context, repoPath string, serverUrl string, allowedTags []string, logMaxAge, logRotationTime time.Duration, logRotationSize int64) error {
 	r, err := repo.NewFS(repoPath)
 	if err != nil {
 		return err
@@ -36,7 +36,7 @@ func StartDaemon(ctx context.Context, repoPath string, serverUrl string, allowed
 	log.Infof("Supervisor Daemon started at %s", lr.Path())
 
 	// Initialize the Manager that handles the Data Plane (instances/bins)
-	manager := NewManager(lr.Path(), serverUrl, allowedTags)
+	manager := NewManager(lr.Path(), serverUrl, allowedTags, logMaxAge, logRotationTime, logRotationSize)
 	if err := manager.InitDirs(); err != nil {
 		return err
 	}
