@@ -231,3 +231,10 @@ type SchedulerCfg struct {
 
 	NodeCountLimit int
 }
+
+// SupervisorCfg supervisor config
+type SupervisorCfg struct {
+	ServerURL     string
+	ListenAddress string
+	Timeout       string
+}
