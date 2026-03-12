@@ -25,7 +25,6 @@ var webFiles embed.FS
 
 const (
 	FlagPort        = "port"
-	FlagRedisURL    = "redis-url"
 	FlagDatabaseURL = "db-url"
 	FlagConfig      = "config"
 	FlagAdminUser   = "admin-user"
@@ -34,12 +33,7 @@ const (
 )
 
 type Config struct {
-	Port  string `yaml:"Port"`
-	Redis struct {
-		Host string `yaml:"Host"`
-		Pass string `yaml:"Pass"`
-		Key  string `yaml:"Key"`
-	} `yaml:"Redis"`
+	Port     string `yaml:"Port"`
 	Database struct {
 		User string `yaml:"User"`
 		Pass string `yaml:"Pass"`
@@ -65,12 +59,6 @@ func main() {
 				Name:  FlagPort,
 				Value: "8088",
 				Usage: "Port to listen on",
-			},
-			&cli.StringFlag{
-				Name:    FlagRedisURL,
-				Value:   "",
-				Usage:   "Redis URL (e.g. redis://127.0.0.1:6379/0) [REQUIRED]",
-				EnvVars: []string{"TITAN_REDIS_URL"},
 			},
 			&cli.StringFlag{
 				Name:    FlagDatabaseURL,
@@ -111,7 +99,6 @@ func main() {
 
 func runServer(cctx *cli.Context) error {
 	port := cctx.String(FlagPort)
-	redisURL := cctx.String(FlagRedisURL)
 	dbURL := cctx.String(FlagDatabaseURL)
 	configPath := cctx.String(FlagConfig)
 	adminUser := cctx.String(FlagAdminUser)
@@ -133,15 +120,6 @@ func runServer(cctx *cli.Context) error {
 			port = cfg.Port
 		}
 
-		if cfg.Redis.Host != "" {
-			proto := "redis"
-			auth := ""
-			if cfg.Redis.Pass != "" {
-				auth = ":" + cfg.Redis.Pass + "@"
-			}
-			redisURL = fmt.Sprintf("%s://%s%s/0", proto, auth, cfg.Redis.Host)
-		}
-
 		if cfg.Database.Host != "" {
 			dbURL = fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true",
 				cfg.Database.User, cfg.Database.Pass, cfg.Database.Host, cfg.Database.DB)
@@ -159,12 +137,12 @@ func runServer(cctx *cli.Context) error {
 	}
 
 	// 2. Strict validation
-	if redisURL == "" || dbURL == "" || jwtSecret == "" {
-		return fmt.Errorf("FATAL: --redis-url, --db-url, and --jwt-secret are all REQUIRED for production stack")
+	if dbURL == "" || jwtSecret == "" {
+		return fmt.Errorf("FATAL: --db-url, and --jwt-secret are all REQUIRED for production stack")
 	}
 
 	// 3. Initialize Production Storage
-	storage, err := orchestrator.NewProductionStorage(dbURL, redisURL, "")
+	storage, err := orchestrator.NewProductionStorage(dbURL, "", "")
 	if err != nil {
 		return fmt.Errorf("failed to initialize production storage: %v", err)
 	}

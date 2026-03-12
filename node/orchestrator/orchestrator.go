@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"crypto"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -13,7 +14,6 @@ import (
 
 	titanrsa "github.com/Filecoin-Titan/titan/node/rsa"
 	"github.com/gbrlsnchs/jwt/v3"
-	"github.com/go-redis/redis/v8"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/websocket"
 	logging "github.com/ipfs/go-log/v2"
@@ -33,6 +33,9 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+//go:embed schema.sql
+var schemaSQL string
+
 // Storage defines the interface for persisting topology data
 type Storage interface {
 	GetTopology() ([]byte, error)
@@ -47,55 +50,97 @@ type Storage interface {
 
 // ProductionStorage implements Storage using MySQL for metadata and Redis for speeds/configurations
 type ProductionStorage struct {
-	rdb *redis.Client
 	db  *sqlx.DB
 	ctx context.Context
-	key string // Topology key in Redis
 }
 
-func NewProductionStorage(mysqlURL string, redisURL string, customKey string) (*ProductionStorage, error) {
+func NewProductionStorage(mysqlURL string, unusedRedisURL string, unusedKey string) (*ProductionStorage, error) {
 	// 1. Setup MySQL
 	db, err := sqlx.Connect("mysql", mysqlURL)
 	if err != nil {
 		return nil, fmt.Errorf("mysql connection failed: %v", err)
 	}
 
-	// 2. Setup Redis
-	opts, err := redis.ParseURL(redisURL)
-	if err != nil {
-		return nil, fmt.Errorf("redis url invalid: %v", err)
-	}
-	rdb := redis.NewClient(opts)
-	ctx := context.Background()
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("redis connection failed: %v", err)
-	}
-
-	if customKey == "" {
-		customKey = "titan:orchestrator"
-	}
-
-	return &ProductionStorage{
-		rdb: rdb,
+	res := &ProductionStorage{
 		db:  db,
-		ctx: ctx,
-		key: customKey,
-	}, nil
+		ctx: context.Background(),
+	}
+
+	if err := res.InitDatabase(); err != nil {
+		return nil, fmt.Errorf("failed to init database: %v", err)
+	}
+
+	return res, nil
+}
+
+func (s *ProductionStorage) InitDatabase() error {
+	// Split schema into individual commands (primitive split by ;)
+	commands := strings.Split(schemaSQL, ";")
+	for _, cmd := range commands {
+		cmd = strings.TrimSpace(cmd)
+		if cmd == "" {
+			continue
+		}
+		if _, err := s.db.ExecContext(s.ctx, cmd); err != nil {
+			return fmt.Errorf("failed to execute schema command [%s]: %v", cmd, err)
+		}
+	}
+	return nil
 }
 
 func (s *ProductionStorage) GetTopology() ([]byte, error) {
-	val, err := s.rdb.Get(s.ctx, s.key).Result()
-	if err == redis.Nil {
+	var rows []struct {
+		Name    string `db:"name"`
+		Content []byte `db:"content"`
+	}
+	err := s.db.SelectContext(s.ctx, &rows, "SELECT name, content FROM topology")
+	if err != nil || len(rows) == 0 {
 		return []byte(`{"instances": {}}`), nil
 	}
-	if err != nil {
-		return nil, err
+
+	instances := make(map[string]interface{})
+	for _, row := range rows {
+		var inst interface{}
+		if err := json.Unmarshal(row.Content, &inst); err != nil {
+			log.Errorf("failed to unmarshal topology row %s: %v", row.Name, err)
+			continue
+		}
+		instances[row.Name] = inst
 	}
-	return []byte(val), nil
+
+	res := map[string]interface{}{
+		"instances": instances,
+	}
+	return json.Marshal(res)
 }
 
 func (s *ProductionStorage) UpdateTopology(data []byte) error {
-	return s.rdb.Set(s.ctx, s.key, data, 0).Err()
+	var topo struct {
+		Instances map[string]interface{} `json:"instances"`
+	}
+	if err := json.Unmarshal(data, &topo); err != nil {
+		return fmt.Errorf("invalid topology format: %v", err)
+	}
+
+	tx, err := s.db.BeginTxx(s.ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Clear old state (or we could do a diff, but wipe/rewrite is safer for a "save" operation)
+	if _, err := tx.ExecContext(s.ctx, "DELETE FROM topology"); err != nil {
+		return err
+	}
+
+	for name, content := range topo.Instances {
+		cBytes, _ := json.Marshal(content)
+		if _, err := tx.ExecContext(s.ctx, "INSERT INTO topology (name, content) VALUES (?, ?)", name, cBytes); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (s *ProductionStorage) ReportStatus(ctx context.Context, report *Report) error {
