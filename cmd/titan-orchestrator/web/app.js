@@ -373,7 +373,7 @@ document.getElementById('add-instance-btn').onclick = () => {
     document.getElementById('inst-pre-stop').value = '[]';
     document.getElementById('inst-env').value = '{}';
     document.getElementById('inst-tags').value = '';
-    document.getElementById('inst-params').value = '{\n  "port": 5577\n}';
+    document.getElementById('inst-params').value = '{}';
     document.getElementById('inst-platforms').value = '{}';
     modalOverlay.classList.remove('hidden');
 };
