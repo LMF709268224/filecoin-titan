@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -389,7 +390,7 @@ func (o *Orchestrator) HandleReportStatus(w http.ResponseWriter, r *http.Request
 
 	// Simple IP detection if not provided
 	if report.IP == "" {
-		report.IP = r.RemoteAddr
+		report.IP = getClientIP(r)
 	}
 
 	if err := o.storage.ReportStatus(r.Context(), &report); err != nil {
@@ -399,6 +400,30 @@ func (o *Orchestrator) HandleReportStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func getClientIP(r *http.Request) string {
+	// 1. Check X-Forwarded-For
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		ips := strings.Split(xff, ",")
+		if len(ips) > 0 {
+			return strings.TrimSpace(ips[0])
+		}
+	}
+
+	// 2. Check X-Real-IP
+	xri := r.Header.Get("X-Real-IP")
+	if xri != "" {
+		return strings.TrimSpace(xri)
+	}
+
+	// 3. Fallback to RemoteAddr
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 /*
