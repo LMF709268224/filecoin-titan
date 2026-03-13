@@ -36,6 +36,17 @@ var exeSuffix = func() string {
 	return ""
 }()
 
+const (
+	// Time allowed to write a message to the peer.
+	writeWait = 10 * time.Second
+
+	// Time allowed to read the next pong message from the peer.
+	pongWait = 60 * time.Second
+
+	// Send pings to peer with this period. Must be less than pongWait.
+	pingPeriod = (pongWait * 9) / 10
+)
+
 // Topology represents the server's desired state
 type Topology struct {
 	Instances map[string]InstanceTarget `json:"instances"`
@@ -228,10 +239,34 @@ func (m *Manager) WatchConfig(ctx context.Context) {
 		backoff = 1 * time.Second // Reset backoff on success
 		log.Info("WebSocket connected to Orchestrator")
 
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		conn.SetPongHandler(func(string) error {
+			conn.SetReadDeadline(time.Now().Add(pongWait))
+			return nil
+		})
+
+		heartbeatDone := make(chan struct{})
+		go func() {
+			ticker := time.NewTicker(pingPeriod)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait)); err != nil {
+						log.Errorf("WebSocket ping failed: %v", err)
+						return
+					}
+				case <-heartbeatDone:
+					return
+				}
+			}
+		}()
+
 		for {
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
 				log.Warnf("WebSocket connection lost: %v", err)
+				close(heartbeatDone)
 				conn.Close()
 				break
 			}
