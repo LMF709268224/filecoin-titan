@@ -161,9 +161,9 @@ func runServer(cctx *cli.Context) error {
 
 	mux := http.NewServeMux()
 
-	// 1. Service API for Supervisors
-	mux.HandleFunc("/topology", server.HandleGetTopology)
-	mux.HandleFunc("/report", server.HandleReportStatus)
+	// 1. Service API for Supervisors (Unified under /api/v1/node/)
+	mux.HandleFunc("/api/v1/node/topology", server.HandleGetTopology)
+	mux.HandleFunc("/api/v1/node/report", server.HandleReportStatus)
 
 	// Node Authentication & Real-time Sync
 	mux.HandleFunc("/api/v1/node/register", server.HandleNodeRegister)
@@ -178,7 +178,7 @@ func runServer(cctx *cli.Context) error {
 
 	// 3. Static Web UI (Public)
 	sub, _ := fs.Sub(webFiles, "web")
-	mux.Handle("/", http.FileServer(http.FS(sub)))
+	mux.Handle("/web/", http.StripPrefix("/web/", http.FileServer(http.FS(sub))))
 
 	// 5. Signal Handling for Graceful Shutdown
 	stop := make(chan os.Signal, 1)
