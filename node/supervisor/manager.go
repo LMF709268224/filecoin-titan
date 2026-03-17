@@ -293,7 +293,7 @@ func (m *Manager) PullTopology() {
 		return
 	}
 
-	req, err := http.NewRequest("GET", m.serverUrl+"/topology", nil)
+	req, err := http.NewRequest("GET", m.serverUrl+"/api/v1/node/topology", nil)
 	if err != nil {
 		log.Errorf("Failed to create request: %v", err)
 		return
@@ -325,7 +325,7 @@ func (m *Manager) ReportStatus() {
 		log.Errorf("Invalid server URL for reporting: %v", err)
 		return
 	}
-	u.Path = "/report"
+	u.Path = "/api/v1/node/report"
 	reportUrl := u.String()
 
 	instances := make(map[string]interface{})
