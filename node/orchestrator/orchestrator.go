@@ -62,6 +62,11 @@ func NewProductionStorage(mysqlURL string, unusedRedisURL string, unusedKey stri
 		return nil, fmt.Errorf("mysql connection failed: %v", err)
 	}
 
+	// Optimize connection pool to avoid "bad idle connection" warnings
+	db.SetConnMaxLifetime(time.Minute * 3)
+	db.SetMaxIdleConns(10)
+	db.SetMaxOpenConns(100)
+
 	res := &ProductionStorage{
 		db:  db,
 		ctx: context.Background(),

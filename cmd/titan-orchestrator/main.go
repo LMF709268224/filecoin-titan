@@ -159,6 +159,14 @@ func runServer(cctx *cli.Context) error {
 		log.Warn("================================================================")
 	}
 
+	// Global Logger Middleware
+	loggerMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log.Infof("[Request] %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)
+			next.ServeHTTP(w, r)
+		})
+	}
+
 	mux := http.NewServeMux()
 
 	// 1. Service API for Supervisors (Unified under /api/v1/node/)
@@ -186,7 +194,7 @@ func runServer(cctx *cli.Context) error {
 
 	srv := &http.Server{
 		Addr:    ":" + port,
-		Handler: mux,
+		Handler: loggerMiddleware(mux),
 	}
 
 	go func() {
