@@ -159,7 +159,7 @@ func (m *Manager) Login(ctx context.Context) error {
 	}
 	body, _ := json.Marshal(reqBody)
 
-	resp, err := http.Post(m.serverUrl+"/api/v1/node/login", "application/json", strings.NewReader(string(body)))
+	resp, err := http.Post(strings.TrimSuffix(m.serverUrl, "/")+"/api/v1/node/login", "application/json", strings.NewReader(string(body)))
 	if err != nil {
 		// If 404, maybe we need to register?
 		return fmt.Errorf("login request failed: %w", err)
@@ -175,7 +175,7 @@ func (m *Manager) Login(ctx context.Context) error {
 			"public_key": string(pub),
 		}
 		rb, _ := json.Marshal(regBody)
-		rresp, err := http.Post(m.serverUrl+"/api/v1/node/register", "application/json", strings.NewReader(string(rb)))
+		rresp, err := http.Post(strings.TrimSuffix(m.serverUrl, "/")+"/api/v1/node/register", "application/json", strings.NewReader(string(rb)))
 		if err == nil {
 			rresp.Body.Close()
 			if rresp.StatusCode == http.StatusOK {
@@ -223,7 +223,7 @@ func (m *Manager) WatchConfig(ctx context.Context) {
 			continue
 		}
 
-		wsUrl := strings.Replace(m.serverUrl, "http", "ws", 1) + "/api/v1/node/ws?token=" + m.token
+		wsUrl := strings.TrimSuffix(strings.Replace(m.serverUrl, "http", "ws", 1), "/") + "/api/v1/node/ws?token=" + m.token
 		log.Infof("Attempting WebSocket connection to %s", wsUrl)
 		conn, _, err := websocket.DefaultDialer.Dial(wsUrl, nil)
 		if err != nil {
@@ -293,7 +293,7 @@ func (m *Manager) PullTopology() {
 		return
 	}
 
-	req, err := http.NewRequest("GET", m.serverUrl+"/api/v1/node/topology", nil)
+	req, err := http.NewRequest("GET", strings.TrimSuffix(m.serverUrl, "/")+"/api/v1/node/topology", nil)
 	if err != nil {
 		log.Errorf("Failed to create request: %v", err)
 		return
