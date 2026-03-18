@@ -5,6 +5,10 @@ import (
 	"errors"
 	"time"
 
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/Filecoin-Titan/titan/node/repo"
 	titanrsa "github.com/Filecoin-Titan/titan/node/rsa"
 	"github.com/Filecoin-Titan/titan/node/types"
@@ -16,6 +20,10 @@ var log = logging.Logger("supervisor")
 
 // StartDaemon initializes the repo and starts the main Supervisor control loop.
 func StartDaemon(ctx context.Context, repoPath string, serverUrl string, allowedTags []string, logMaxAge, logRotationTime time.Duration, logRotationSize int64, platform string) error {
+	// Wrap context with signal handling for graceful shutdown
+	sigCtx, stopNotify := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stopNotify()
+
 	r, err := repo.NewFS(repoPath)
 	if err != nil {
 		return err
@@ -102,8 +110,8 @@ func StartDaemon(ctx context.Context, repoPath string, serverUrl string, allowed
 
 	for {
 		select {
-		case <-ctx.Done():
-			log.Info("Supervisor shutting down...")
+		case <-sigCtx.Done():
+			log.Info("Supervisor received shutdown signal, stopping all instances...")
 			manager.StopAll()
 			return nil
 		case <-ticker.C:
