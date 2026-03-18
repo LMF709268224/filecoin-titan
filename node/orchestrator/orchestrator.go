@@ -28,9 +28,13 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		// Strict Origin check: Allow same-host or explicit list
-		// In production, you'd check r.Host against a whitelist
-		return true // Still allowing for now but providing hook for restriction
+		// Strict Origin check: Only allow same host
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		// Basic check: origin must contain the host
+		return strings.Contains(origin, r.Host)
 	},
 }
 
@@ -387,9 +391,20 @@ func (o *Orchestrator) HandleReportStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	var pl NodePayload
+	token := auth[len("Bearer "):]
+	jwt.Verify([]byte(token), jwt.NewHS256(o.JWTSecret), &pl) // We know it's valid if authorized is true
+
 	var report Report
 	if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
 		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// SECURITY: Verify that the reporting node is only reporting for ITSELF
+	if report.ID != pl.NodeID {
+		log.Errorf("🔥 SECURITY ALERT: Node %s attempted to report status for Node %s! Request blocked.", pl.NodeID, report.ID)
+		http.Error(w, "Forbidden: ID mismatch", http.StatusForbidden)
 		return
 	}
 
@@ -757,9 +772,13 @@ func (o *Orchestrator) BroadcastReload() {
 	o.nodesMu.RLock()
 	defer o.nodesMu.RUnlock()
 	for id, conn := range o.nodes {
-		err := conn.WriteMessage(websocket.TextMessage, []byte("RELOAD"))
-		if err != nil {
-			log.Errorf("Failed to push RELOAD to node %s: %v", id, err)
-		}
+		// Optimization: Use a goroutine per node for broadcasting to prevent slow clients from blocking the mutex
+		go func(nodeID string, c *websocket.Conn) {
+			c.SetWriteDeadline(time.Now().Add(3 * time.Second))
+			err := c.WriteMessage(websocket.TextMessage, []byte("RELOAD"))
+			if err != nil {
+				log.Errorf("Failed to push RELOAD to node %s: %v", nodeID, err)
+			}
+		}(id, conn)
 	}
 }
