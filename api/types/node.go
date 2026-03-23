@@ -179,6 +179,7 @@ const (
 	NodeUpdater
 	NodeL5
 	NodeL3
+	NodeSupervisor
 )
 
 func (n NodeType) String() string {
@@ -197,6 +198,8 @@ func (n NodeType) String() string {
 		return "l5"
 	case NodeL3:
 		return "l3"
+	case NodeSupervisor:
+		return "supervisor"
 	}
 
 	return ""

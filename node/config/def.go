@@ -206,6 +206,15 @@ func DefaultSchedulerCfg() *SchedulerCfg {
 	}
 }
 
+// DefaultSupervisorCfg returns the default supervisor config
+func DefaultSupervisorCfg() *SupervisorCfg {
+	return &SupervisorCfg{
+		ServerURL:     "http://127.0.0.1:8080/topology",
+		ListenAddress: "0.0.0.0:4567",
+		Timeout:       "30s",
+	}
+}
+
 var (
 	_ encoding.TextMarshaler   = (*Duration)(nil)
 	_ encoding.TextUnmarshaler = (*Duration)(nil)
