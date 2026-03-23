@@ -138,13 +138,13 @@ func errorResult(code int, err error) *JSONCallResult {
 type (
 	daemonStartFunc func(ctx context.Context, daemonSwitch *DaemonSwitch, repoPath, locatorURL string) error
 	CLib            struct {
-		daemonStart   daemonStartFunc
-		repoPath      string
-		isStaring     bool
-		dSwitch       DaemonSwitch
-		downloader    *Downloader
-		quicClient    *http.Client
-		connFailCount int
+		daemonStart daemonStartFunc
+		repoPath    string
+		isStaring   bool
+		dSwitch     DaemonSwitch
+		downloader  *Downloader
+		quicClient  *http.Client
+		// connFailCount int
 	}
 )
 
@@ -252,9 +252,9 @@ func (clib *CLib) startDaemon(jsonStr string) (int, error) {
 		return CodeClibRequestInvalid, fmt.Errorf("marshal input args failed:%s", err.Error())
 	}
 
-	if clib.connFailCount > 3 {
-		client.SetProxy("https://pcdn.titannet.io/titan/endpoint-finder/test3.json")
-	}
+	// if clib.connFailCount > 3 {
+	// 	client.SetProxy("https://pcdn.titannet.io/titan/endpoint-finder/test3.json")
+	// }
 
 	if len(req.RepoPath) == 0 {
 		return CodeOpenPathError, fmt.Errorf("Args RepoPath can not emtpy")
@@ -300,7 +300,7 @@ func (clib *CLib) startDaemon(jsonStr string) (int, error) {
 
 	if err = clib.daemonStart(context.Background(), &clib.dSwitch, req.RepoPath, req.LocatorURL); err != nil {
 		// clib.isInit = false
-		clib.connFailCount++
+		// clib.connFailCount++
 		return CodeDaemonStartFailed, err
 	}
 

@@ -184,11 +184,18 @@ func flushConfig(lr repo.LockedRepo, tlsConfig *tls.Config, cfg *config.Candidat
 
 		var certKeyBytes []byte
 
-		privBytes, err := x509.MarshalECPrivateKey(cert.PrivateKey.(*ecdsa.PrivateKey))
-		if err == nil {
+		switch priv := cert.PrivateKey.(type) {
+		case *ecdsa.PrivateKey:
+			privBytes, err := x509.MarshalECPrivateKey(priv)
+			if err != nil {
+				return err
+			}
 			certKeyBytes = pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: privBytes})
-		} else {
-			privBytes, err = x509.MarshalPKCS8PrivateKey(cert.PrivateKey)
+		case *rsa.PrivateKey:
+			privBytes := x509.MarshalPKCS1PrivateKey(priv)
+			certKeyBytes = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: privBytes})
+		default:
+			privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
 			if err != nil {
 				return err
 			}
