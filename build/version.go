@@ -3,8 +3,9 @@ package build
 import "os"
 
 var (
-	CurrentCommit string
-	BuildType     int
+	CurrentCommit   string
+	BuildType       int
+	DefaultPlatform string
 )
 
 const (
