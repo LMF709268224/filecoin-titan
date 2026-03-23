@@ -8,7 +8,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/Filecoin-Titan/titan/node/scheduler/assets"
+	"github.com/Filecoin-Titan/titan/node/scheduler/node"
 	"github.com/google/uuid"
 )
 
@@ -38,8 +38,8 @@ func Encrypt(r io.Reader, pass []byte, tempDir string) (io.Reader, int64, error)
 	defer tmpFile.Close()
 
 	// Get buffer from pool
-	bufPtr := assets.GetBuffer(chunkSize)
-	defer assets.PutBuffer(bufPtr)
+	bufPtr := node.GetBuffer(chunkSize)
+	defer node.PutBuffer(bufPtr)
 	buf := *bufPtr
 
 	var (
