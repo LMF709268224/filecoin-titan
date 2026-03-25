@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,9 +46,12 @@ const (
 	pingPeriod = (pongWait * 9) / 10
 )
 
-// Topology represents the server's desired state
+// Topology represents the server's desired state for ALL nodes.
+// NodeTags are tags the administrator has assigned to this specific node
+// (in addition to the locally configured --tags flag).
 type Topology struct {
 	Instances map[string]InstanceTarget `json:"instances"`
+	NodeTags  []string                  `json:"node_tags"` // Server-assigned tags for this node (overridable per-node by admin)
 }
 
 type PlatformConfig struct {
@@ -69,9 +71,9 @@ type InstanceTarget struct {
 	InstanceDir    string                    `json:"instance_dir"` // Optional: custom dir for run_config.yaml and user_config.yaml
 	Env            map[string]string         `json:"env"`          // Optional: extra environment variables
 	Params         map[string]interface{}    `json:"params"`
-	Tags           []string                  `json:"tags"`                     // Optional: tags for selective running
-	Enabled        *bool                     `json:"enabled" monolayer:"omit"` // Optional: global ON/OFF switch
-	PreStopCommand []string                  `json:"pre_stop_command"`         // Optional: command(s) to run before first start
+	Tags           []string                  `json:"tags"`             // Optional: tags for selective running
+	Enabled        *bool                     `json:"enabled"`          // Optional: global ON/OFF switch
+	PreStopCommand []string                  `json:"pre_stop_command"` // Optional: command(s) to run before first start
 }
 
 type InstanceState struct {
@@ -84,8 +86,9 @@ type InstanceState struct {
 
 	FailedHash   string
 	LastGoodHash string
-	AdoptedPID   int // PID of a process adopted from a previous Supervisor run
-}
+	AdoptedPID   int
+	LastError    string // Captured terminal/exit errors
+} // PID of a process adopted from a previous Supervisor run
 
 type Manager struct {
 	repoPath     string
@@ -93,7 +96,11 @@ type Manager struct {
 	binPath      string
 	instancePath string
 	serverUrl    string
-	allowedTags  []string // Tags this node is allowed to run
+	allowedTags  []string // Tags configured locally via --tags flag
+	serverTags   []string // Tags dynamically assigned by the administrator from the Orchestrator
+	// serverTagsConfigured is true when the server has explicitly set tags for this node
+	// (even to empty = run nothing). When false, local allowedTags are used as fallback.
+	serverTagsConfigured bool
 
 	mu        sync.Mutex
 	instances map[string]*InstanceState
@@ -107,6 +114,21 @@ type Manager struct {
 
 	keystore types.KeyStore
 	token    string
+}
+
+// effectiveTags returns the tags used for instance filtering.
+//
+// Priority rules (server is authoritative when configured):
+//   - If server has explicitly configured tags for this node → use server tags ONLY
+//     (even if empty, which means "run nothing")
+//   - If server has not configured any tags → fall back to local --tags flag
+func (m *Manager) effectiveTags() []string {
+	if m.serverTagsConfigured {
+		// Server is authoritative: use its tags exclusively, ignoring --tags
+		return m.serverTags
+	}
+	// Not yet configured on server: respect the user's local --tags
+	return m.allowedTags
 }
 
 func NewManager(repoPath string, nodeID string, serverUrl string, allowedTags []string, logMaxAge, logRotationTime time.Duration, logRotationSize int64, platformOverride string, keystore types.KeyStore) *Manager {
@@ -153,43 +175,26 @@ func (m *Manager) Login(ctx context.Context) error {
 	}
 
 	reqBody := map[string]string{
-		"node_id":   m.nodeID,
-		"signature": hex.EncodeToString(sig),
-		"timestamp": ts,
+		"node_id":    m.nodeID,
+		"signature":  hex.EncodeToString(sig),
+		"timestamp":  ts,
+		"public_key": string(titanrsa.PublicKey2Pem(&priv.PublicKey)),
 	}
 	body, _ := json.Marshal(reqBody)
 
 	resp, err := http.Post(strings.TrimSuffix(m.serverUrl, "/")+"/api/v1/node/login", "application/json", strings.NewReader(string(body)))
 	if err != nil {
-		// If 404, maybe we need to register?
 		return fmt.Errorf("login request failed: %w", err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusNotFound {
-		// Try register first
-		log.Info("Node not recognized, attempting registration...")
-		pub := titanrsa.PublicKey2Pem(&priv.PublicKey)
-		regBody := map[string]string{
-			"node_id":    m.nodeID,
-			"public_key": string(pub),
-		}
-		rb, _ := json.Marshal(regBody)
-		rresp, err := http.Post(strings.TrimSuffix(m.serverUrl, "/")+"/api/v1/node/register", "application/json", strings.NewReader(string(rb)))
-		if err == nil {
-			rresp.Body.Close()
-			if rresp.StatusCode == http.StatusOK {
-				return m.Login(ctx) // Retry login
-			}
-		}
-	}
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("login failed with status %d", resp.StatusCode)
 	}
 
 	var res struct {
-		Token string `json:"token"`
+		Token    string   `json:"token"`
+		Topology Topology `json:"topology"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 		return err
@@ -198,7 +203,12 @@ func (m *Manager) Login(ctx context.Context) error {
 	m.mu.Lock()
 	m.token = res.Token
 	m.mu.Unlock()
-	log.Infof("Successfully logged in, received JWT for node %s", m.nodeID)
+
+	// Step 4: Apply initial topology received in the login response immediately.
+	// This enables "Zero-delay startup" without waiting for a WebSocket push.
+	m.applyTopology(res.Topology)
+
+	log.Infof("Successfully logged in, received JWT and applied initial topology for node %s", m.nodeID)
 	return nil
 }
 
@@ -223,8 +233,11 @@ func (m *Manager) WatchConfig(ctx context.Context) {
 			continue
 		}
 
+		// Convert HTTP URL to WS URL (e.g., http://... -> ws://...) and append the JWT token
 		wsUrl := strings.TrimSuffix(strings.Replace(m.serverUrl, "http", "ws", 1), "/") + "/api/v1/node/ws?token=" + m.token
 		log.Infof("Attempting WebSocket connection to %s", wsUrl)
+
+		// Establish the WebSocket connection tightly coupled with the Orchestrator
 		conn, _, err := websocket.DefaultDialer.Dial(wsUrl, nil)
 		if err != nil {
 			log.Errorf("WebSocket dial failed: %v, retrying in %v", err, backoff)
@@ -252,9 +265,38 @@ func (m *Manager) WatchConfig(ctx context.Context) {
 			for {
 				select {
 				case <-ticker.C:
+					// 1. Send a standard WebSocket Ping control frame to keep the connection alive
 					if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait)); err != nil {
 						log.Errorf("WebSocket ping failed: %v", err)
 						return
+					}
+
+					// 2. Piggyback Resource Report: Send CPU/Mem/Disk/Network usage as a JSON event
+					report := CollectResourceReport()
+					reportMsg := map[string]interface{}{
+						"event": "resource_report",
+						"data":  report,
+					}
+					if data, err := json.Marshal(reportMsg); err == nil {
+						conn.SetWriteDeadline(time.Now().Add(writeWait))
+						if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+							log.Errorf("WebSocket resource report push failed: %v", err)
+							return
+						}
+					}
+
+					// 3. Piggyback Status Report: Send worker instance statuses (running, crashed, etc.)
+					statusData := m.buildStatusReport()
+					statusMsg := map[string]interface{}{
+						"event": "report_status",
+						"data":  statusData,
+					}
+					if data, err := json.Marshal(statusMsg); err == nil {
+						conn.SetWriteDeadline(time.Now().Add(writeWait))
+						if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
+							log.Errorf("WebSocket status report push failed: %v", err)
+							return
+						}
 					}
 				case <-heartbeatDone:
 					return
@@ -263,7 +305,7 @@ func (m *Manager) WatchConfig(ctx context.Context) {
 		}()
 
 		for {
-			_, msg, err := conn.ReadMessage()
+			msgType, msg, err := conn.ReadMessage()
 			if err != nil {
 				log.Warnf("WebSocket connection lost: %v", err)
 				close(heartbeatDone)
@@ -271,10 +313,27 @@ func (m *Manager) WatchConfig(ctx context.Context) {
 				break
 			}
 
-			message := string(msg)
-			if message == "RELOAD" {
-				log.Info("📬 Received RELOAD signal via WebSocket! Triggering immediate pull.")
-				go m.PullTopology()
+			if msgType == websocket.TextMessage {
+				// 4. Listen for incoming JSON events pushed proactively by the Orchestrator
+				var wsMsg struct {
+					Event string          `json:"event"`
+					Data  json.RawMessage `json:"data"`
+				}
+				if err := json.Unmarshal(msg, &wsMsg); err == nil {
+					if wsMsg.Event == "topology" {
+						// Instantly apply the new topology (zero polling delay)
+						log.Info("📬 Received updated topology via WebSocket! Applying immediately.")
+						var topo Topology
+						if err := json.Unmarshal(wsMsg.Data, &topo); err == nil {
+							m.applyTopology(topo)
+						} else {
+							log.Errorf("Failed to parse topology from WS: %v", err)
+						}
+					} else if wsMsg.Event == "RELOAD" {
+						// Fallback legacy reload signal, ignore or handle if needed
+						log.Warn("Received legacy RELOAD string, ignoring since we use JSON now.")
+					}
+				}
 			}
 		}
 	}
@@ -287,47 +346,7 @@ func (m *Manager) InitDirs() error {
 	return os.MkdirAll(m.instancePath, 0755)
 }
 
-func (m *Manager) PullTopology() {
-	if err := m.Login(context.Background()); err != nil {
-		log.Errorf("Failed to login before pulling topology: %v", err)
-		return
-	}
-
-	req, err := http.NewRequest("GET", strings.TrimSuffix(m.serverUrl, "/")+"/api/v1/node/topology", nil)
-	if err != nil {
-		log.Errorf("Failed to create request: %v", err)
-		return
-	}
-	req.Header.Set("Authorization", "Bearer "+m.token)
-
-	// Use a client with timeout to prevent hanging indefinitely
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Warnf("Failed to pull topology: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	var topo Topology
-	if err := json.NewDecoder(resp.Body).Decode(&topo); err != nil {
-		log.Warnf("Failed to parse topology: %v", err)
-		return
-	}
-
-	m.applyTopology(topo)
-	m.ReportStatus()
-}
-
-func (m *Manager) ReportStatus() {
-	u, err := url.Parse(m.serverUrl)
-	if err != nil {
-		log.Errorf("Invalid server URL for reporting: %v", err)
-		return
-	}
-	u.Path = "/api/v1/node/report"
-	reportUrl := u.String()
-
+func (m *Manager) buildStatusReport() map[string]interface{} {
 	instances := make(map[string]interface{})
 	m.mu.Lock()
 	for name, state := range m.instances {
@@ -335,40 +354,15 @@ func (m *Manager) ReportStatus() {
 			"hash":        state.CurrentHash,
 			"status":      m.deriveStatus(state),
 			"crash_count": state.CrashCount,
-			"last_error":  "", // TODO: capture actual error if possible
+			"last_error":  state.LastError, // Update this if you add an error field to InstanceState
 		}
 	}
 	m.mu.Unlock()
 
-	report := map[string]interface{}{
-		"id":        m.nodeID,
+	return map[string]interface{}{
 		"version":   build.UserVersion(),
 		"tags":      m.allowedTags,
 		"instances": instances,
-	}
-
-	data, _ := json.Marshal(report)
-	req, err := http.NewRequest("POST", reportUrl, strings.NewReader(string(data)))
-	if err != nil {
-		log.Errorf("Failed to create report request: %v", err)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	if m.token != "" {
-		req.Header.Set("Authorization", "Bearer "+m.token)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Warnf("Failed to report status to %s: %v", reportUrl, err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Warnf("Orchestrator returned error for status report: %s (Status: %d)", reportUrl, resp.StatusCode)
 	}
 }
 
@@ -392,6 +386,27 @@ func (m *Manager) applyTopology(topo Topology) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	// Update server-assigned tags from the topology response.
+	// node_tags present in JSON (even as []) means server has explicitly configured this node.
+	// node_tags absent from JSON (nil) means server has not configured this node → fall back to local --tags.
+	if topo.NodeTags != nil {
+		// Server is authoritative: compare and update
+		if !m.serverTagsConfigured || !stringSlicesEqual(m.serverTags, topo.NodeTags) {
+			log.Infof("Server tags updated for this node: %v → %v (server authoritative)", m.serverTags, topo.NodeTags)
+			m.serverTags = topo.NodeTags
+		}
+		m.serverTagsConfigured = true
+	} else {
+		// Server has not configured tags for this node → clear server override
+		if m.serverTagsConfigured {
+			log.Infof("Server tags removed for this node. Falling back to local --tags: %v", m.allowedTags)
+		}
+		m.serverTagsConfigured = false
+		m.serverTags = nil
+	}
+
+	activeTags := m.effectiveTags()
+
 	// 1. Start or Update Instances
 	for name, target := range topo.Instances {
 		// SECURITY: Validate instance name to prevent path traversal
@@ -413,17 +428,17 @@ func (m *Manager) applyTopology(topo Topology) {
 
 		// Tag filtering:
 		// 1. If instance has no tags, it's "Global" and always runs.
-		// 2. If instance has tags, it ONLY runs if the Supervisor has a matching tag.
+		// 2. If instance has tags, it ONLY runs if the effective tags (local + server) has a match.
 		if len(target.Tags) > 0 {
 			match := false
 			for _, t := range target.Tags {
-				if isTagAllowed(t, m.allowedTags) {
+				if isTagAllowed(t, activeTags) {
 					match = true
 					break
 				}
 			}
 			if !match {
-				log.Debugf("Instance %s skipped: tags %v not matched by node tags %v", name, target.Tags, m.allowedTags)
+				log.Debugf("Instance %s skipped: tags %v not matched by effective tags %v", name, target.Tags, activeTags)
 				if exists {
 					m.stopInstance(name, state)
 				}
@@ -557,7 +572,6 @@ func (m *Manager) applyTopology(topo Topology) {
 			}
 		}
 
-		// If version changed OR config changed, we need to restart
 		// A process counts as running if we have a Cmd handle OR we adopted it from a PID file
 		isRunning := (state.Cmd != nil) || (state.AdoptedPID > 0)
 		if state.CurrentHash != desiredHash || (!isRollback && state.RunConfigHash != newConfigHash) || !isRunning {
@@ -1257,4 +1271,17 @@ func isTagAllowed(tag string, allowed []string) bool {
 		}
 	}
 	return false
+}
+
+// stringSlicesEqual returns true if two string slices have the same elements in the same order.
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

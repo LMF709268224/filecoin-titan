@@ -98,24 +98,12 @@ func StartDaemon(ctx context.Context, repoPath string, serverUrl string, allowed
 		return err
 	}
 
-	// For demonstration, we'll poll the mock server every 30 seconds
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	// Do an immediate poll on startup
-	manager.PullTopology()
-
-	// Start WebSocket watcher for real-time reloads
+	// Start WebSocket watcher (handles Login and real-time topology updates)
 	go manager.WatchConfig(ctx)
 
-	for {
-		select {
-		case <-sigCtx.Done():
-			log.Info("Supervisor received shutdown signal, stopping all instances...")
-			manager.StopAll()
-			return nil
-		case <-ticker.C:
-			manager.PullTopology()
-		}
-	}
+	// Block main thread until signal
+	<-sigCtx.Done()
+	log.Info("Supervisor received shutdown signal, stopping all instances...")
+	manager.StopAll()
+	return nil
 }
