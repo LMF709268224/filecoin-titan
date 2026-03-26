@@ -50,8 +50,9 @@ const (
 // NodeTags are tags the administrator has assigned to this specific node
 // (in addition to the locally configured --tags flag).
 type Topology struct {
-	Instances map[string]InstanceTarget `json:"instances"`
-	NodeTags  []string                  `json:"node_tags"` // Server-assigned tags for this node (overridable per-node by admin)
+	Instances    map[string]InstanceTarget `json:"instances"`
+	NodeTags     []string                  `json:"node_tags"`     // Server-assigned tags for this node
+	TagsOverride bool                      `json:"tags_override"` // If true, server tags completely override local tags
 }
 
 type PlatformConfig struct {
@@ -116,19 +117,26 @@ type Manager struct {
 	token    string
 }
 
-// effectiveTags returns the tags used for instance filtering.
-//
-// Priority rules (server is authoritative when configured):
-//   - If server has explicitly configured tags for this node → use server tags ONLY
-//     (even if empty, which means "run nothing")
-//   - If server has not configured any tags → fall back to local --tags flag
 func (m *Manager) effectiveTags() []string {
 	if m.serverTagsConfigured {
-		// Server is authoritative: use its tags exclusively, ignoring --tags
+		// Override mode: server is authoritative, ignore local --tags
 		return m.serverTags
 	}
-	// Not yet configured on server: respect the user's local --tags
-	return m.allowedTags
+
+	// Merge mode (default): Combine local --tags with server tags
+	uniqueTags := make(map[string]struct{})
+	for _, t := range m.allowedTags {
+		uniqueTags[t] = struct{}{}
+	}
+	for _, t := range m.serverTags {
+		uniqueTags[t] = struct{}{}
+	}
+
+	var result []string
+	for t := range uniqueTags {
+		result = append(result, t)
+	}
+	return result
 }
 
 func NewManager(repoPath string, nodeID string, serverUrl string, allowedTags []string, logMaxAge, logRotationTime time.Duration, logRotationSize int64, platformOverride string, keystore types.KeyStore) *Manager {
@@ -387,22 +395,16 @@ func (m *Manager) applyTopology(topo Topology) {
 	defer m.mu.Unlock()
 
 	// Update server-assigned tags from the topology response.
-	// node_tags present in JSON (even as []) means server has explicitly configured this node.
-	// node_tags absent from JSON (nil) means server has not configured this node → fall back to local --tags.
-	if topo.NodeTags != nil {
-		// Server is authoritative: compare and update
-		if !m.serverTagsConfigured || !stringSlicesEqual(m.serverTags, topo.NodeTags) {
-			log.Infof("Server tags updated for this node: %v → %v (server authoritative)", m.serverTags, topo.NodeTags)
-			m.serverTags = topo.NodeTags
-		}
-		m.serverTagsConfigured = true
-	} else {
-		// Server has not configured tags for this node → clear server override
-		if m.serverTagsConfigured {
-			log.Infof("Server tags removed for this node. Falling back to local --tags: %v", m.allowedTags)
-		}
-		m.serverTagsConfigured = false
-		m.serverTags = nil
+	m.serverTags = topo.NodeTags
+	if m.serverTags == nil {
+		m.serverTags = []string{}
+	}
+	m.serverTagsConfigured = topo.TagsOverride
+
+	if m.serverTagsConfigured {
+		log.Infof("Server tags are authoritative: %v (local tags ignored)", m.serverTags)
+	} else if len(m.serverTags) > 0 {
+		log.Infof("Server tags provided in merge mode: %v (combined with local tags)", m.serverTags)
 	}
 
 	activeTags := m.effectiveTags()
