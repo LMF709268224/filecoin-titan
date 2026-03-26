@@ -17,11 +17,20 @@ import (
 	"github.com/filecoin-project/go-jsonrpc"
 
 	"github.com/Filecoin-Titan/titan/lib/rpcenc"
+	"sync"
 )
 
 var (
 	defaultHTTP3Client *http.Client
+	clientOnce         sync.Once
 )
+
+func GetHTTP3Client() *http.Client {
+	clientOnce.Do(func() {
+		defaultHTTP3Client = NewHTTP3Client()
+	})
+	return defaultHTTP3Client
+}
 
 // NewScheduler creates a new http jsonrpc client.
 func NewScheduler(ctx context.Context, addr string, requestHeader http.Header, opts ...jsonrpc.Option) (api.Scheduler, jsonrpc.ClientCloser, error) {
@@ -33,7 +42,7 @@ func NewScheduler(ctx context.Context, addr string, requestHeader http.Header, o
 	// TODO server not support https now
 	pushURL = strings.Replace(pushURL, "https", "http", 1)
 
-	rpcOpts := []jsonrpc.Option{rpcenc.ReaderParamEncoder(pushURL), jsonrpc.WithErrors(api.RPCErrors)}
+	rpcOpts := []jsonrpc.Option{rpcenc.ReaderParamEncoder(pushURL), jsonrpc.WithErrors(api.RPCErrors), jsonrpc.WithHTTPClient(GetHTTP3Client())}
 	if len(opts) > 0 {
 		rpcOpts = append(rpcOpts, opts...)
 	}
@@ -169,60 +178,40 @@ func NewLocator(ctx context.Context, addr string, requestHeader http.Header, opt
 }
 
 func NewHTTP3Client() *http.Client {
-	if defaultHTTP3Client != nil {
-		return defaultHTTP3Client
-	}
-
-	defaultHTTP3Client = &http.Client{
-		Transport: &http3.Transport{
+	return &http.Client{
+		Transport: &http3.RoundTripper{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 			},
 			QUICConfig: &quic.Config{
-				MaxIncomingStreams:             10,
-				MaxIncomingUniStreams:          10,
-				InitialStreamReceiveWindow:     16 * 1024,
-				InitialConnectionReceiveWindow: 32 * 1024,
-				MaxStreamReceiveWindow:         64 * 1024,
-				MaxConnectionReceiveWindow:     128 * 1024,
-				KeepAlivePeriod:                30 * time.Second,
+				MaxIncomingStreams:    100,
+				MaxIncomingUniStreams: 100,
 			},
 		},
 	}
-
-	return defaultHTTP3Client
 }
 
-// NewHTTP3ClientWithPacketConn new http3 client for nat trave.
-// It returns a fresh http.Client with its own http3.Transport for each caller
-// so that connections can be effectively closed by closing the Transport.
-func NewHTTP3ClientWithPacketConn(transport *quic.Transport) (*http.Client, error) {
+// NewHTTP3ClientWithPacketConn new http3 client for nat trave
+func NewHTTP3ClientWithPacketConn(tansport *quic.Transport) (*http.Client, error) {
 	dial := func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (quic.EarlyConnection, error) {
 		remoteAddr, err := net.ResolveUDPAddr("udp", addr)
 		if err != nil {
 			return nil, err
 		}
 
-		return transport.DialEarly(ctx, remoteAddr, tlsCfg, cfg)
+		return tansport.DialEarly(ctx, remoteAddr, tlsCfg, cfg)
 	}
 
-	roundTripper := &http3.Transport{
+	roundTripper := &http3.RoundTripper{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
 		QUICConfig: &quic.Config{
-			MaxIncomingStreams:             10,
-			MaxIncomingUniStreams:          10,
-			InitialStreamReceiveWindow:     16 * 1024,
-			InitialConnectionReceiveWindow: 32 * 1024,
-			MaxStreamReceiveWindow:         64 * 1024,
-			MaxConnectionReceiveWindow:     128 * 1024,
-			KeepAlivePeriod:                30 * time.Second,
+			MaxIncomingStreams:    3,
+			MaxIncomingUniStreams: 3,
 		},
 		Dial: dial,
 	}
 
-	client := &http.Client{Transport: roundTripper, Timeout: 20 * time.Second}
-
-	return client, nil
+	return &http.Client{Transport: roundTripper, Timeout: 30 * time.Second}, nil
 }

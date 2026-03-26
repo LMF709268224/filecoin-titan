@@ -217,13 +217,8 @@ func getSchedulerVersion(api api.Scheduler, timeout time.Duration) (api.APIVersi
 	return api.Version(ctx)
 }
 
-func newAuthTokenFromScheduler(transport *quic.Transport, schedulerURL, nodeID string, privateKey *rsa.PrivateKey) (string, error) {
-	httpClient, err := client.NewHTTP3ClientWithPacketConn(transport)
-	if err != nil {
-		return "", err
-	}
-
-	schedulerAPI, closer, err := client.NewScheduler(context.Background(), schedulerURL, nil, jsonrpc.WithHTTPClient(httpClient))
+func newAuthTokenFromScheduler(schedulerURL, nodeID string, privateKey *rsa.PrivateKey) (string, error) {
+	schedulerAPI, closer, err := client.NewScheduler(context.Background(), schedulerURL, nil, jsonrpc.WithHTTPClient(client.NewHTTP3Client()))
 	if err != nil {
 		return "", err
 	}
@@ -259,7 +254,7 @@ func getAccessPoint(locatorURL, nodeID, areaID string) (*types.AccessPointRsp, e
 }
 
 func newSchedulerAPI(transport *quic.Transport, schedulerURL, nodeID string, privateKey *rsa.PrivateKey) (api.Scheduler, jsonrpc.ClientCloser, error) {
-	token, err := newAuthTokenFromScheduler(transport, schedulerURL, nodeID, privateKey)
+	token, err := newAuthTokenFromScheduler(schedulerURL, nodeID, privateKey)
 	if err != nil {
 		return nil, nil, err
 	}
