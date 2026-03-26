@@ -1,7 +1,9 @@
 package supervisor
 
 import (
+	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -22,6 +24,7 @@ type NodeResourceReport struct {
 	NetTxBytes  uint64  `json:"net_tx_bytes_per_sec"`
 }
 
+var netMu sync.Mutex
 var prevNet struct {
 	rxBytes   uint64
 	txBytes   uint64
@@ -29,7 +32,8 @@ var prevNet struct {
 }
 
 // CollectResourceReport gathers current system resource metrics.
-func CollectResourceReport() *NodeResourceReport {
+// dataPath is used to determine which partition's disk usage to report.
+func CollectResourceReport(dataPath string) *NodeResourceReport {
 	_ = runtime.GOOS // Just to ensure runtime import is used
 
 	cores, _ := cpu.Counts(true)
@@ -41,9 +45,20 @@ func CollectResourceReport() *NodeResourceReport {
 		usedMem = vm.Used
 	}
 
-	// Disk (root partition)
+	// Disk usage for the data partition
 	totalDisk, usedDisk := uint64(0), uint64(0)
-	if du, err := disk.Usage("/"); err == nil {
+	diskPath := "/"
+	if runtime.GOOS == "windows" {
+		if vol := filepath.VolumeName(dataPath); vol != "" {
+			diskPath = vol + "\\"
+		} else {
+			diskPath = "C:\\"
+		}
+	} else if dataPath != "" {
+		diskPath = dataPath
+	}
+
+	if du, err := disk.Usage(diskPath); err == nil {
 		totalDisk = du.Total
 		usedDisk = du.Used
 	}
@@ -55,9 +70,10 @@ func CollectResourceReport() *NodeResourceReport {
 		cpuPct = percents[0]
 	}
 
-	// Bandwidth: delta since last sample
+	// Bandwidth: delta since last sample (Protected by mutex)
 	rxPerSec, txPerSec := uint64(0), uint64(0)
 	if counters, err := psnet.IOCounters(false); err == nil && len(counters) > 0 {
+		netMu.Lock()
 		now := time.Now()
 		rx := counters[0].BytesRecv
 		tx := counters[0].BytesSent
@@ -71,6 +87,7 @@ func CollectResourceReport() *NodeResourceReport {
 		prevNet.rxBytes = rx
 		prevNet.txBytes = tx
 		prevNet.sampledAt = now
+		netMu.Unlock()
 	}
 
 	return &NodeResourceReport{

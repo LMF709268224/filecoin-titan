@@ -89,6 +89,7 @@ type InstanceState struct {
 	LastGoodHash string
 	AdoptedPID   int
 	LastError    string // Captured terminal/exit errors
+	LogWriter    io.WriteCloser
 } // PID of a process adopted from a previous Supervisor run
 
 type Manager struct {
@@ -280,7 +281,7 @@ func (m *Manager) WatchConfig(ctx context.Context) {
 					}
 
 					// 2. Piggyback Resource Report: Send CPU/Mem/Disk/Network usage as a JSON event
-					report := CollectResourceReport()
+					report := CollectResourceReport(m.instancePath)
 					reportMsg := map[string]interface{}{
 						"event": "resource_report",
 						"data":  report,
@@ -392,9 +393,7 @@ func (m *Manager) deriveStatus(state *InstanceState) string {
 
 func (m *Manager) applyTopology(topo Topology) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Update server-assigned tags from the topology response.
+	// 1. Update server-assigned tags and settings (Locked)
 	m.serverTags = topo.NodeTags
 	if m.serverTags == nil {
 		m.serverTags = []string{}
@@ -408,29 +407,31 @@ func (m *Manager) applyTopology(topo Topology) {
 	}
 
 	activeTags := m.effectiveTags()
+	m.mu.Unlock()
 
-	// 1. Start or Update Instances
+	// 2. Preparation Phase (Mostly Unlocked)
+	// We iterate through the desired topology and determine what needs to be done.
+	// We handle downloads and local provisioning BEFORE acquiring the finalize lock.
+
+	// Track which instances we processed to handle cleanup later
+	processedInstances := make(map[string]struct{})
 	for name, target := range topo.Instances {
+		processedInstances[name] = struct{}{}
+
 		// SECURITY: Validate instance name to prevent path traversal
 		if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
 			log.Errorf("🔥 SECURITY ALERT: Malicious instance name '%s' detected! Skipping.", name)
 			continue
 		}
+
 		compatible := m.resolveTargetPlatform(&target)
 		if !compatible {
-			log.Debugf("Instance %s skipped: no compatible platform found in %v for current environment", name, target.Platforms)
-			state, exists := m.instances[name]
-			if exists {
-				m.stopInstance(name, state)
-			}
+			log.Debugf("Instance %s skipped: no compatible platform found", name)
+			m.stopInstanceIfRunning(name, false)
 			continue
 		}
 
-		state, exists := m.instances[name]
-
 		// Tag filtering:
-		// 1. If instance has no tags, it's "Global" and always runs.
-		// 2. If instance has tags, it ONLY runs if the effective tags (local + server) has a match.
 		if len(target.Tags) > 0 {
 			match := false
 			for _, t := range target.Tags {
@@ -440,285 +441,208 @@ func (m *Manager) applyTopology(topo Topology) {
 				}
 			}
 			if !match {
-				log.Debugf("Instance %s skipped: tags %v not matched by effective tags %v", name, target.Tags, activeTags)
-				if exists {
-					m.stopInstance(name, state)
-				}
+				log.Debugf("Instance %s skipped: tags not matched", name)
+				m.stopInstanceIfRunning(name, false)
 				continue
 			}
 		}
 
-		// 3. Global Enable/Disable switch
+		// Global Enable/Disable switch
 		if target.Enabled != nil && !*target.Enabled {
-			if exists {
-				m.stopInstance(name, state)
-				// Clear blacklist state when manually disabled
-				if state.FailedHash != "" || state.CrashCount > 0 {
-					log.Infof("Instance %s is manually disabled. Clearing its blacklist state.", name)
-					state.FailedHash = ""
-					state.CrashCount = 0
-				}
-			}
+			m.stopInstanceIfRunning(name, true)
 			continue
 		}
 
-		if !exists {
-			state = &InstanceState{}
-			// Load persisted stable version from disk (survives Supervisor restarts)
-			svPath := filepath.Join(m.instancePath, name, "stable_version.txt")
-			if data, err := os.ReadFile(svPath); err == nil {
-				state.LastGoodHash = strings.TrimSpace(string(data))
-				if state.LastGoodHash != "" {
-					log.Infof("Loaded stable version for %s from disk: %s", name, state.LastGoodHash)
-				}
-			}
-			// Attempt to adopt an orphan process from a previous Supervisor run
-			instanceDir := filepath.Join(m.instancePath, name)
-			if pid, hash, err := readPIDFile(instanceDir); err == nil {
-				if isProcessRunning(pid) {
-					log.Infof("🐣 Adopted orphan instance %s (PID %d, version %s) from previous run.", name, pid, hash)
-					state.AdoptedPID = pid
-					state.CurrentHash = hash
-				} else {
-					log.Infof("Stale PID file for %s (PID %d) - process not running. Will restart.", name, pid)
-					cleanPIDFile(instanceDir)
-				}
-			}
-			// Run pre_stop_command to gracefully stop a legacy service before we take over
-			if len(target.PreStopCommand) > 0 {
-				log.Infof("Running pre_stop_command for %s: %v", name, target.PreStopCommand)
-				var cmd *exec.Cmd
+		// --- I/O INTENSIVE WORK (Unlocked) ---
 
-				processedCmds := make([]string, len(target.PreStopCommand))
-				for i, c := range target.PreStopCommand {
-					processedCmds[i] = m.replacePlaceholders(c, name, instanceDir, "", "")
-				}
-
-				// Directly execute, no shell wrapping to avoid shell injection risk
-				cmd = exec.Command(processedCmds[0], processedCmds[1:]...)
-
-				if out, err := cmd.CombinedOutput(); err != nil {
-					log.Warnf("pre_stop_command for %s failed (continuing anyway): %v\n%s", name, err, string(out))
-				} else {
-					log.Infof("pre_stop_command for %s succeeded: %s", name, string(out))
-				}
-			}
-			m.instances[name] = state
-		}
-
-		// 1. Resolve remote configuration asset if provided
+		// 1. Resolve remote configuration asset
 		remoteConfigPath := ""
 		if target.ConfigURL != "" {
 			mgmtDir := filepath.Join(m.instancePath, name)
 			configExt := filepath.Ext(target.ConfigURL)
 			if configExt == "" {
-				configExt = ".conf" // default
+				configExt = ".conf"
 			}
 			remoteConfigPath = filepath.Join(mgmtDir, "remote_config"+configExt)
-
-			// Ensure instance directory exists before downloading config
 			os.MkdirAll(mgmtDir, 0755)
 
-			// "Only pull if missing" - preserve user modifications
-			// Hash-based config verification (Fixed Sticky Bug)
-			needDownload := false
-			if _, err := os.Stat(remoteConfigPath); os.IsNotExist(err) {
-				needDownload = true
-			} else if !verifySHA256(remoteConfigPath, target.ConfigHash) {
-				log.Infof("Config for %s hash mismatch. Redownloading version %s", name, target.ConfigHash)
-				needDownload = true
-			}
-
-			if needDownload {
-				log.Infof("Downloading config %s to %s", target.ConfigURL, remoteConfigPath)
-				if err := downloadFile(remoteConfigPath, target.ConfigURL); err == nil {
-					if verifySHA256(remoteConfigPath, target.ConfigHash) {
-						state.CurrentConfigHash = target.ConfigHash
-					} else {
-						log.Warnf("Downloaded config for %s hash mismatch! Found %s, expected %s.", name, calculateSHA256(remoteConfigPath), target.ConfigHash)
-					}
-				} else {
-					log.Errorf("Failed to download remote config for %s: %v", name, err)
+			if _, err := os.Stat(remoteConfigPath); os.IsNotExist(err) || !verifySHA256(remoteConfigPath, target.ConfigHash) {
+				log.Infof("Downloading config %s for %s", target.ConfigURL, name)
+				if err := downloadFile(remoteConfigPath, target.ConfigURL); err != nil {
+					log.Errorf("Failed to download config for %s: %v", name, err)
 				}
-			} else {
-				log.Debugf("Config for %s is up-to-date. Skipping download.", name)
 			}
 		}
 
-		// Combine Server params and user config
+		// 2. Provision (writes run_config.yaml, interpolates args/env)
 		newConfigHash, finalArgs, finalEnv, effectiveInstanceDir := m.provisionInstance(name, target.Args, target.InstanceDir, target.Params, target.Env, remoteConfigPath)
 
+		// Determine the desired hash (including potentially rolling back)
+		m.mu.Lock()
+		state, exists := m.instances[name]
 		desiredHash := target.Hash
-		isRollback := false
-
-		// If config changed, give it another chance by clearing the blacklist
-		if state.FailedHash != "" && state.RunConfigHash != "" && state.RunConfigHash != newConfigHash {
-			log.Infof("Config for %s has changed. Clearing blacklist to retry version %s.", name, state.FailedHash)
-			state.FailedHash = ""
-			state.CrashCount = 0
+		if exists && state.FailedHash == desiredHash && state.LastGoodHash != "" && state.LastGoodHash != desiredHash {
+			desiredHash = state.LastGoodHash
 		}
+		m.mu.Unlock()
 
-		// Permanent blacklist: once a hash fails 3 times, never try it again until server changes the hash
-		if state.FailedHash == desiredHash {
-			if state.LastGoodHash != "" && state.LastGoodHash != desiredHash {
-				if state.CurrentHash != state.LastGoodHash {
-					log.Warnf("🛡️ Instance %s target version (%s) is BLACKLISTED! Rolling back to known stable version: %s", name, desiredHash, state.LastGoodHash)
-				}
-				desiredHash = state.LastGoodHash
-				isRollback = true
-			} else {
-				if state.CurrentHash != "" {
-					log.Warnf("Instance %s target version is blacklisted and no rollback exists. Paused.", name)
-				}
+		binFile := filepath.Join(m.binPath, fmt.Sprintf("%s-%s", name, desiredHash))
+
+		// 3. Download binary if needed
+		if !verifySHA256(binFile, desiredHash) {
+			log.Infof("Downloading binary %s for %s", target.URL, name)
+			if err := downloadFile(binFile, target.URL); err != nil {
+				log.Errorf("Failed to download binary for %s: %v", name, err)
 				continue
 			}
-		}
-
-		// A process counts as running if we have a Cmd handle OR we adopted it from a PID file
-		isRunning := (state.Cmd != nil) || (state.AdoptedPID > 0)
-		if state.CurrentHash != desiredHash || (!isRollback && state.RunConfigHash != newConfigHash) || !isRunning {
-			log.Infof("Instance %s requires update (Current: %s, Desired: %s)", name, state.CurrentHash, desiredHash)
-
-			// Download binary if we don't have it or hash mismatch
-			binFile := filepath.Join(m.binPath, fmt.Sprintf("%s-%s", name, desiredHash))
-			if !verifySHA256(binFile, desiredHash) {
-				if isRollback {
-					log.Errorf("Rollback binary %s not found in cache! Cannot rollback.", binFile)
-					continue
-				}
-
-				log.Infof("Hash mismatch or file missing. Downloading %s to %s", target.URL, binFile)
-				if err := downloadFile(binFile, target.URL); err != nil {
-					log.Errorf("Failed to download binary: %v", err)
-					continue
-				}
-
-				// Security Verification: Ensure the downloaded file matches the expected Hash!
-				actualCalcHash := calculateSHA256(binFile)
-				if !strings.EqualFold(actualCalcHash, target.Hash) {
-					log.Errorf("🔥 SECURITY ALERT: Downloaded file %s hash mismatch! Expected: %s, Actual: %s. Update aborted. Retrying in 10 minutes.", binFile, target.Hash, actualCalcHash)
-					os.Remove(binFile) // Delete the tainted file
-
-					// Register failure: blacklisted permanently until server changes the hash
-					state.FailedHash = target.Hash
-					continue // Wait for the next cycle
-				}
-			}
-
-			// Reset failure state upon successful verification and fresh target
-			if !isRollback {
-				state.FailedHash = ""
-			}
-
-			os.Chmod(binFile, 0755)
-
-			// Stop existing (handle both live Cmd and adopted orphan)
-			if state.Cmd != nil && state.Cmd.Process != nil {
-				log.Infof("Stopping old instance %s (cmd)...", name)
-				state.Cmd.Process.Kill()
-				state.Cmd.Wait()
-				state.Cmd = nil
-			}
-			if state.AdoptedPID > 0 {
-				log.Infof("Stopping adopted instance %s (PID %d)...", name, state.AdoptedPID)
-				if proc, err := os.FindProcess(state.AdoptedPID); err == nil {
-					proc.Kill()
-				}
-				state.AdoptedPID = 0
-				cleanPIDFile(filepath.Join(m.instancePath, name))
-			}
-
-			// Copy binary into instance directory so the executable name remains constant
-			instanceDir := filepath.Join(m.instancePath, name)
-			os.MkdirAll(instanceDir, 0755)
-
-			instanceBin := filepath.Join(instanceDir, name+exeSuffix)
-			if err := copyLocalFile(binFile, instanceBin); err != nil {
-				log.Errorf("Failed to copy binary to instance dir: %v", err)
-				continue
-			}
-			os.Chmod(instanceBin, 0755)
-
-			// Start new
-			log.Infof("Starting new instance %s with version %s", name, desiredHash)
-
-			cmd := exec.Command(instanceBin, finalArgs...)
-			cmd.Dir = effectiveInstanceDir
-			log.Infof("  Command: %s %v (WD: %s)", instanceBin, finalArgs, cmd.Dir)
-
-			// Build subprocess environment: inherit parent env + per-instance overrides
-			cmd.Env = buildEnv(finalEnv)
-
-			// Redirect stdout/stderr to per-instance log file (with rotation)
-			logWriter, logErr := m.openInstanceLog(instanceDir, name)
-			if logErr != nil {
-				log.Warnf("Failed to open log file for %s: %v, falling back to stdout", name, logErr)
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-			} else {
-				cmd.Stdout = logWriter
-				cmd.Stderr = logWriter
-			}
-
-			if err := cmd.Start(); err != nil {
-				log.Errorf("Failed to start instance %s: %v", name, err)
-				// Count a start failure the same as a rapid crash
-				state.CrashCount++
-				if state.CrashCount >= 3 {
-					log.Errorf("🚨🚨🚨 Instance %s failed to start %d times (version %s)! Blacklisting version.", name, state.CrashCount, desiredHash)
-					state.FailedHash = desiredHash
-				} else {
-					log.Warnf("Instance %s failed to start. Retry %d/3...", name, state.CrashCount)
-				}
-				continue
-			}
-
-			state.Cmd = cmd
-			state.AdoptedPID = 0 // Clear any adoption since we now own the process via Cmd
-			state.CurrentHash = desiredHash
-			if state.TargetHash != target.Hash {
-				state.CrashCount = 0
-			}
-			state.TargetHash = target.Hash
-			if !isRollback {
-				state.RunConfigHash = newConfigHash
-			}
-
-			// Write PID file so we can adopt this process if Supervisor restarts
-			writePIDFile(filepath.Join(m.instancePath, name), cmd.Process.Pid, desiredHash)
-
-			// Background monitor
-			go m.monitorWorker(name, cmd, desiredHash)
-
-			// Validation timer: mark as stable after 15 seconds, and persist to disk
-			go func(n string, c *exec.Cmd, h string) {
-				time.Sleep(15 * time.Second)
+			if !strings.EqualFold(calculateSHA256(binFile), desiredHash) {
+				log.Errorf("🔥 SECURITY ALERT: %s hash mismatch! Aborting update.", name)
+				os.Remove(binFile)
 				m.mu.Lock()
-				defer m.mu.Unlock()
-				s, ok := m.instances[n]
-				if ok && s.Cmd == c && s.CurrentHash == h {
-					log.Infof("✅ Instance %s (version %s) ran smoothly for 15s. Marked as stable.", n, h)
-					s.LastGoodHash = h
-					s.CrashCount = 0
-					// Persist to disk so rollback works after Supervisor restarts
-					svPath := filepath.Join(m.instancePath, n, "stable_version.txt")
-					if err := os.WriteFile(svPath, []byte(h), 0644); err != nil {
-						log.Warnf("Failed to persist stable version for %s: %v", n, err)
-					} else {
-						log.Infof("💾 Stable version %s persisted to disk for %s", h, n)
-					}
+				if state, ok := m.instances[name]; ok {
+					state.FailedHash = desiredHash
 				}
-			}(name, cmd, desiredHash)
+				m.mu.Unlock()
+				continue
+			}
 		}
+		os.Chmod(binFile, 0755)
+
+		// --- APPLY PHASE (Locked in helper) ---
+		m.finalizeInstanceUpdate(name, target, desiredHash, binFile, newConfigHash, finalArgs, finalEnv, effectiveInstanceDir)
 	}
 
-	// 2. Cleanup: Stop and remove instances that are no longer in the topology
+	// 3. Cleanup logic (Locked)
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for name, state := range m.instances {
-		if _, stillExists := topo.Instances[name]; !stillExists {
-			log.Infof("Instance %s removed from topology. Stopping and cleaning up.", name)
+		if _, stillExists := processedInstances[name]; !stillExists {
+			log.Infof("Instance %s removed from topology. Cleaning up.", name)
 			m.stopInstance(name, state)
 			delete(m.instances, name)
 		}
+	}
+}
+
+func (m *Manager) stopInstanceIfRunning(name string, clearBlacklist bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	state, exists := m.instances[name]
+	if exists {
+		m.stopInstance(name, state)
+		if clearBlacklist {
+			state.FailedHash = ""
+			state.CrashCount = 0
+		}
+	}
+}
+
+func (m *Manager) finalizeInstanceUpdate(name string, target InstanceTarget, desiredHash string, binFile string, newConfigHash string, finalArgs []string, finalEnv map[string]string, effectiveInstanceDir string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	state, exists := m.instances[name]
+	if !exists {
+		state = &InstanceState{}
+		m.instances[name] = state
+		// Initial state recovery (disk & PID)
+		svPath := filepath.Join(m.instancePath, name, "stable_version.txt")
+		if data, err := os.ReadFile(svPath); err == nil {
+			state.LastGoodHash = strings.TrimSpace(string(data))
+		}
+		instanceDir := filepath.Join(m.instancePath, name)
+		if pid, hash, err := readPIDFile(instanceDir); err == nil && isProcessRunning(pid) {
+			state.AdoptedPID = pid
+			state.CurrentHash = hash
+		}
+		// Pre-stop command (only for new takes)
+		if len(target.PreStopCommand) > 0 {
+			m.runPreStop(name, target.PreStopCommand, instanceDir)
+		}
+	}
+
+	// Double check blacklist
+	if state.FailedHash == desiredHash {
+		if state.LastGoodHash != "" && state.LastGoodHash != desiredHash {
+			desiredHash = state.LastGoodHash
+			binFile = filepath.Join(m.binPath, fmt.Sprintf("%s-%s", name, desiredHash))
+		} else {
+			return
+		}
+	}
+
+	isRunning := (state.Cmd != nil) || (state.AdoptedPID > 0)
+	needsRestart := (state.CurrentHash != desiredHash) || (state.RunConfigHash != newConfigHash) || !isRunning
+
+	if needsRestart {
+		log.Infof("Applying update/restart for %s", name)
+		m.stopInstance(name, state)
+
+		instanceDir := filepath.Join(m.instancePath, name)
+		os.MkdirAll(instanceDir, 0755)
+		instanceBin := filepath.Join(instanceDir, name+exeSuffix)
+		if err := copyLocalFile(binFile, instanceBin); err != nil {
+			log.Errorf("Copy failed for %s: %v", name, err)
+			return
+		}
+		os.Chmod(instanceBin, 0755)
+
+		cmd := exec.Command(instanceBin, finalArgs...)
+		cmd.Dir = effectiveInstanceDir
+		cmd.Env = buildEnv(finalEnv)
+
+		if state.LogWriter != nil {
+			state.LogWriter.Close()
+			state.LogWriter = nil
+		}
+
+		if logWriter, err := m.openInstanceLog(instanceDir, name); err == nil {
+			cmd.Stdout = logWriter
+			cmd.Stderr = logWriter
+			state.LogWriter = logWriter
+		}
+
+		if err := cmd.Start(); err != nil {
+			log.Errorf("Start failed for %s: %v", name, err)
+			state.CrashCount++
+			if state.CrashCount >= 3 {
+				state.FailedHash = desiredHash
+			}
+			return
+		}
+
+		state.Cmd = cmd
+		state.AdoptedPID = 0
+		state.CurrentHash = desiredHash
+		state.TargetHash = target.Hash
+		state.RunConfigHash = newConfigHash
+		writePIDFile(instanceDir, cmd.Process.Pid, desiredHash)
+		go m.monitorWorker(name, cmd, desiredHash)
+
+		go func(n string, c *exec.Cmd, h string) {
+			time.Sleep(15 * time.Second)
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			s, ok := m.instances[n]
+			if ok && s.Cmd == c && s.CurrentHash == h {
+				s.LastGoodHash = h
+				s.CrashCount = 0
+				os.WriteFile(filepath.Join(m.instancePath, n, "stable_version.txt"), []byte(h), 0644)
+			}
+		}(name, cmd, desiredHash)
+	}
+}
+
+func (m *Manager) runPreStop(name string, commands []string, instanceDir string) {
+	processedCmds := make([]string, len(commands))
+	for i, c := range commands {
+		processedCmds[i] = m.replacePlaceholders(c, name, instanceDir, "", "")
+	}
+	cmd := exec.Command(processedCmds[0], processedCmds[1:]...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Warnf("pre_stop_command for %s failed: %v\n%s", name, err, string(out))
+	} else {
+		log.Infof("pre_stop_command for %s succeeded", name)
 	}
 }
 
@@ -949,6 +873,11 @@ func (m *Manager) stopInstance(name string, state *InstanceState) {
 		}
 		cleanPIDFile(instanceDir)
 	}
+	if state.LogWriter != nil {
+		log.Infof("Closing log writer for %s", name)
+		state.LogWriter.Close()
+		state.LogWriter = nil
+	}
 }
 
 // Helper to download a file
@@ -1138,7 +1067,7 @@ func isProcessRunning(pid int) bool {
 	return err == nil
 }
 
-func (m *Manager) openInstanceLog(instanceDir, name string) (io.Writer, error) {
+func (m *Manager) openInstanceLog(instanceDir, name string) (io.WriteCloser, error) {
 	logPath := filepath.Join(instanceDir, "instance.log")
 
 	// Use rotatelogs for automatic management
