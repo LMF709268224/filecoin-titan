@@ -503,16 +503,17 @@ func (m *Manager) applyTopology(topo Topology) {
 		}
 
 		// Tag filtering:
-		if len(target.Tags) > 0 {
+		instTags := target.Tags
+		if len(instTags) > 0 {
 			match := false
-			for _, t := range target.Tags {
+			for _, t := range instTags {
 				if isTagAllowed(t, activeTags) {
 					match = true
 					break
 				}
 			}
 			if !match {
-				log.Debugf("Instance %s skipped: tags not matched", name)
+				log.Infof("Instance %s skipped: tags %v not matched with active tags %v", name, instTags, activeTags)
 				m.stopAndRemoveInstance(name)
 				continue
 			}
@@ -1334,12 +1335,30 @@ func buildEnv(extra map[string]string) []string {
 	return env
 }
 func isTagAllowed(tag string, allowed []string) bool {
+	if tag == "" {
+		return true
+	}
+	
+	// Handle negation !tag
+	isNegation := false
+	baseTag := tag
+	if strings.HasPrefix(tag, "!") {
+		isNegation = true
+		baseTag = strings.TrimSpace(tag[1:])
+	}
+
+	found := false
 	for _, a := range allowed {
-		if a == tag {
-			return true
+		if strings.EqualFold(a, baseTag) {
+			found = true
+			break
 		}
 	}
-	return false
+
+	if isNegation {
+		return !found
+	}
+	return found
 }
 
 // stringSlicesEqual returns true if two string slices have the same elements in the same order.
