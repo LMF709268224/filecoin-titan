@@ -1,0 +1,9 @@
+Port: "8088"
+Database:
+  User: "root"
+  Pass: "password"
+  Host: "127.0.0.1:3306"
+  DB: "titan"
+JWTSecret: "ebf68c5e356bb43704758104aab2be852129a310fe72adae27bfff78bd977af6"
+AdminUser: "admin"
+AdminPass: "admin001"
