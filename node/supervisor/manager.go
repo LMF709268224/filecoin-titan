@@ -88,9 +88,53 @@ type InstanceState struct {
 	FailedHash   string
 	LastGoodHash string
 	AdoptedPID   int
-	LastError    string // Captured terminal/exit errors
-	LogWriter    io.WriteCloser
+	LastError       string // Captured terminal/exit errors
+	LogWriter       io.WriteCloser
+	ErrorBuffer     *LogBuffer
+	TransientStatus string // For temporary states like "downloading"
 } // PID of a process adopted from a previous Supervisor run
+
+// LogBuffer is a simple circular buffer to keep the last N bytes of output
+type LogBuffer struct {
+	mu   sync.Mutex
+	buf  []byte
+	size int
+	off  int
+}
+
+func NewLogBuffer(size int) *LogBuffer {
+	return &LogBuffer{
+		buf:  make([]byte, size),
+		size: size,
+	}
+}
+
+func (lb *LogBuffer) Write(p []byte) (n int, err error) {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+
+	n = len(p)
+	if n > lb.size {
+		p = p[n-lb.size:]
+	}
+
+	for _, b := range p {
+		lb.buf[lb.off] = b
+		lb.off = (lb.off + 1) % lb.size
+	}
+	return n, nil
+}
+
+func (lb *LogBuffer) String() string {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+
+	res := make([]byte, lb.size)
+	for i := 0; i < lb.size; i++ {
+		res[i] = lb.buf[(lb.off+i)%lb.size]
+	}
+	return string(strings.TrimLeft(string(res), "\x00"))
+}
 
 type Manager struct {
 	repoPath     string
@@ -116,6 +160,8 @@ type Manager struct {
 
 	keystore types.KeyStore
 	token    string
+	lastTopo Topology // Last successfully applied topology for self-healing
+	topoMu   sync.Mutex
 }
 
 func (m *Manager) effectiveTags() []string {
@@ -214,8 +260,8 @@ func (m *Manager) Login(ctx context.Context) error {
 	m.mu.Unlock()
 
 	// Step 4: Apply initial topology received in the login response immediately.
-	// This enables "Zero-delay startup" without waiting for a WebSocket push.
-	m.applyTopology(res.Topology)
+	// This happens in the background to avoid blocking the WebSocket connection.
+	go m.applyTopology(res.Topology)
 
 	log.Infof("Successfully logged in, received JWT and applied initial topology for node %s", m.nodeID)
 	return nil
@@ -267,6 +313,33 @@ func (m *Manager) WatchConfig(ctx context.Context) {
 			return nil
 		})
 
+		// Initial push immediately upon connection
+		sendReports := func() {
+			// 1. Send Resource Report
+			report := CollectResourceReport(m.instancePath)
+			reportMsg := map[string]interface{}{
+				"event": "resource_report",
+				"data":  report,
+			}
+			if data, err := json.Marshal(reportMsg); err == nil {
+				conn.SetWriteDeadline(time.Now().Add(writeWait))
+				conn.WriteMessage(websocket.TextMessage, data)
+			}
+
+			// 2. Send Status Report
+			statusData := m.buildStatusReport()
+			statusMsg := map[string]interface{}{
+				"event": "report_status",
+				"data":  statusData,
+			}
+			if data, err := json.Marshal(statusMsg); err == nil {
+				conn.SetWriteDeadline(time.Now().Add(writeWait))
+				conn.WriteMessage(websocket.TextMessage, data)
+			}
+		}
+
+		sendReports()
+
 		heartbeatDone := make(chan struct{})
 		go func() {
 			ticker := time.NewTicker(pingPeriod)
@@ -274,39 +347,25 @@ func (m *Manager) WatchConfig(ctx context.Context) {
 			for {
 				select {
 				case <-ticker.C:
-					// 1. Send a standard WebSocket Ping control frame to keep the connection alive
+					// 1. Send a standard WebSocket Ping control frame
 					if err := conn.WriteControl(websocket.PingMessage, []byte{}, time.Now().Add(writeWait)); err != nil {
 						log.Errorf("WebSocket ping failed: %v", err)
 						return
 					}
 
-					// 2. Piggyback Resource Report: Send CPU/Mem/Disk/Network usage as a JSON event
-					report := CollectResourceReport(m.instancePath)
-					reportMsg := map[string]interface{}{
-						"event": "resource_report",
-						"data":  report,
-					}
-					if data, err := json.Marshal(reportMsg); err == nil {
-						conn.SetWriteDeadline(time.Now().Add(writeWait))
-						if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-							log.Errorf("WebSocket resource report push failed: %v", err)
-							return
-						}
-					}
+					// 2. Regular report push
+					sendReports()
 
-					// 3. Piggyback Status Report: Send worker instance statuses (running, crashed, etc.)
-					statusData := m.buildStatusReport()
-					statusMsg := map[string]interface{}{
-						"event": "report_status",
-						"data":  statusData,
+					// 4. Local Self-Healing: Periodically re-apply last known topology
+					m.mu.Lock()
+					lt := m.lastTopo
+					m.mu.Unlock()
+					if len(lt.Instances) > 0 {
+						log.Debug("Self-healing: Re-applying last known topology in background")
+						go m.applyTopology(lt)
 					}
-					if data, err := json.Marshal(statusMsg); err == nil {
-						conn.SetWriteDeadline(time.Now().Add(writeWait))
-						if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-							log.Errorf("WebSocket status report push failed: %v", err)
-							return
-						}
-					}
+				case <-ctx.Done():
+					return
 				case <-heartbeatDone:
 					return
 				}
@@ -334,13 +393,18 @@ func (m *Manager) WatchConfig(ctx context.Context) {
 						log.Info("📬 Received updated topology via WebSocket! Applying immediately.")
 						var topo Topology
 						if err := json.Unmarshal(wsMsg.Data, &topo); err == nil {
-							m.applyTopology(topo)
+							go m.applyTopology(topo)
 						} else {
 							log.Errorf("Failed to parse topology from WS: %v", err)
 						}
 					} else if wsMsg.Event == "RELOAD" {
 						// Fallback legacy reload signal, ignore or handle if needed
 						log.Warn("Received legacy RELOAD string, ignoring since we use JSON now.")
+					} else if wsMsg.Event == "resource_report" {
+						// Update last_heartbeat for the node
+						// This is a no-op on the supervisor side, as it's meant for the orchestrator.
+						// However, we process it to acknowledge the event type.
+						log.Debug("Received resource_report acknowledgment from Orchestrator.")
 					}
 				}
 			}
@@ -376,6 +440,9 @@ func (m *Manager) buildStatusReport() map[string]interface{} {
 }
 
 func (m *Manager) deriveStatus(state *InstanceState) string {
+	if state.TransientStatus != "" {
+		return state.TransientStatus
+	}
 	if state.Cmd != nil {
 		return "running"
 	}
@@ -386,13 +453,17 @@ func (m *Manager) deriveStatus(state *InstanceState) string {
 		return "blacklisted"
 	}
 	if state.CrashCount > 0 {
-		return "crashed"
+		return "failed"
 	}
 	return "stopped"
 }
 
 func (m *Manager) applyTopology(topo Topology) {
+	m.topoMu.Lock()
+	defer m.topoMu.Unlock()
+
 	m.mu.Lock()
+	m.lastTopo = topo // Store for self-healing
 	// 1. Update server-assigned tags and settings (Locked)
 	m.serverTags = topo.NodeTags
 	if m.serverTags == nil {
@@ -427,7 +498,7 @@ func (m *Manager) applyTopology(topo Topology) {
 		compatible := m.resolveTargetPlatform(&target)
 		if !compatible {
 			log.Debugf("Instance %s skipped: no compatible platform found", name)
-			m.stopInstanceIfRunning(name, false)
+			m.stopAndRemoveInstance(name)
 			continue
 		}
 
@@ -442,7 +513,7 @@ func (m *Manager) applyTopology(topo Topology) {
 			}
 			if !match {
 				log.Debugf("Instance %s skipped: tags not matched", name)
-				m.stopInstanceIfRunning(name, false)
+				m.stopAndRemoveInstance(name)
 				continue
 			}
 		}
@@ -490,8 +561,22 @@ func (m *Manager) applyTopology(topo Topology) {
 
 		// 3. Download binary if needed
 		if !verifySHA256(binFile, desiredHash) {
+			m.mu.Lock()
+			if state, ok := m.instances[name]; ok {
+				state.TransientStatus = "downloading"
+			}
+			m.mu.Unlock()
+
 			log.Infof("Downloading binary %s for %s", target.URL, name)
-			if err := downloadFile(binFile, target.URL); err != nil {
+			err := downloadFile(binFile, target.URL)
+
+			m.mu.Lock()
+			if state, ok := m.instances[name]; ok {
+				state.TransientStatus = ""
+			}
+			m.mu.Unlock()
+
+			if err != nil {
 				log.Errorf("Failed to download binary for %s: %v", name, err)
 				continue
 			}
@@ -534,6 +619,18 @@ func (m *Manager) stopInstanceIfRunning(name string, clearBlacklist bool) {
 			state.FailedHash = ""
 			state.CrashCount = 0
 		}
+	}
+}
+
+func (m *Manager) stopAndRemoveInstance(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	state, exists := m.instances[name]
+	if exists {
+		log.Infof("Removing instance %s from monitored list (tag/platform mismatch)", name)
+		m.stopInstance(name, state)
+		delete(m.instances, name)
+		cleanPIDFile(filepath.Join(m.instancePath, name))
 	}
 }
 
@@ -587,6 +684,7 @@ func (m *Manager) finalizeInstanceUpdate(name string, target InstanceTarget, des
 		}
 		os.Chmod(instanceBin, 0755)
 
+		state.TransientStatus = "starting"
 		cmd := exec.Command(instanceBin, finalArgs...)
 		cmd.Dir = effectiveInstanceDir
 		cmd.Env = buildEnv(finalEnv)
@@ -596,21 +694,29 @@ func (m *Manager) finalizeInstanceUpdate(name string, target InstanceTarget, des
 			state.LogWriter = nil
 		}
 
+		if state.ErrorBuffer == nil {
+			state.ErrorBuffer = NewLogBuffer(2048) // Keep last 2KB of logs
+		}
+		state.LastError = "" // Reset error on new start
+
 		if logWriter, err := m.openInstanceLog(instanceDir, name); err == nil {
-			cmd.Stdout = logWriter
-			cmd.Stderr = logWriter
+			cmd.Stdout = io.MultiWriter(logWriter, state.ErrorBuffer)
+			cmd.Stderr = io.MultiWriter(logWriter, state.ErrorBuffer)
 			state.LogWriter = logWriter
 		}
 
 		if err := cmd.Start(); err != nil {
 			log.Errorf("Start failed for %s: %v", name, err)
+			state.TransientStatus = ""
 			state.CrashCount++
 			if state.CrashCount >= 3 {
 				state.FailedHash = desiredHash
+				state.LastError = fmt.Sprintf("Start failed: %v", err)
 			}
 			return
 		}
 
+		state.TransientStatus = ""
 		state.Cmd = cmd
 		state.AdoptedPID = 0
 		state.CurrentHash = desiredHash
@@ -619,14 +725,19 @@ func (m *Manager) finalizeInstanceUpdate(name string, target InstanceTarget, des
 		writePIDFile(instanceDir, cmd.Process.Pid, desiredHash)
 		go m.monitorWorker(name, cmd, desiredHash)
 
+		// Stabilization timer: if the process stays alive for 10 seconds, consider it a "stable run"
+		// and reset failure counters. This isolates supervisor from sub-process internal bugs.
 		go func(n string, c *exec.Cmd, h string) {
-			time.Sleep(15 * time.Second)
+			time.Sleep(10 * time.Second)
 			m.mu.Lock()
 			defer m.mu.Unlock()
 			s, ok := m.instances[n]
 			if ok && s.Cmd == c && s.CurrentHash == h {
+				if s.CrashCount > 0 {
+					log.Infof("Instance %s stabilized after running for 10s. Resetting crash count.", n)
+					s.CrashCount = 0
+				}
 				s.LastGoodHash = h
-				s.CrashCount = 0
 				os.WriteFile(filepath.Join(m.instancePath, n, "stable_version.txt"), []byte(h), 0644)
 			}
 		}(name, cmd, desiredHash)
@@ -827,25 +938,52 @@ func (m *Manager) monitorWorker(name string, cmd *exec.Cmd, runningHash string) 
 	if state.Cmd == cmd {
 		// Only log as warning if the process exited with an error
 		if err != nil {
-			log.Warnf("Instance %s exited with error: %v (ran for %v)", name, err, runDuration)
+			if runDuration >= 10*time.Second {
+				// Downgrade application-level errors (those that run for > 10s) to INFO
+				log.Infof("Instance %s stopped with application error (ran for %v): %v. It will be restarted.", name, runDuration, err)
+			} else {
+				log.Warnf("Instance %s failed during startup (ran for %v): %v", name, err, runDuration)
+			}
+
+			if state.ErrorBuffer != nil {
+				state.LastError = fmt.Sprintf("Exit Error: %v\nLogs:\n%s", err, state.ErrorBuffer.String())
+			} else {
+				state.LastError = fmt.Sprintf("Exit Error: %v", err)
+			}
 		} else {
 			log.Infof("Instance %s exited cleanly (ran for %v)", name, runDuration)
+			state.LastError = ""
 		}
 		state.Cmd = nil
 		state.CurrentHash = "" // Force restart on next poll if it's supposed to be running
 		cleanPIDFile(filepath.Join(m.instancePath, name))
 
-		if runDuration < 15*time.Second {
+		if runDuration < 10*time.Second {
+			// Process died very quickly: likely a startup failure (missing file, bad config, etc.)
 			state.CrashCount++
 			if state.CrashCount >= 3 {
-				log.Errorf("🚨🚨🚨 Instance %s crashed %d times rapidly (version %s)! Blacklisting version.", name, state.CrashCount, runningHash)
+				log.Errorf("🚨🚨🚨 Instance %s failed to start %d times (version %s). Blacklisting.", name, state.CrashCount, runningHash)
 				state.FailedHash = runningHash
-			} else {
-				log.Warnf("Instance %s crashed. Retry %d/3...", name, state.CrashCount)
 			}
 		} else {
-			// Ran long enough: not a crash loop
+			// Process ran for a while but exited later. 
+			// We treat this as a successful start. Internal app errors don't trigger blacklisting.
 			state.CrashCount = 0
+		}
+
+		if runDuration < 10*time.Second {
+			// Self-healing (Reactive): Trigger a re-apply of the topology after a short delay
+			// Only for startup failures. Stable processes wait for the next periodic poll (54s).
+			go func() {
+				time.Sleep(5 * time.Second)
+				m.mu.Lock()
+				lt := m.lastTopo
+				m.mu.Unlock()
+				if len(lt.Instances) > 0 {
+					log.Infof("Self-healing (reactive): Attempting to restart %s", name)
+					m.applyTopology(lt)
+				}
+			}()
 		}
 	}
 }
