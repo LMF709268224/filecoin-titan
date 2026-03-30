@@ -71,11 +71,3 @@ CREATE TABLE IF NOT EXISTS node_config (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_updated_at (updated_at)
 );
-
-
-ALTER TABLE supervisors ADD INDEX idx_last_heartbeat (last_heartbeat);
-ALTER TABLE node_config ADD INDEX idx_updated_at (updated_at);
-ALTER TABLE topology ADD INDEX idx_updated_at (updated_at);
-ALTER TABLE node_tags ADD INDEX idx_node_id (node_id);
-ALTER TABLE supervisors ADD INDEX idx_updated_at (updated_at);
-ALTER TABLE supervisor_instances ADD INDEX idx_supervisor_id (supervisor_id);
