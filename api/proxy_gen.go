@@ -320,9 +320,9 @@ type NodeAPIStruct struct {
 
 		CreateTunnel func(p0 context.Context, p1 *types.CreateTunnelReq) error `perm:"candidate"`
 
-		DeactivateNode func(p0 context.Context, p1 string, p2 int) error `perm:"web,admin,candidate"`
+		DeactivateNode func(p0 context.Context, p1 string, p2 int) error `perm:"web,admin"`
 
-		DeactivateNodeV2 func(p0 context.Context, p1 string, p2 int, p3 float64) error `perm:"web,admin,candidate"`
+		DeactivateNodeV2 func(p0 context.Context, p1 string, p2 int, p3 float64) error `perm:"web,admin"`
 
 		DownloadDataResult func(p0 context.Context, p1 string, p2 string, p3 int64) error `perm:"edge,candidate"`
 
