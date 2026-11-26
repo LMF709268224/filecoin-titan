@@ -21,6 +21,7 @@ import (
 	"github.com/Filecoin-Titan/titan/node/scheduler/assets"
 	"github.com/Filecoin-Titan/titan/node/scheduler/node"
 	"github.com/filecoin-project/go-jsonrpc/auth"
+	"github.com/google/uuid"
 	"golang.org/x/xerrors"
 )
 
@@ -143,6 +144,11 @@ func (s *Scheduler) GetAssetRecords(ctx context.Context, limit, offset int, stat
 		serverID = s.ServerID
 	}
 
+	serverID, err := normalizeServerID(serverID)
+	if err != nil {
+		return nil, err
+	}
+
 	rows, err := s.db.LoadAssetRecordRows(statuses, limit, offset, serverID)
 	if err != nil {
 		return nil, xerrors.Errorf("LoadAssetRecords err:%s", err.Error())
@@ -164,6 +170,15 @@ func (s *Scheduler) GetAssetRecords(ctx context.Context, limit, offset int, stat
 	}
 
 	return list, nil
+}
+
+func normalizeServerID(serverID dtypes.ServerID) (dtypes.ServerID, error) {
+	id, err := uuid.Parse(string(serverID))
+	if err != nil {
+		return "", xerrors.Errorf("invalid serverID: %w", err)
+	}
+
+	return dtypes.ServerID(id.String()), nil
 }
 
 // RemoveAssetRecords removes an asset record from the system by its CID.
